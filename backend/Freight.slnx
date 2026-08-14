@@ -1,0 +1,13 @@
+<Solution>
+  <Folder Name="/src/">
+    <Project Path="src/Freight.Api/Freight.Api.csproj" />
+    <Project Path="src/Freight.Application/Freight.Application.csproj" />
+    <Project Path="src/Freight.Domain/Freight.Domain.csproj" />
+    <Project Path="src/Freight.Infrastructure/Freight.Infrastructure.csproj" />
+  </Folder>
+  <Folder Name="/tests/">
+    <Project Path="tests/Freight.Api.Tests/Freight.Api.Tests.csproj" />
+    <Project Path="tests/Freight.Application.Tests/Freight.Application.Tests.csproj" />
+    <Project Path="tests/Freight.Domain.Tests/Freight.Domain.Tests.csproj" />
+  </Folder>
+</Solution>
