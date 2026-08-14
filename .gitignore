@@ -1,0 +1,33 @@
+# .NET
+bin/
+obj/
+*.user
+*.suo
+.vs/
+
+# Node / JS / TS
+node_modules/
+dist/
+build/
+.expo/
+*.tsbuildinfo
+
+# Env / secrets
+.env
+.env.local
+*.pfx
+appsettings.Development.json
+appsettings.Local.json
+google-services.json
+GoogleService-Info.plist
+firebase-service-account*.json
+
+# OS / editor
+.DS_Store
+Thumbs.db
+*.swp
+.idea/
+
+# Logs
+*.log
+npm-debug.log*
