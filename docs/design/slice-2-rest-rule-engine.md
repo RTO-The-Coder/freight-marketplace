@@ -5,8 +5,10 @@ the new domain-event base types).
 **Scope:** Section 9 (EU Regulation (EC) 561/2006 — daily/weekly/two-week driving
 limits, breaks, daily/weekly rest, team-driving alternation). Pure domain model: no
 persistence, no API, no background scheduler — see [requirements](../../trucking-marketplace-requirements.md),
-Section 18. The tick loop that calls this engine on a timer (FR-8.1) is Slice 9
-(renumbered from Slice 7 when Slices 3-4 were inserted — see ADR 0010).
+Section 18. The tick loop that calls this engine on a timer (FR-8.1) is the live
+tick scheduler slice — see Section 18's roadmap table for its current number,
+which has shifted multiple times as earlier slices were inserted (ADR 0010) and
+is not repeated here to avoid it going stale again.
 
 ## Entity/value object diagram
 
@@ -161,7 +163,7 @@ classDiagram
     a mandatory break consumes elapsed time without accruing driving minutes, so
     "540 minutes from now" is not the same as "540 minutes driven."
   - `Advance` — single-driver tick: drives if eligible, begins/continues the
-    required stop otherwise. Called once per tick by the caller (Slice 9).
+    required stop otherwise. Called once per tick by the caller (the live tick scheduler slice).
   - `EvaluateTeam` — two-ledger tick for `Team`-assignment trucks; implements the
     primary-first swap rule (see below) and returns the resulting truck
     `MovementState`. Uses `IsEligibleToDriveNow` throughout — team correctness
@@ -189,7 +191,7 @@ classDiagram
   for "which rules does driver X follow" — `DriverRulePreference` alone is just a
   value object; nothing durably links it to a driver without going through the
   registry. No persistence yet (consistent with the rest of Slice 2 being pure
-  domain, no DB) — callers (tests today, Slice 9 later) `Assign` once per driver at
+  domain, no DB) — callers (tests today, the live tick scheduler slice later) `Assign` once per driver at
   simulation setup, then `Get` it back by `DriverId` wherever needed rather than
   constructing/passing preferences ad hoc.
 - **"Daily" and "weekly" are rest-bounded, not calendar-bounded.** A driver's "day"
@@ -236,7 +238,7 @@ classDiagram
 - **Domain event infrastructure is new, greenfield** (`Freight.Domain/Common/`):
   `IDomainEvent` (marker + `OccurredAt`) and `Entity` (thin base class holding a
   `DomainEvents` collection). `DriverComplianceState` is the first entity to use it.
-  Events are recorded on entities but not dispatched — publishing them is Slice 9's
+  Events are recorded on entities but not dispatched — publishing them is the live tick scheduler slice's
   event-backbone concern.
 - **No history is stored** — `DriverComplianceState` is a rolling-balance ledger only.
   "When was this driver working vs. resting" is reconstructed from the domain events
@@ -265,14 +267,17 @@ classDiagram
 
 ## Explicitly deferred (not part of this slice)
 
-- Background tick scheduler / "fast-forward N hours" demo control (Slice 9)
+- Background tick scheduler / "fast-forward N hours" demo control — that is this engine's own consuming slice
 - Reduced-weekly-rest compensation enforcement (see note above) — the concept was
   considered and explicitly dropped as half-built, not merely unscheduled
-- `RestRuleLimits` DB-backed loader (Infrastructure layer, later)
+- `RestRuleLimits` DB-backed loader and `DriverComplianceState`/`DriverRulePreference`
+  EF Core mapping (Infrastructure layer) — picked up in Slice 5 (Seed data &
+  verification), which covers the EF Core catch-up for Slices 1-4's aggregates
+  (see Section 18)
 - Domain event *dispatching* — entities record events; publishing to subscribers is
-  Slice 9's event backbone
+  the live tick scheduler slice's event backbone
 - Wiring `Truck.ChangeMovementState` from `EvaluateTeam`'s `ResultingMovementState` —
-  this slice produces the *decision*, Slice 9 applies it
+  this slice produces the *decision*, the live tick scheduler slice applies it
 - Truck's assigned shipments / cargo destinations (Slice 3, new)
 - Route time calculation combining this engine's driver-state output with travel
   time (Slice 4, new — Route Time Engine, see ADR 0010)

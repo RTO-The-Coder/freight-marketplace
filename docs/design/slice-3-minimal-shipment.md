@@ -62,16 +62,16 @@ type at all).
 
 ## Notes
 
-- **No state machine, shipper reference, or deadline** — deliberately deferred to Slice 6,
+- **No state machine, shipper reference, or deadline** — deliberately deferred to Slice 8,
   which richens this same `Shipment` skeleton once the shipper facet and bidding flow are
-  in scope. This slice only needs enough data for Slice 4 (route time) and Slice 7
+  in scope. This slice only needs enough data for Slice 4 (route time) and Slice 9
   (eligibility) to consume.
-- **Cargo kind and weight/volume are included this early** because Slice 7 (eligibility)
+- **Cargo kind and weight/volume are included this early** because Slice 9 (eligibility)
   needs them for cargo-compatibility and capacity filtering, and neither has any
   dependency on the state-machine/shipper pieces that *are* deferred.
 - **`CargoKind` is a plain enum** with five values mapped 1:1 to the Section 8.1 taxonomy
   rows — mirrors `TruckType`/`MovementState`'s existing convention (no smart-enum
-  pattern). The cargo-kind → truck-type *mapping* itself is Slice 7's job, not this
+  pattern). The cargo-kind → truck-type *mapping* itself is Slice 9's job, not this
   slice's; Slice 3 only carries the kind as data.
 - **`Shipment.CargoSize` reuses the existing `Capacity` value object** (`WeightKg`,
   `VolumeCubicMeters`) rather than introducing a new type. `Capacity` itself still only
@@ -80,7 +80,7 @@ type at all).
   zero-weight or zero-volume cargo size — a real shipment always has positive weight and
   volume.
 - **`Shipment`'s constructor is `public`**, unlike `Truck`'s `internal` one. No aggregate
-  yet owns `Shipment`'s construction (the shipper doesn't exist until Slice 6), so there
+  yet owns `Shipment`'s construction (the shipper doesn't exist until Slice 8), so there
   is nothing to route construction through.
 - **`Shipment` uses plain reference equality** (no `Equals`/`GetHashCode` override) —
   consistent with `Truck` and `TruckingCompany`, which are entities identified by `Id`,
@@ -89,12 +89,12 @@ type at all).
   references its own parent (`TruckingCompany`) by `Guid` (`TruckingCompanyId`), not by
   holding a `TruckingCompany` object — this mirrors that existing convention
   symmetrically for children. It also anticipates `Shipment` becoming its own aggregate
-  root with its own consistency boundary in Slice 6; a direct object reference would
+  root with its own consistency boundary in Slice 8; a direct object reference would
   couple `Truck`'s and `Shipment`'s lifecycles once persistence arrives (an EF Core
   navigation property would cascade loads/saves across what should be two independent
   aggregates).
 - **`Truck.AssignShipment(shipmentId)` performs no validation** beyond rejecting an empty
-  `Guid` — no capacity check, no duplicate check, no cargo-kind check. Those are Slice 7's
+  `Guid` — no capacity check, no duplicate check, no cargo-kind check. Those are Slice 9's
   job (eligibility); this slice is purely structural — an ordered, appendable list exists.
   Assigning the same shipment id twice is currently permitted and simply appends a
   duplicate entry.
@@ -106,11 +106,16 @@ type at all).
 
 ## Explicitly deferred (not part of this slice)
 
-- Shipment state machine (`Open → Bidding → Awarded / Unfulfilled`) (Slice 6)
-- Shipper reference and delivery deadline (Slice 6)
-- Cargo-kind → truck-type eligibility matching (Slice 7, Section 8)
-- Capacity/duplicate/cargo-kind validation on `Truck.AssignShipment` (Slice 7)
+- Shipment state machine (`Open → Bidding → Awarded / Unfulfilled`) (Slice 8)
+- Shipper reference and delivery deadline (Slice 8)
+- Cargo-kind → truck-type eligibility matching (Slice 9, Section 8)
+- Capacity/duplicate/cargo-kind validation on `Truck.AssignShipment` (Slice 9)
 - Route time calculation combining driver state + travel time (Slice 4, Route Time
   Engine, ADR 0010)
-- Persistence / EF Core / repositories
+- Persistence / EF Core mapping / repositories for `Shipment` — deferred at the
+  time this slice was built; the minimal `FreightDbContext` skeleton now exists
+  (`Freight.Infrastructure/Persistence/`, no entity mappings yet), and EF Core
+  configuration for `Shipment` is picked up retroactively or by whichever later
+  slice first needs it to survive past a single test run — persistence is added
+  incrementally, one slice's aggregate(s) at a time (see Section 18)
 - API endpoints

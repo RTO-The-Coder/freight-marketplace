@@ -126,15 +126,20 @@ classDiagram
   4 Route Time Engine instead of calling this directly for their authoritative numbers.
 - **`IPositionProvider`** satisfies the Dependency Inversion requirement in Section
   11.3 — domain code depends on this interface, not a concrete GPS source. No
-  implementation exists yet; the real (simulated) implementation lands in Slice 9
-  (live tick scheduler).
+  implementation exists yet; the real (simulated) implementation lands in the live
+  tick scheduler slice (see requirements doc Section 18 for its current number —
+  deliberately not repeated here since it has shifted multiple times).
 
 ## Explicitly deferred (not part of this slice)
 
 - EU driving/rest-hour accrual on `Driver` (Slice 2, Section 9)
-- Movement-state transition *rules*/guards (Slice 2/9)
+- Movement-state transition *rules*/guards (Slice 2, and the live tick scheduler slice)
 - Truck's assigned shipments / cargo destinations (Slice 3, new — see ADR 0010's context)
 - Route time calculation combining driver state + travel time (Slice 4, new — Route Time Engine, ADR 0010)
-- Cargo-kind → truck-type eligibility matching (Slice 7, Section 8)
-- Persistence / EF Core / repositories
+- Cargo-kind → truck-type eligibility matching (Slice 9, Section 8)
+- Persistence / EF Core mapping / repositories for Fleet aggregates — deferred at
+  the time this slice was built; picked up in Slice 5 (Seed data & verification),
+  which specifically covers the EF Core catch-up for Slices 1-4's aggregates plus
+  a targeted seed dataset and Postman-driven verification of the Route Time Engine
+  against realistic data (see Section 18).
 - API endpoints
