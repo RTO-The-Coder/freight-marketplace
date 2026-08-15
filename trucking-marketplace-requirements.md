@@ -95,7 +95,7 @@ The set of (truck, company) pairs allowed to bid on a given shipment, computed a
 - Multi-role organizational approval chains (explicitly removed from this design)
 - Third-party carrier API integration (ships, planes, SOAP/SFTP carriers)
 - Real GPS/telematics integration (simulated only — architected so a real feed could later replace the simulator)
-- Multi-leg / multi-truck shipments (one shipment = one truck for the full job)
+- Multi-leg / multi-truck shipments (one shipment = one truck for the full job — a Shipment aggregate always references exactly one Truck for its entire pickup-to-delivery span; no relay handoffs, no splitting one shipment's cargo across trucks. This is unaffected by, and distinct from, the multiple-shipments-per-truck capability introduced in Slice 3/ADR 0010 — a Truck may carry several Shipments' worth of cargo simultaneously along a shared route, but each individual Shipment still belongs to exactly one Truck.)
 
 ---
 
@@ -357,7 +357,7 @@ Slices 1 and 2 were built before the gap addressed by Slices 3 and 4 was identif
 | Repo/solution scaffold, license, ADR process | Slice 0 — Skeleton |
 | FR-2 | Slice 1 — Fleet model (Truck, Driver, TruckingCompany, driver config, movement-state field, position/distance calculator) |
 | Section 9 | Slice 2 — EU rest-rule engine (daily/weekly/two-week limits, team driving) |
-| FR-3.5-adjacent (new) | Slice 3 — Minimal Shipment (id, pickup/delivery `GeoCoordinate` only — no state machine/shipper/deadline yet) and Truck→AssignedShipments (ordered, multiple shipments per truck, per ADR 0010's context) |
+| FR-3.5-adjacent (new), FR-1.2, Section 8.1 | Slice 3 — Minimal Shipment (id, pickup/delivery `GeoCoordinate`, cargo kind from the Section 8.1 taxonomy, weight/volume — no state machine/shipper/deadline yet, those arrive at Slice 6) and Truck→AssignedShipments (ordered, multiple shipments per truck, per ADR 0010's context). Cargo kind and weight/volume are included this early because Slice 7 (eligibility) needs them for cargo-compatibility and capacity filtering, and there's no reason to defer data that has no dependency on the state-machine/shipper pieces being deferred. |
 | FR-8.3-adjacent (new), ADR 0010 | Slice 4 — Route Time Engine: combines Slice 1 (truck position) + Slice 2 (driver rest-rule state) + Slice 3 (shipment locations) via a cached, OSRM-derived, 10-minute-rounded route time — the single source of truth reachability, deadline feasibility, pricing, and the tick scheduler all read from |
 | FR-5, Section 10 | Slice 5 — Pricing strategy (Idle vs. Driving-detour formulas), consumes Slice 4 |
 | FR-1 | Slice 6 — Shipment posting (Shipment aggregate gains state machine, shipper reference, deadline — richens Slice 3's skeleton) |
