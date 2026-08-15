@@ -23,6 +23,33 @@ public class CapacityTests
     }
 
     [Fact]
+    public void CanAccommodate_WhenInsufficientVolume_ReturnsFalse()
+    {
+        var truckCapacity = new Capacity(weightKg: 1000, volumeCubicMeters: 5);
+        var cargo = new Capacity(weightKg: 500, volumeCubicMeters: 10);
+
+        Assert.False(truckCapacity.CanAccommodate(cargo));
+    }
+
+    [Fact]
+    public void CanAccommodate_SufficientWeightButInsufficientVolume_ReturnsFalse()
+    {
+        var truckCapacity = new Capacity(weightKg: 1000, volumeCubicMeters: 2);
+        var cargo = new Capacity(weightKg: 500, volumeCubicMeters: 10);
+
+        Assert.False(truckCapacity.CanAccommodate(cargo));
+    }
+
+    [Fact]
+    public void CanAccommodate_SufficientVolumeButInsufficientWeight_ReturnsFalse()
+    {
+        var truckCapacity = new Capacity(weightKg: 100, volumeCubicMeters: 50);
+        var cargo = new Capacity(weightKg: 500, volumeCubicMeters: 10);
+
+        Assert.False(truckCapacity.CanAccommodate(cargo));
+    }
+
+    [Fact]
     public void Subtract_PartialLoad_ReturnsRemainingCapacity()
     {
         var truckCapacity = new Capacity(weightKg: 1000, volumeCubicMeters: 20);
