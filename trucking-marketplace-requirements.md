@@ -367,3 +367,15 @@ Dependency-ordered build: Slices 0-7 (domain + REST API) are pure backend, each 
 | — | Slices 12+ — remaining UI-facing functionality (bid withdrawal/decline flows, truck status view, map view with live positions, push notifications, synthetic-data banner) — exact breakdown to be defined when reached |
 | FR-17 | AI/Insights slice — dummy data seeding, chunking, retrieval, dual query path (built after core marketplace and shipper/dispatcher UI slices are functional) |
 | Section 14 | Capstone — ADRs, end-to-end test scenarios, portfolio polish |
+
+---
+
+## 19. Phasing Note: Loading Time & Working Time Directive
+
+**Status:** Phase 1 assumption, recorded here rather than in Section 9 so that section remains a clean, untouched reference to EU Regulation (EC) 561/2006. See [ADR 0009](docs/adr/0009-loading-time-and-working-time-directive-deferred.md) for the full decision record.
+
+Section 9's rule set (and Slice 2's rest-rule engine, Section 18) covers *driving* and *rest* time under Regulation (EC) 561/2006 only. `Truck.MovementState` also includes a `Loading` value (Section 7, FR-2.4) representing a truck at pickup/delivery — but no rule in Section 9 governs time spent in that state, because 561/2006 doesn't govern it; a separate EU regulation does.
+
+**Phase 1 (current scope):** `Loading` is zero-duration. No simulated time elapses while a truck is `Loading`, and no driving-hours or rest-rule ledger accrues anything as a result. The rest-rule engine is never invoked for a truck in this state.
+
+**Phase 2 (explicitly deferred, unscheduled — not part of the current build order in Section 18):** model real loading/unloading duration, and separately implement the EU Road Transport Working Time Directive (2002/15/EC) — which governs total *working* time (driving plus loading, inspection, paperwork, and other on-duty tasks), with its own ~48-hour weekly average cap (extendable to 60 in a single week if a 4-month rolling average holds at or under 48) and a 6-hour-working-time break trigger, distinct from Section 9's 4.5-hour-*driving* break trigger. This would be a second, independent rule set and ledger alongside the Section 9 engine, not a modification of it.
