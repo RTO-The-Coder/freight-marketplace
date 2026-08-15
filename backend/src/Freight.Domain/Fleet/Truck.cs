@@ -4,6 +4,8 @@ namespace Freight.Domain.Fleet;
 
 public sealed class Truck
 {
+    private readonly List<Guid> _assignedShipmentIds = [];
+
     public Guid Id { get; }
     public Guid TruckingCompanyId { get; }
     public TruckType TruckType { get; }
@@ -12,6 +14,7 @@ public sealed class Truck
     public bool HazmatCertified { get; }
     public GeoCoordinate CurrentLocation { get; private set; }
     public MovementState MovementState { get; private set; }
+    public IReadOnlyList<Guid> AssignedShipmentIds => _assignedShipmentIds;
 
     internal Truck(
         Guid id,
@@ -61,5 +64,15 @@ public sealed class Truck
     public void LoadCargo(Capacity cargo)
     {
         Capacity = Capacity.LoadCargo(cargo);
+    }
+
+    public void AssignShipment(Guid shipmentId)
+    {
+        if (shipmentId == Guid.Empty)
+        {
+            throw new ArgumentException("Shipment id cannot be empty.", nameof(shipmentId));
+        }
+
+        _assignedShipmentIds.Add(shipmentId);
     }
 }

@@ -79,4 +79,45 @@ public class TruckTests
         Assert.Equal(600, truck.Capacity.Remaining.WeightKg);
         Assert.Equal(12, truck.Capacity.Remaining.VolumeCubicMeters);
     }
+
+    [Fact]
+    public void NewTruck_StartsWithNoAssignedShipments()
+    {
+        var truck = NewTruck(NewCompany());
+
+        Assert.Empty(truck.AssignedShipmentIds);
+    }
+
+    [Fact]
+    public void AssignShipment_AddsToAssignedShipmentIds_PreservesInsertionOrder()
+    {
+        var truck = NewTruck(NewCompany());
+        var firstShipmentId = Guid.NewGuid();
+        var secondShipmentId = Guid.NewGuid();
+
+        truck.AssignShipment(firstShipmentId);
+        truck.AssignShipment(secondShipmentId);
+
+        Assert.Equal([firstShipmentId, secondShipmentId], truck.AssignedShipmentIds);
+    }
+
+    [Fact]
+    public void AssignShipment_EmptyGuid_Throws()
+    {
+        var truck = NewTruck(NewCompany());
+
+        Assert.Throws<ArgumentException>(() => truck.AssignShipment(Guid.Empty));
+    }
+
+    [Fact]
+    public void AssignShipment_SameIdTwice_AppendsDuplicate()
+    {
+        var truck = NewTruck(NewCompany());
+        var shipmentId = Guid.NewGuid();
+
+        truck.AssignShipment(shipmentId);
+        truck.AssignShipment(shipmentId);
+
+        Assert.Equal([shipmentId, shipmentId], truck.AssignedShipmentIds);
+    }
 }
