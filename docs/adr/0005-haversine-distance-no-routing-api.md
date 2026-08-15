@@ -1,7 +1,7 @@
 # 5. Haversine straight-line distance instead of an external routing API
 
 ## Status
-Accepted
+Superseded by ADR 0010 — pricing/eligibility now use OSRM-derived, cached route times instead of haversine. This record is kept for history; see ADR 0010 for the current decision and rationale for the change.
 
 ## Context
 Reachability (Section 8.3) and deadline feasibility (Section 8.4) both require estimating distance and drive time between a truck's current location and a shipment's pickup/delivery points. A real routing API (Google Maps, Mapbox Directions, etc.) would give more accurate road-network distances and times, but requires an API key, has usage quotas/cost, and — critically — breaks the project's "clone and run" goal: anyone downloading the repo should be able to run it without signing up for external services.

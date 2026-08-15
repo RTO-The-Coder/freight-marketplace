@@ -1,6 +1,6 @@
 # Client Architecture, Concurrency, Notifications & Capacity Planning
 
-**Status:** Placeholder — to be elaborated when the relevant slices begin (concurrency strategy at Slice 6 — Bidding engine; client/UI/notification/geography detail at Slices 8-11 and beyond).
+**Status:** Placeholder — to be elaborated when the relevant slices begin (concurrency strategy at the Bidding engine slice; client/UI/notification/geography detail at the shipper/dispatcher UI slices and beyond). See [trucking-marketplace-requirements.md](../../trucking-marketplace-requirements.md) Section 18 for current slice numbers — deliberately not repeated here since they've already shifted once (ADR 0010) and this placeholder predates the current numbering.
 
 This document previously existed as Section 16 of [trucking-marketplace-requirements.md](../../trucking-marketplace-requirements.md). It was relocated here because it describes implementation-close detail for modules not yet under active development, per the document-structure plan agreed on 2026-08-14. The content below is preserved from that discussion as reference material; it will be revisited, verified, and elaborated properly when its owning slice starts — treat it as prior thinking to validate, not settled design.
 
@@ -21,7 +21,7 @@ Four concurrency hazards exist given the two-clock bidding model, and each has a
 3. **Accept-vs-cross-withdrawal race** — a truck's bid is accepted on one shipment the same moment the platform auto-withdraws that truck's other pending bid elsewhere. Resolved by making the cross-withdrawal a side effect *inside* the same locked transaction that processes acceptance, so it cannot interleave with a concurrent attempt on the same Bid.
 4. **Tick-engine vs. bid-engine race** — the GPS tick simulator changes a truck's state at the same moment a bid against that truck is being priced or accepted. This is a **deliberate non-guarantee**, consistent with the pricing model ("price is simply always as of now, no locking, no staleness handling") — documented explicitly as a chosen trade-off, not an oversight, so it isn't "fixed" accidentally later.
 
-This strategy is captured in ADR 0003 and is central to the Bid aggregate's design (Slice 6).
+This strategy is captured in ADR 0003 and is central to the Bid aggregate's design (the Bidding engine slice — see requirements doc Section 18 for its current number).
 
 ## Notifications
 In-app live updates are supplemented with **real push notifications** to the mobile app via Firebase Cloud Messaging (FCM) — a dispatcher receives an actual OS-level notification even when the app is closed, for events including: new shipment entered eligible pool, bid auto-withdrawn, bid lost. This is a genuine, committed implementation, not simulated — though it requires a visitor's own Firebase project/credentials to fire in their own environment (same category as the AI layer's own-API-key requirement). The notification concern sits behind an `INotificationSender` abstraction (Dependency Inversion, same pattern as `IPositionProvider`), with the real FCM implementation as one concrete provider. See ADR 0006.

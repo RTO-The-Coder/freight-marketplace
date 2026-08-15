@@ -348,23 +348,27 @@ A company bids a margin percentage on top of the platform-calculated base price.
 
 ## 18. Appendix: Requirements-to-Implementation-Slice Mapping
 
-Dependency-ordered build: Slices 0-7 (domain + REST API) are pure backend, each with its own thin API endpoint(s), built and verified via unit/integration tests and a Postman collection — no client UI exists yet at that stage, since none of these have a human-facing goal of their own. From Slice 8 onward, each slice is a **complete vertical slice including UI** — a slice isn't done until a real actor (shipper or dispatcher) can accomplish a real goal end-to-end through the actual interface, not just via Postman. Slices 8-11 are interleaved by causal dependency between the shipper and dispatcher actors (rather than finishing one actor's full loop first), so every slice's demo uses real data produced by the slice before it — no seeding or faking the other side required. The AI/Insights layer is last, since it consumes completed marketplace data. See [docs/design/](docs/design/) for per-slice design docs, created when each slice's work starts.
+Dependency-ordered build: Slices 0-9 (domain + REST API) are pure backend, each with its own thin API endpoint(s), built and verified via unit/integration tests and a Postman collection — no client UI exists yet at that stage, since none of these have a human-facing goal of their own. From Slice 10 onward, each slice is a **complete vertical slice including UI** — a slice isn't done until a real actor (shipper or dispatcher) can accomplish a real goal end-to-end through the actual interface, not just via Postman. Slices 10-13 are interleaved by causal dependency between the shipper and dispatcher actors (rather than finishing one actor's full loop first), so every slice's demo uses real data produced by the slice before it — no seeding or faking the other side required. The AI/Insights layer is last, since it consumes completed marketplace data. See [docs/design/](docs/design/) for per-slice design docs, created when each slice's work starts.
+
+Slices 1 and 2 were built before the gap addressed by Slices 3 and 4 was identified (see ADR 0010): a truck's assigned cargo and the combined driver-time + travel-time calculation needed for reachability/deadline feasibility had no home in the original roadmap. Slices 3 and 4 are inserted as new slices rather than triggering a renumbering of the already-built Slices 1-2, since neither of those touches Shipment or route-time concerns at all.
 
 | Requirement group | Implementation slice |
 |---|---|
 | Repo/solution scaffold, license, ADR process | Slice 0 — Skeleton |
 | FR-2 | Slice 1 — Fleet model (Truck, Driver, TruckingCompany, driver config, movement-state field, position/distance calculator) |
 | Section 9 | Slice 2 — EU rest-rule engine (daily/weekly/two-week limits, team driving) |
-| FR-5, Section 10 | Slice 3 — Pricing strategy (Idle vs. Driving-detour formulas) |
-| FR-1 | Slice 4 — Shipment posting (Shipment aggregate, state machine) |
-| FR-3, Section 8 | Slice 5 — Truck eligibility (cargo compatibility, capacity, reachability, deadline feasibility) |
-| FR-4, FR-6, FR-7 | Slice 6 — Bidding engine (Bid aggregate, two independent clocks, pessimistic locking, immutability, auto-withdrawal, explicit decline, audit trail) |
-| FR-8 | Slice 7 — Live tick scheduler (background service advancing simulated time, moving trucks, accruing hours, emitting domain events) |
-| FR-1, FR-1.4 | Slice 8 — Shipment posting (shipper, web) — complete vertical slice with UI |
-| FR-2 | Slice 9 — Fleet upload (dispatcher, mobile) — complete vertical slice with UI, Excel/spreadsheet bulk import |
-| FR-3, FR-5.4 | Slice 10 — Dispatcher views eligible shipments and submits a bid (dispatcher, mobile) — complete vertical slice with UI |
-| FR-6, FR-7 | Slice 11 — Shipper views postings and reacts to bids (shipper, web) — complete vertical slice with UI |
-| — | Slices 12+ — remaining UI-facing functionality (bid withdrawal/decline flows, truck status view, map view with live positions, push notifications, synthetic-data banner) — exact breakdown to be defined when reached |
+| FR-3.5-adjacent (new) | Slice 3 — Minimal Shipment (id, pickup/delivery `GeoCoordinate` only — no state machine/shipper/deadline yet) and Truck→AssignedShipments (ordered, multiple shipments per truck, per ADR 0010's context) |
+| FR-8.3-adjacent (new), ADR 0010 | Slice 4 — Route Time Engine: combines Slice 1 (truck position) + Slice 2 (driver rest-rule state) + Slice 3 (shipment locations) via a cached, OSRM-derived, 10-minute-rounded route time — the single source of truth reachability, deadline feasibility, pricing, and the tick scheduler all read from |
+| FR-5, Section 10 | Slice 5 — Pricing strategy (Idle vs. Driving-detour formulas), consumes Slice 4 |
+| FR-1 | Slice 6 — Shipment posting (Shipment aggregate gains state machine, shipper reference, deadline — richens Slice 3's skeleton) |
+| FR-3, Section 8 | Slice 7 — Truck eligibility (cargo compatibility, capacity, reachability, deadline feasibility), consumes Slice 4 |
+| FR-4, FR-6, FR-7 | Slice 8 — Bidding engine (Bid aggregate, two independent clocks, pessimistic locking, immutability, auto-withdrawal, explicit decline, audit trail) |
+| FR-8 | Slice 9 — Live tick scheduler (background service advancing simulated time, moving trucks, accruing hours, emitting domain events), consumes Slice 4 |
+| FR-1, FR-1.4 | Slice 10 — Shipment posting (shipper, web) — complete vertical slice with UI |
+| FR-2 | Slice 11 — Fleet upload (dispatcher, mobile) — complete vertical slice with UI, Excel/spreadsheet bulk import |
+| FR-3, FR-5.4 | Slice 12 — Dispatcher views eligible shipments and submits a bid (dispatcher, mobile) — complete vertical slice with UI |
+| FR-6, FR-7 | Slice 13 — Shipper views postings and reacts to bids (shipper, web) — complete vertical slice with UI |
+| — | Slices 14+ — remaining UI-facing functionality (bid withdrawal/decline flows, truck status view, map view with live positions, push notifications, synthetic-data banner) — exact breakdown to be defined when reached |
 | FR-17 | AI/Insights slice — dummy data seeding, chunking, retrieval, dual query path (built after core marketplace and shipper/dispatcher UI slices are functional) |
 | Section 14 | Capstone — ADRs, end-to-end test scenarios, portfolio polish |
 

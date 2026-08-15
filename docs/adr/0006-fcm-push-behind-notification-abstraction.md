@@ -12,5 +12,5 @@ Implement **real, fully committed FCM push** — not a simulated or stubbed vers
 ## Consequences
 - A visitor cloning the repo can run the full app without a Firebase account; push simply no-ops (falls back to console/log) unless they configure their own Firebase project and credentials.
 - The FCM implementation is real, working code — not a mock — so it demonstrates genuine third-party integration and DIP in the same pattern already used for the GPS position source, rather than being pure aspiration.
-- Adds Firebase SDK integration on the mobile client (device token registration) and a service-account credential path on the backend — real, if bounded, additional Slice 7 scope.
-- Same category of trade-off as the AI/Insights layer (ADR forthcoming with Slice 8): genuinely optional, key-gated enhancement, clearly documented in the README as such.
+- Adds Firebase SDK integration on the mobile client (device token registration) and a service-account credential path on the backend — real, if bounded, additional scope for whichever mobile-client slice implements it.
+- Same category of trade-off as the AI/Insights layer: genuinely optional, key-gated enhancement, clearly documented in the README as such.
