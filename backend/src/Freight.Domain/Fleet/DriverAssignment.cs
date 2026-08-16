@@ -2,9 +2,19 @@ namespace Freight.Domain.Fleet;
 
 public sealed class DriverAssignment
 {
-    public DriverConfigurationType ConfigurationType { get; }
-    public Driver PrimaryDriver { get; }
-    public Driver? SecondaryDriver { get; }
+    public DriverConfigurationType ConfigurationType { get; private set; }
+    public Driver PrimaryDriver { get; private set; } = null!;
+    public Driver? SecondaryDriver { get; private set; }
+
+    // EF Core cannot bind PrimaryDriver/SecondaryDriver through the constructor below
+    // (they are reference navigations to the independent Driver entity, and EF's
+    // constructor injection only binds scalar/owned properties) - this parameterless
+    // constructor exists solely so EF's materializer can construct an instance and set
+    // the properties above via reflection. Single(...)/Team(...) remain the only
+    // construction path reachable from application code.
+    private DriverAssignment()
+    {
+    }
 
     private DriverAssignment(DriverConfigurationType configurationType, Driver primaryDriver, Driver? secondaryDriver)
     {

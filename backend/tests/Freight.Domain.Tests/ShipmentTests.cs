@@ -11,6 +11,7 @@ public class ShipmentTests
 
     private static ShipmentAggregate NewShipment() => new(
         Guid.NewGuid(),
+        Guid.NewGuid(),
         Pickup(),
         Delivery(),
         Freight.Domain.Shipment.CargoKind.GeneralDryGoods,
@@ -20,13 +21,15 @@ public class ShipmentTests
     public void Constructor_ValidArguments_ExposesAllProperties()
     {
         var id = Guid.NewGuid();
+        var shipperId = Guid.NewGuid();
         var pickup = Pickup();
         var delivery = Delivery();
         var cargoSize = ValidCargoSize();
 
-        var shipment = new ShipmentAggregate(id, pickup, delivery, Freight.Domain.Shipment.CargoKind.LiquidBulk, cargoSize);
+        var shipment = new ShipmentAggregate(id, shipperId, pickup, delivery, Freight.Domain.Shipment.CargoKind.LiquidBulk, cargoSize);
 
         Assert.Equal(id, shipment.Id);
+        Assert.Equal(shipperId, shipment.ShipperId);
         Assert.Equal(pickup, shipment.PickupLocation);
         Assert.Equal(delivery, shipment.DeliveryLocation);
         Assert.Equal(Freight.Domain.Shipment.CargoKind.LiquidBulk, shipment.CargoKind);
@@ -37,28 +40,35 @@ public class ShipmentTests
     public void Constructor_EmptyId_Throws()
     {
         Assert.Throws<ArgumentException>(() =>
-            new ShipmentAggregate(Guid.Empty, Pickup(), Delivery(), Freight.Domain.Shipment.CargoKind.GeneralDryGoods, ValidCargoSize()));
+            new ShipmentAggregate(Guid.Empty, Guid.NewGuid(), Pickup(), Delivery(), Freight.Domain.Shipment.CargoKind.GeneralDryGoods, ValidCargoSize()));
+    }
+
+    [Fact]
+    public void Constructor_EmptyShipperId_Throws()
+    {
+        Assert.Throws<ArgumentException>(() =>
+            new ShipmentAggregate(Guid.NewGuid(), Guid.Empty, Pickup(), Delivery(), Freight.Domain.Shipment.CargoKind.GeneralDryGoods, ValidCargoSize()));
     }
 
     [Fact]
     public void Constructor_NullPickupLocation_Throws()
     {
         Assert.Throws<ArgumentNullException>(() =>
-            new ShipmentAggregate(Guid.NewGuid(), null!, Delivery(), Freight.Domain.Shipment.CargoKind.GeneralDryGoods, ValidCargoSize()));
+            new ShipmentAggregate(Guid.NewGuid(), Guid.NewGuid(), null!, Delivery(), Freight.Domain.Shipment.CargoKind.GeneralDryGoods, ValidCargoSize()));
     }
 
     [Fact]
     public void Constructor_NullDeliveryLocation_Throws()
     {
         Assert.Throws<ArgumentNullException>(() =>
-            new ShipmentAggregate(Guid.NewGuid(), Pickup(), null!, Freight.Domain.Shipment.CargoKind.GeneralDryGoods, ValidCargoSize()));
+            new ShipmentAggregate(Guid.NewGuid(), Guid.NewGuid(), Pickup(), null!, Freight.Domain.Shipment.CargoKind.GeneralDryGoods, ValidCargoSize()));
     }
 
     [Fact]
     public void Constructor_NullCargoSize_Throws()
     {
         Assert.Throws<ArgumentNullException>(() =>
-            new ShipmentAggregate(Guid.NewGuid(), Pickup(), Delivery(), Freight.Domain.Shipment.CargoKind.GeneralDryGoods, null!));
+            new ShipmentAggregate(Guid.NewGuid(), Guid.NewGuid(), Pickup(), Delivery(), Freight.Domain.Shipment.CargoKind.GeneralDryGoods, null!));
     }
 
     [Fact]
@@ -67,7 +77,7 @@ public class ShipmentTests
         var zeroWeight = new Capacity(0, 5);
 
         Assert.Throws<ArgumentOutOfRangeException>(() =>
-            new ShipmentAggregate(Guid.NewGuid(), Pickup(), Delivery(), Freight.Domain.Shipment.CargoKind.GeneralDryGoods, zeroWeight));
+            new ShipmentAggregate(Guid.NewGuid(), Guid.NewGuid(), Pickup(), Delivery(), Freight.Domain.Shipment.CargoKind.GeneralDryGoods, zeroWeight));
     }
 
     [Fact]
@@ -76,6 +86,6 @@ public class ShipmentTests
         var zeroVolume = new Capacity(500, 0);
 
         Assert.Throws<ArgumentOutOfRangeException>(() =>
-            new ShipmentAggregate(Guid.NewGuid(), Pickup(), Delivery(), Freight.Domain.Shipment.CargoKind.GeneralDryGoods, zeroVolume));
+            new ShipmentAggregate(Guid.NewGuid(), Guid.NewGuid(), Pickup(), Delivery(), Freight.Domain.Shipment.CargoKind.GeneralDryGoods, zeroVolume));
     }
 }

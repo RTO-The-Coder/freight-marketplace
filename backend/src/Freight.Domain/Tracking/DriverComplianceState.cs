@@ -23,6 +23,17 @@ public sealed class DriverComplianceState : Entity
 
     public DateTime LastEvaluatedSimulatedTime { get; internal set; }
 
+    // EF Core cannot bind simulatedStart through the constructor below (it has no
+    // corresponding property of the same name - it only seeds
+    // LastEvaluatedSimulatedTime - and EF's constructor injection requires an exact
+    // property match) - this parameterless constructor exists solely so EF's
+    // materializer can construct an instance and set properties via reflection. The
+    // public constructor below remains the only construction path reachable from
+    // application code.
+    private DriverComplianceState()
+    {
+    }
+
     public DriverComplianceState(Guid driverId, DateTime simulatedStart)
     {
         if (driverId == Guid.Empty)

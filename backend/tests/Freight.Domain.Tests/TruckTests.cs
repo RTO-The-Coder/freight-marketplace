@@ -15,8 +15,7 @@ public class TruckTests
             Guid.NewGuid(),
             TruckType.BoxTruck,
             new TruckCapacity(new Capacity(1000, 20)),
-            SingleDriverAssignment(),
-            new GeoCoordinate(52.5200, 13.4050));
+            SingleDriverAssignment());
 
     [Fact]
     public void NewTruck_StartsIdle()
@@ -24,25 +23,6 @@ public class TruckTests
         var truck = NewTruck(NewCompany());
 
         Assert.Equal(MovementState.Idle, truck.MovementState);
-    }
-
-    [Fact]
-    public void UpdateLocation_ChangesCurrentLocation()
-    {
-        var truck = NewTruck(NewCompany());
-        var newLocation = new GeoCoordinate(48.1351, 11.5820);
-
-        truck.UpdateLocation(newLocation);
-
-        Assert.Equal(newLocation, truck.CurrentLocation);
-    }
-
-    [Fact]
-    public void UpdateLocation_Null_Throws()
-    {
-        var truck = NewTruck(NewCompany());
-
-        Assert.Throws<ArgumentNullException>(() => truck.UpdateLocation(null!));
     }
 
     [Theory]

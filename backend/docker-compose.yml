@@ -1,0 +1,20 @@
+services:
+  postgres:
+    image: postgres:16-alpine
+    container_name: freight-postgres
+    environment:
+      POSTGRES_DB: freight_marketplace
+      POSTGRES_USER: freight
+      POSTGRES_PASSWORD: freight_dev_password
+    ports:
+      - "5432:5432"
+    volumes:
+      - freight-postgres-data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U freight -d freight_marketplace"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+volumes:
+  freight-postgres-data:

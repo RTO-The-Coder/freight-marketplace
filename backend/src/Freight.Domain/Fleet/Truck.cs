@@ -6,15 +6,24 @@ public sealed class Truck
 {
     private readonly List<Stop> _routeStops = [];
 
-    public Guid Id { get; }
-    public Guid TruckingCompanyId { get; }
-    public TruckType TruckType { get; }
-    public TruckCapacity Capacity { get; private set; }
-    public DriverAssignment DriverAssignment { get; }
-    public bool HazmatCertified { get; }
-    public GeoCoordinate CurrentLocation { get; private set; }
+    public Guid Id { get; private set; }
+    public Guid TruckingCompanyId { get; private set; }
+    public TruckType TruckType { get; private set; }
+    public TruckCapacity Capacity { get; private set; } = null!;
+    public DriverAssignment DriverAssignment { get; private set; } = null!;
+    public bool HazmatCertified { get; private set; }
     public MovementState MovementState { get; private set; }
     public IReadOnlyList<Stop> RouteStops => _routeStops;
+
+    // EF Core cannot bind capacity/driverAssignment through the constructor below
+    // (they are owned-type/reference navigations, and EF's constructor injection only
+    // binds scalar properties) - this parameterless constructor exists solely so EF's
+    // materializer can construct an instance and set the properties above via
+    // reflection. TruckingCompany.RegisterTruck(...) remains the only construction
+    // path reachable from application code.
+    private Truck()
+    {
+    }
 
     internal Truck(
         Guid id,
@@ -22,7 +31,6 @@ public sealed class Truck
         TruckType truckType,
         TruckCapacity capacity,
         DriverAssignment driverAssignment,
-        GeoCoordinate initialLocation,
         bool hazmatCertified)
     {
         if (id == Guid.Empty)
@@ -37,7 +45,6 @@ public sealed class Truck
 
         ArgumentNullException.ThrowIfNull(capacity);
         ArgumentNullException.ThrowIfNull(driverAssignment);
-        ArgumentNullException.ThrowIfNull(initialLocation);
 
         Id = id;
         TruckingCompanyId = truckingCompanyId;
@@ -45,15 +52,7 @@ public sealed class Truck
         Capacity = capacity;
         DriverAssignment = driverAssignment;
         HazmatCertified = hazmatCertified;
-        CurrentLocation = initialLocation;
         MovementState = MovementState.Idle;
-    }
-
-    public void UpdateLocation(GeoCoordinate location)
-    {
-        ArgumentNullException.ThrowIfNull(location);
-
-        CurrentLocation = location;
     }
 
     public void ChangeMovementState(MovementState movementState)

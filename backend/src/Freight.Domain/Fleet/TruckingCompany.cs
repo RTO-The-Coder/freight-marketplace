@@ -31,10 +31,9 @@ public sealed class TruckingCompany
         TruckType truckType,
         TruckCapacity capacity,
         DriverAssignment driverAssignment,
-        GeoCoordinate initialLocation,
         bool hazmatCertified = false)
     {
-        var truck = new Truck(truckId, Id, truckType, capacity, driverAssignment, initialLocation, hazmatCertified);
+        var truck = new Truck(truckId, Id, truckType, capacity, driverAssignment, hazmatCertified);
 
         _trucks.Add(truck);
 

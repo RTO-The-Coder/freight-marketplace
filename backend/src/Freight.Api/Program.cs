@@ -5,7 +5,7 @@ var builder = WebApplication.CreateBuilder(args);
 
 builder.Services.AddOpenApi();
 builder.Services.AddDbContext<FreightDbContext>(options =>
-    options.UseSqlServer(builder.Configuration.GetConnectionString("FreightDb")));
+    options.UseNpgsql(builder.Configuration.GetConnectionString("FreightDb")));
 
 var app = builder.Build();
 
