@@ -81,43 +81,97 @@ public class TruckTests
     }
 
     [Fact]
-    public void NewTruck_StartsWithNoAssignedShipments()
+    public void NewTruck_StartsWithNoRouteStops()
     {
         var truck = NewTruck(NewCompany());
 
-        Assert.Empty(truck.AssignedShipmentIds);
+        Assert.Empty(truck.RouteStops);
     }
 
     [Fact]
-    public void AssignShipment_AddsToAssignedShipmentIds_PreservesInsertionOrder()
+    public void AssignShipment_InterleavedWithExistingStops_InsertsAtCorrectPositions()
     {
         var truck = NewTruck(NewCompany());
-        var firstShipmentId = Guid.NewGuid();
-        var secondShipmentId = Guid.NewGuid();
+        var shipment2Id = Guid.NewGuid();
+        var shipment5Id = Guid.NewGuid();
+        var newShipmentId = Guid.NewGuid();
 
-        truck.AssignShipment(firstShipmentId);
-        truck.AssignShipment(secondShipmentId);
+        // Seed route: [S2-Pickup, S2-Delivery, S5-Pickup, S5-Delivery]
+        truck.AssignShipment(shipment2Id, pickupInsertIndex: 0, deliveryInsertIndex: 0);
+        truck.AssignShipment(shipment5Id, pickupInsertIndex: 2, deliveryInsertIndex: 2);
 
-        Assert.Equal([firstShipmentId, secondShipmentId], truck.AssignedShipmentIds);
+        // New shipment: pickup right after S2's stops (index 2), delivery right after
+        // S5's stops (index 4, i.e. the end) — expressed against the pre-insertion route.
+        truck.AssignShipment(newShipmentId, pickupInsertIndex: 2, deliveryInsertIndex: 4);
+
+        Assert.Equal(
+            [
+                new Stop(shipment2Id, StopKind.Pickup),
+                new Stop(shipment2Id, StopKind.Delivery),
+                new Stop(newShipmentId, StopKind.Pickup),
+                new Stop(shipment5Id, StopKind.Pickup),
+                new Stop(shipment5Id, StopKind.Delivery),
+                new Stop(newShipmentId, StopKind.Delivery),
+            ],
+            truck.RouteStops);
     }
 
-    [Fact]
-    public void AssignShipment_EmptyGuid_Throws()
+    [Theory]
+    [InlineData(1, 0)]
+    [InlineData(2, 0)]
+    public void AssignShipment_DeliveryBeforePickup_Throws(int pickupIndex, int deliveryIndex)
     {
         var truck = NewTruck(NewCompany());
+        truck.AssignShipment(Guid.NewGuid(), pickupInsertIndex: 0, deliveryInsertIndex: 0);
+        var routeBefore = truck.RouteStops.ToList();
 
-        Assert.Throws<ArgumentException>(() => truck.AssignShipment(Guid.Empty));
+        Assert.Throws<ArgumentException>(() =>
+            truck.AssignShipment(Guid.NewGuid(), pickupIndex, deliveryIndex));
+
+        Assert.Equal(routeBefore, truck.RouteStops);
     }
 
     [Fact]
-    public void AssignShipment_SameIdTwice_AppendsDuplicate()
+    public void AssignShipment_DeliveryIndexEqualsPickupIndex_InsertsRightAfterPickup()
     {
         var truck = NewTruck(NewCompany());
         var shipmentId = Guid.NewGuid();
 
-        truck.AssignShipment(shipmentId);
-        truck.AssignShipment(shipmentId);
+        truck.AssignShipment(shipmentId, pickupInsertIndex: 0, deliveryInsertIndex: 0);
 
-        Assert.Equal([shipmentId, shipmentId], truck.AssignedShipmentIds);
+        Assert.Equal(
+            [new Stop(shipmentId, StopKind.Pickup), new Stop(shipmentId, StopKind.Delivery)],
+            truck.RouteStops);
+    }
+
+    [Fact]
+    public void AssignShipment_EmptyShipmentId_Throws()
+    {
+        var truck = NewTruck(NewCompany());
+
+        Assert.Throws<ArgumentException>(() =>
+            truck.AssignShipment(Guid.Empty, pickupInsertIndex: 0, deliveryInsertIndex: 0));
+    }
+
+    [Fact]
+    public void AssignShipment_PickupIndexOutOfRange_Throws()
+    {
+        var truck = NewTruck(NewCompany());
+
+        Assert.Throws<ArgumentOutOfRangeException>(() =>
+            truck.AssignShipment(Guid.NewGuid(), pickupInsertIndex: -1, deliveryInsertIndex: 0));
+        Assert.Throws<ArgumentOutOfRangeException>(() =>
+            truck.AssignShipment(Guid.NewGuid(), pickupInsertIndex: 1, deliveryInsertIndex: 1));
+    }
+
+    [Fact]
+    public void AssignShipment_DeliveryIndexOutOfRange_Throws()
+    {
+        var truck = NewTruck(NewCompany());
+
+        Assert.Throws<ArgumentOutOfRangeException>(() =>
+            truck.AssignShipment(Guid.NewGuid(), pickupInsertIndex: 0, deliveryInsertIndex: -1));
+        Assert.Throws<ArgumentOutOfRangeException>(() =>
+            truck.AssignShipment(Guid.NewGuid(), pickupInsertIndex: 0, deliveryInsertIndex: 1));
     }
 }

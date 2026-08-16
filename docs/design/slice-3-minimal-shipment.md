@@ -33,8 +33,19 @@ classDiagram
 
     class Truck {
         +Guid Id
-        +IReadOnlyList~Guid~ AssignedShipmentIds
-        +AssignShipment(Guid shipmentId)
+        +IReadOnlyList~Stop~ RouteStops
+        +AssignShipment(Guid shipmentId, int pickupInsertIndex, int deliveryInsertIndex)
+    }
+
+    class Stop {
+        +Guid ShipmentId
+        +StopKind Kind
+    }
+
+    class StopKind {
+        <<enumeration>>
+        Pickup
+        Delivery
     }
 
     class GeoCoordinate {
@@ -51,14 +62,16 @@ classDiagram
     Shipment "1" *-- "1" GeoCoordinate : DeliveryLocation
     Shipment "1" *-- "1" Capacity : CargoSize
     Shipment --> CargoKind
-    Truck ..> Shipment : references by Guid only
+    Truck "1" *-- "many" Stop : RouteStops (ordered)
+    Stop --> StopKind
+    Stop ..> Shipment : references by Guid only
 ```
 
-The dotted arrow from `Truck` to `Shipment` is deliberate: `Truck` holds
-`AssignedShipmentIds` as `List<Guid>`, not `List<Shipment>` — there is no UML composition
-or association to an actual `Shipment` object. `Fleet` and `Shipment` remain decoupled at
-the code level, not just the data level (`Truck.cs` does not reference the `Shipment`
-type at all).
+The dotted arrow from `Stop` to `Shipment` is deliberate: a `Stop` carries only
+`ShipmentId` (`Guid`) and `StopKind`, not a `Shipment` reference — there is no UML
+composition or association to an actual `Shipment` object. `Fleet` and `Shipment` remain
+decoupled at the code level, not just the data level (`Truck.cs`/`Stop.cs` do not
+reference the `Shipment` type at all).
 
 ## Notes
 
@@ -85,19 +98,40 @@ type at all).
 - **`Shipment` uses plain reference equality** (no `Equals`/`GetHashCode` override) —
   consistent with `Truck` and `TruckingCompany`, which are entities identified by `Id`,
   not structural value.
-- **`Truck.AssignedShipmentIds` is `List<Guid>`, not `List<Shipment>`.** `Truck` already
-  references its own parent (`TruckingCompany`) by `Guid` (`TruckingCompanyId`), not by
-  holding a `TruckingCompany` object — this mirrors that existing convention
-  symmetrically for children. It also anticipates `Shipment` becoming its own aggregate
-  root with its own consistency boundary in Slice 8; a direct object reference would
-  couple `Truck`'s and `Shipment`'s lifecycles once persistence arrives (an EF Core
-  navigation property would cascade loads/saves across what should be two independent
-  aggregates).
-- **`Truck.AssignShipment(shipmentId)` performs no validation** beyond rejecting an empty
-  `Guid` — no capacity check, no duplicate check, no cargo-kind check. Those are Slice 9's
-  job (eligibility); this slice is purely structural — an ordered, appendable list exists.
-  Assigning the same shipment id twice is currently permitted and simply appends a
-  duplicate entry.
+- **`Truck.RouteStops` is `List<Stop>`, where `Stop` carries only `ShipmentId: Guid` and
+  `StopKind`, not a `Shipment` reference.** `Truck` already references its own parent
+  (`TruckingCompany`) by `Guid` (`TruckingCompanyId`), not by holding a `TruckingCompany`
+  object — this mirrors that existing convention symmetrically for children. It also
+  anticipates `Shipment` becoming its own aggregate root with its own consistency
+  boundary in Slice 8; a direct object reference would couple `Truck`'s and `Shipment`'s
+  lifecycles once persistence arrives (an EF Core navigation property would cascade
+  loads/saves across what should be two independent aggregates).
+- **A shipment contributes two independent stops to the route — a `Pickup` and a
+  `Delivery` — and they are not necessarily adjacent.** Other shipments' stops can be
+  interleaved between them (e.g. pick up shipment B somewhere between shipment A's pickup
+  and delivery). This reflects a real dispatch scenario: a truck already routed through
+  several shipments can have a new shipment's pickup and delivery each inserted at
+  different points along that existing route, not bolted on as a pair at one spot.
+- **`AssignShipment(shipmentId, pickupInsertIndex, deliveryInsertIndex)` takes two
+  independent insertion positions, both expressed as indices into the route *as it
+  exists before the call*.** The caller (ultimately the dispatcher, per Slice 12) does
+  not need to account for index drift caused by inserting the pickup stop before the
+  delivery stop — `AssignShipment` shifts the delivery index internally. The only
+  structural rule enforced here is causality: `deliveryInsertIndex` must be at least
+  `pickupInsertIndex` in the pre-insertion route (equal means "insert delivery
+  immediately after pickup, with no other stop in between"), or the call throws
+  `ArgumentException` and the route is left unchanged. This is basic sanity (a shipment
+  cannot be delivered before it is picked up), not the full route-feasibility
+  computation — whether the *resulting* route is still legally/logically achievable
+  end-to-end is Slice 9's job.
+- **No other validation** — no capacity check, no duplicate-shipment check, no cargo-kind
+  check. Those remain Slice 9's job (eligibility).
+- **Removing a stop once it has actually been completed is explicitly out of scope for
+  this slice.** `RouteStops` only ever grows via `AssignShipment`; nothing in `Truck`
+  removes a stop. That responsibility belongs to Slice 14 (live tick scheduler), the only
+  component that knows a truck has actually reached a given stop — Slice 3 has no notion
+  of "in progress" vs. "not yet started" for a stop, since the tick engine doesn't exist
+  yet.
 - **Shipment pickup/delivery locations are exactly what Slice 4 (Route Time Engine)
   consumes** to query OSRM for a cached, rounded route time — no extra abstraction (e.g.
   an `IHasRoute` interface) is introduced in this slice; `PickupLocation`/
@@ -110,6 +144,10 @@ type at all).
 - Shipper reference and delivery deadline (Slice 8)
 - Cargo-kind → truck-type eligibility matching (Slice 9, Section 8)
 - Capacity/duplicate/cargo-kind validation on `Truck.AssignShipment` (Slice 9)
+- Whole-route feasibility validation after a stop insertion — whether the resulting
+  route can still legally meet every shipment's deadline (Slice 9, Section 8.4)
+- Stop completion / removal from `RouteStops` once a truck actually reaches a stop
+  (Slice 14, live tick scheduler)
 - Route time calculation combining driver state + travel time (Slice 4, Route Time
   Engine, ADR 0010)
 - Persistence / EF Core mapping / repositories for `Shipment` — deferred at the
