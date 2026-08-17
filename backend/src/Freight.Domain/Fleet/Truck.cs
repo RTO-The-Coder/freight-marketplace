@@ -60,17 +60,20 @@ public sealed class Truck
         MovementState = movementState;
     }
 
-    public void LoadCargo(Capacity cargo)
-    {
-        Capacity = Capacity.LoadCargo(cargo);
-    }
-
-    public void AssignShipment(Guid shipmentId, int pickupInsertIndex, int deliveryInsertIndex)
+    public void AssignShipment(
+        Guid shipmentId,
+        Capacity shipmentSize,
+        int pickupInsertIndex,
+        int deliveryInsertIndex,
+        DateTime pickupExpectedArrivalTime,
+        DateTime deliveryExpectedArrivalTime)
     {
         if (shipmentId == Guid.Empty)
         {
             throw new ArgumentException("Shipment id cannot be empty.", nameof(shipmentId));
         }
+
+        ArgumentNullException.ThrowIfNull(shipmentSize);
 
         if (pickupInsertIndex < 0 || pickupInsertIndex > _routeStops.Count)
         {
@@ -90,11 +93,23 @@ public sealed class Truck
                 "Delivery must be inserted at or after pickup in the route.", nameof(deliveryInsertIndex));
         }
 
-        _routeStops.Insert(pickupInsertIndex, new Stop(shipmentId, StopKind.Pickup));
+        if (!Capacity.Remaining.CanAccommodate(shipmentSize))
+        {
+            throw new InvalidOperationException("Truck does not have sufficient remaining capacity for this shipment.");
+        }
+
+        _routeStops.Insert(pickupInsertIndex, new Stop(shipmentId, StopKind.Pickup, pickupExpectedArrivalTime));
 
         // deliveryInsertIndex was expressed against the pre-insertion route; the pickup
         // insertion above shifted every original index at/after pickupInsertIndex right
         // by one, so account for that shift before inserting delivery.
-        _routeStops.Insert(deliveryInsertIndex + 1, new Stop(shipmentId, StopKind.Delivery));
+        _routeStops.Insert(deliveryInsertIndex + 1, new Stop(shipmentId, StopKind.Delivery, deliveryExpectedArrivalTime));
+
+        Capacity = Capacity.AssignShipment(shipmentSize);
+    }
+
+    public void RemoveShipment(Guid shipmentId)
+    {
+        _routeStops.RemoveAll(stop => stop.ShipmentId == shipmentId);
     }
 }

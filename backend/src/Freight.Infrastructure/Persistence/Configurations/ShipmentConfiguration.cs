@@ -11,6 +11,9 @@ public sealed class ShipmentConfiguration : IEntityTypeConfiguration<ShipmentAgg
         builder.HasKey(s => s.Id);
         builder.Property(s => s.ShipperId);
         builder.Property(s => s.CargoKind);
+        builder.Property(s => s.PickupWindowStart);
+        builder.Property(s => s.PickupWindowEnd);
+        builder.Property(s => s.DeliveryDeadline);
 
         builder.HasOne<Freight.Domain.Shipment.Shipper>()
             .WithMany()

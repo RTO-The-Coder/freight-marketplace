@@ -16,35 +16,35 @@ public class TruckCapacityTests
     }
 
     [Fact]
-    public void LoadCargo_ReducesRemainingOnly()
+    public void AssignShipment_ReducesRemainingOnly()
     {
         var capacity = new TruckCapacity(new Capacity(1000, 20));
 
-        var afterLoad = capacity.LoadCargo(new Capacity(300, 5));
+        var afterAssign = capacity.AssignShipment(new Capacity(300, 5));
 
-        Assert.Equal(1000, afterLoad.Total.WeightKg);
-        Assert.Equal(20, afterLoad.Total.VolumeCubicMeters);
-        Assert.Equal(700, afterLoad.Remaining.WeightKg);
-        Assert.Equal(15, afterLoad.Remaining.VolumeCubicMeters);
+        Assert.Equal(1000, afterAssign.Total.WeightKg);
+        Assert.Equal(20, afterAssign.Total.VolumeCubicMeters);
+        Assert.Equal(700, afterAssign.Remaining.WeightKg);
+        Assert.Equal(15, afterAssign.Remaining.VolumeCubicMeters);
     }
 
     [Fact]
-    public void LoadCargo_Twice_AccumulatesReduction()
+    public void AssignShipment_Twice_AccumulatesReduction()
     {
         var capacity = new TruckCapacity(new Capacity(1000, 20));
 
-        var afterBothLoads = capacity.LoadCargo(new Capacity(300, 5)).LoadCargo(new Capacity(200, 5));
+        var afterBothAssignments = capacity.AssignShipment(new Capacity(300, 5)).AssignShipment(new Capacity(200, 5));
 
-        Assert.Equal(500, afterBothLoads.Remaining.WeightKg);
-        Assert.Equal(10, afterBothLoads.Remaining.VolumeCubicMeters);
+        Assert.Equal(500, afterBothAssignments.Remaining.WeightKg);
+        Assert.Equal(10, afterBothAssignments.Remaining.VolumeCubicMeters);
     }
 
     [Fact]
-    public void LoadCargo_MoreThanRemaining_Throws()
+    public void AssignShipment_MoreThanRemaining_Throws()
     {
         var capacity = new TruckCapacity(new Capacity(100, 5));
 
-        Assert.Throws<InvalidOperationException>(() => capacity.LoadCargo(new Capacity(200, 1)));
+        Assert.Throws<InvalidOperationException>(() => capacity.AssignShipment(new Capacity(200, 1)));
     }
 
     [Fact]

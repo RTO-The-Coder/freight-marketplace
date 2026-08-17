@@ -1,3 +1,3 @@
 namespace Freight.Domain.Fleet;
 
-public sealed record Stop(Guid ShipmentId, StopKind Kind);
+public sealed record Stop(Guid ShipmentId, StopKind Kind, DateTime ExpectedArrivalTime);

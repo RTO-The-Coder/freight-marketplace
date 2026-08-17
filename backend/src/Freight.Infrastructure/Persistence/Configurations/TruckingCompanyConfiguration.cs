@@ -11,6 +11,12 @@ public sealed class TruckingCompanyConfiguration : IEntityTypeConfiguration<Truc
         builder.HasKey(c => c.Id);
         builder.Property(c => c.Name).IsRequired();
 
+        builder.OwnsOne(c => c.OfficeLocation, loc =>
+        {
+            loc.Property(l => l.Latitude).HasColumnName("OfficeLatitude");
+            loc.Property(l => l.Longitude).HasColumnName("OfficeLongitude");
+        });
+
         builder.Metadata.FindNavigation(nameof(TruckingCompany.Trucks))!
             .SetPropertyAccessMode(PropertyAccessMode.Field);
 
@@ -48,8 +54,20 @@ public sealed class TruckingCompanyConfiguration : IEntityTypeConfiguration<Truc
             {
                 stopBuilder.Property(s => s.ShipmentId);
                 stopBuilder.Property(s => s.Kind);
+                stopBuilder.Property(s => s.ExpectedArrivalTime);
                 stopBuilder.WithOwner().HasForeignKey("TruckId");
-                stopBuilder.Property<int>("Ordinal").ValueGeneratedNever();
+                // "Ordinal" is EF Core's own default shadow surrogate key for a
+                // relationally-mapped owned collection (Stop has no ToJson()) - per
+                // EF's documented default, this is a database-generated unique value,
+                // NOT a per-truck 0,1,2,... list-index (that auto-derivation only
+                // applies to JSON-column-mapped owned collections). Values are
+                // globally unique/increasing but still assigned in insertion order,
+                // which is all Truck.RouteStops' ordering actually depends on -
+                // nothing reads Ordinal as a 0-based position. Left database-generated
+                // deliberately (not ValueGeneratedNever): that produced every Stop
+                // defaulting to the CLR default (0), colliding within the same Truck,
+                // since Stop carries no ordinal field of its own for EF to read from.
+                stopBuilder.Property<int>("Ordinal");
                 stopBuilder.HasKey("TruckId", "Ordinal");
             });
         });

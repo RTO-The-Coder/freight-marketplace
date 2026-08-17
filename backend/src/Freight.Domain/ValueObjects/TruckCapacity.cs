@@ -25,10 +25,10 @@ public sealed record TruckCapacity
         ArgumentNullException.ThrowIfNull(total);
     }
 
-    public TruckCapacity LoadCargo(Capacity cargo)
+    public TruckCapacity AssignShipment(Capacity shipmentSize)
     {
-        ArgumentNullException.ThrowIfNull(cargo);
+        ArgumentNullException.ThrowIfNull(shipmentSize);
 
-        return new TruckCapacity(Total, Remaining.Subtract(cargo));
+        return new TruckCapacity(Total, Remaining.Subtract(shipmentSize));
     }
 }

@@ -10,6 +10,9 @@ public sealed class Shipment
     public GeoCoordinate DeliveryLocation { get; private set; } = null!;
     public CargoKind CargoKind { get; private set; }
     public Capacity CargoSize { get; private set; } = null!;
+    public DateTime PickupWindowStart { get; private set; }
+    public DateTime PickupWindowEnd { get; private set; }
+    public DateTime DeliveryDeadline { get; private set; }
 
     // EF Core cannot bind pickupLocation/deliveryLocation/cargoSize through the
     // constructor below (they are owned-type navigations, and EF's constructor
@@ -27,7 +30,10 @@ public sealed class Shipment
         GeoCoordinate pickupLocation,
         GeoCoordinate deliveryLocation,
         CargoKind cargoKind,
-        Capacity cargoSize)
+        Capacity cargoSize,
+        DateTime pickupWindowStart,
+        DateTime pickupWindowEnd,
+        DateTime deliveryDeadline)
     {
         if (id == Guid.Empty)
         {
@@ -53,11 +59,24 @@ public sealed class Shipment
             throw new ArgumentOutOfRangeException(nameof(cargoSize), cargoSize.VolumeCubicMeters, "Shipment volume must be greater than zero.");
         }
 
+        if (pickupWindowEnd < pickupWindowStart)
+        {
+            throw new ArgumentException("Pickup window end must be at or after pickup window start.", nameof(pickupWindowEnd));
+        }
+
+        if (deliveryDeadline < pickupWindowEnd)
+        {
+            throw new ArgumentException("Delivery deadline must be at or after the pickup window ends.", nameof(deliveryDeadline));
+        }
+
         Id = id;
         ShipperId = shipperId;
         PickupLocation = pickupLocation;
         DeliveryLocation = deliveryLocation;
         CargoKind = cargoKind;
         CargoSize = cargoSize;
+        PickupWindowStart = pickupWindowStart;
+        PickupWindowEnd = pickupWindowEnd;
+        DeliveryDeadline = deliveryDeadline;
     }
 }

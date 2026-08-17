@@ -12,7 +12,7 @@ using Npgsql.EntityFrameworkCore.PostgreSQL.Metadata;
 namespace Freight.Infrastructure.Persistence.Migrations
 {
     [DbContext(typeof(FreightDbContext))]
-    [Migration("20260816214249_InitialCreate")]
+    [Migration("20260816232604_InitialCreate")]
     partial class InitialCreate
     {
         /// <inheritdoc />
@@ -91,6 +91,15 @@ namespace Freight.Infrastructure.Persistence.Migrations
 
                     b.Property<int>("CargoKind")
                         .HasColumnType("integer");
+
+                    b.Property<DateTime>("DeliveryDeadline")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<DateTime>("PickupWindowEnd")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<DateTime>("PickupWindowStart")
+                        .HasColumnType("timestamp with time zone");
 
                     b.Property<Guid>("ShipperId")
                         .HasColumnType("uuid");
@@ -287,7 +296,13 @@ namespace Freight.Infrastructure.Persistence.Migrations
                                         .HasColumnType("uuid");
 
                                     b2.Property<int>("Ordinal")
+                                        .ValueGeneratedOnAdd()
                                         .HasColumnType("integer");
+
+                                    NpgsqlPropertyBuilderExtensions.UseIdentityByDefaultColumn(b2.Property<int>("Ordinal"));
+
+                                    b2.Property<DateTime>("ExpectedArrivalTime")
+                                        .HasColumnType("timestamp with time zone");
 
                                     b2.Property<int>("Kind")
                                         .HasColumnType("integer");
@@ -371,6 +386,30 @@ namespace Freight.Infrastructure.Persistence.Migrations
 
                             b1.Navigation("RouteStops");
                         });
+
+                    b.OwnsOne("Freight.Domain.ValueObjects.GeoCoordinate", "OfficeLocation", b1 =>
+                        {
+                            b1.Property<Guid>("TruckingCompanyId")
+                                .HasColumnType("uuid");
+
+                            b1.Property<double>("Latitude")
+                                .HasColumnType("double precision")
+                                .HasColumnName("OfficeLatitude");
+
+                            b1.Property<double>("Longitude")
+                                .HasColumnType("double precision")
+                                .HasColumnName("OfficeLongitude");
+
+                            b1.HasKey("TruckingCompanyId");
+
+                            b1.ToTable("TruckingCompanies");
+
+                            b1.WithOwner()
+                                .HasForeignKey("TruckingCompanyId");
+                        });
+
+                    b.Navigation("OfficeLocation")
+                        .IsRequired();
 
                     b.Navigation("Trucks");
                 });

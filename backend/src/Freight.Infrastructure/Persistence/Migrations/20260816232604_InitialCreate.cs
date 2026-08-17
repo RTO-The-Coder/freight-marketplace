@@ -1,5 +1,6 @@
 ﻿using System;
 using Microsoft.EntityFrameworkCore.Migrations;
+using Npgsql.EntityFrameworkCore.PostgreSQL.Metadata;
 
 #nullable disable
 
@@ -68,7 +69,9 @@ namespace Freight.Infrastructure.Persistence.Migrations
                 columns: table => new
                 {
                     Id = table.Column<Guid>(type: "uuid", nullable: false),
-                    Name = table.Column<string>(type: "text", nullable: false)
+                    Name = table.Column<string>(type: "text", nullable: false),
+                    OfficeLatitude = table.Column<double>(type: "double precision", nullable: false),
+                    OfficeLongitude = table.Column<double>(type: "double precision", nullable: false)
                 },
                 constraints: table =>
                 {
@@ -163,7 +166,10 @@ namespace Freight.Infrastructure.Persistence.Migrations
                     DeliveryLongitude = table.Column<double>(type: "double precision", nullable: false),
                     CargoKind = table.Column<int>(type: "integer", nullable: false),
                     WeightKg = table.Column<double>(type: "double precision", nullable: false),
-                    VolumeCubicMeters = table.Column<double>(type: "double precision", nullable: false)
+                    VolumeCubicMeters = table.Column<double>(type: "double precision", nullable: false),
+                    PickupWindowStart = table.Column<DateTime>(type: "timestamp with time zone", nullable: false),
+                    PickupWindowEnd = table.Column<DateTime>(type: "timestamp with time zone", nullable: false),
+                    DeliveryDeadline = table.Column<DateTime>(type: "timestamp with time zone", nullable: false)
                 },
                 constraints: table =>
                 {
@@ -213,9 +219,11 @@ namespace Freight.Infrastructure.Persistence.Migrations
                 columns: table => new
                 {
                     TruckId = table.Column<Guid>(type: "uuid", nullable: false),
-                    Ordinal = table.Column<int>(type: "integer", nullable: false),
+                    Ordinal = table.Column<int>(type: "integer", nullable: false)
+                        .Annotation("Npgsql:ValueGenerationStrategy", NpgsqlValueGenerationStrategy.IdentityByDefaultColumn),
                     ShipmentId = table.Column<Guid>(type: "uuid", nullable: false),
-                    Kind = table.Column<int>(type: "integer", nullable: false)
+                    Kind = table.Column<int>(type: "integer", nullable: false),
+                    ExpectedArrivalTime = table.Column<DateTime>(type: "timestamp with time zone", nullable: false)
                 },
                 constraints: table =>
                 {
