@@ -14,11 +14,17 @@ public sealed class UnitOfWork : IUnitOfWork
         _dbContext = dbContext;
         TruckingCompanies = new TruckingCompanyRepository(dbContext);
         Shippers = new ShipperRepository(dbContext);
+        Trucks = new TruckRepository(dbContext);
+        Drivers = new DriverRepository(dbContext);
     }
 
     public ITruckingCompanyRepository TruckingCompanies { get; }
 
     public IShipperRepository Shippers { get; }
+
+    public ITruckRepository Trucks { get; }
+
+    public IDriverRepository Drivers { get; }
 
     public Task<int> SaveChangesAsync(CancellationToken cancellationToken = default) =>
         _dbContext.SaveChangesAsync(cancellationToken);

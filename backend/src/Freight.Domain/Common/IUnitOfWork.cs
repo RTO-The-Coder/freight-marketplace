@@ -9,5 +9,9 @@ public interface IUnitOfWork
 
     IShipperRepository Shippers { get; }
 
+    ITruckRepository Trucks { get; }
+
+    IDriverRepository Drivers { get; }
+
     Task<int> SaveChangesAsync(CancellationToken cancellationToken = default);
 }
