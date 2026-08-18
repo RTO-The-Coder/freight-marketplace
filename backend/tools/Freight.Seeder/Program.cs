@@ -2,7 +2,7 @@ using Freight.Domain.Fleet;
 using Freight.Domain.Shipment;
 using Freight.Domain.Tracking;
 using Freight.Domain.ValueObjects;
-using Freight.Domain.ValueObjects.DrivingRules;
+using Freight.Domain.ValueObjects.RuleVariants;
 using Freight.Infrastructure.Persistence;
 using Microsoft.EntityFrameworkCore;
 using ShipmentAggregate = Freight.Domain.Shipment.Shipment;
@@ -104,7 +104,7 @@ var firstNameIndex = 0;
 string NextFirstName() => firstNames[firstNameIndex++ % firstNames.Length];
 
 var drivers = new List<Driver>();
-var driverRules = new Dictionary<Guid, DrivingRule>();
+var driverRules = new Dictionary<Guid, DrivingRules>();
 
 foreach (DrivingBreakRule breakPref in Enum.GetValues<DrivingBreakRule>())
 {
@@ -119,9 +119,10 @@ foreach (DrivingBreakRule breakPref in Enum.GetValues<DrivingBreakRule>())
 
                 for (var i = 0; i < driverCount; i++)
                 {
-                    var driver = new Driver(Guid.NewGuid(), NextFirstName(), code);
+                    var rules = DrivingRules.Create(breakPref, dailyPref, weeklyPref, extend);
+                    var driver = Driver.Create(Guid.NewGuid(), NextFirstName(), code, rules);
                     drivers.Add(driver);
-                    driverRules[driver.Id] = DrivingRule.Create(breakPref, dailyPref, weeklyPref, extend);
+                    driverRules[driver.Id] = rules;
                 }
             }
         }
@@ -131,42 +132,35 @@ foreach (DrivingBreakRule breakPref in Enum.GetValues<DrivingBreakRule>())
 Console.WriteLine($"Generated {drivers.Count} drivers across 24 rule combinations.");
 
 // ---------------------------------------------------------------------------
-// 3. Trucks (12-15 per company) - type mix ~60% BoxTruck/15% Flatbed/
-//    15% Refrigerated/10% Tanker, random capacity within realistic per-type
-//    ranges, 4-5 hazmat-certified trucks flat across the whole fleet, all
-//    start Idle, single driver each (drawn from the pool, never reused),
-//    "bigger" trucks (>=12,000kg or >=60m3) get Team driving ~50% of the time.
+// 3. Trucks (12-15 per company) - type mix ~60% BoxVan/15% Flatbed/
+//    15% Refrigerated/10% Tanker, size mix ~40% Small/35% Medium/25% Large
+//    (capacity is derived from size, never entered independently - FR1.2),
+//    4-5 hazmat-certified trucks flat across the whole fleet, single driver
+//    each (drawn from the pool, never reused), Large trucks get Team driving
+//    ~50% of the time.
 // ---------------------------------------------------------------------------
 TruckType RandomTruckType()
 {
     var roll = random.NextDouble();
     return roll switch
     {
-        < 0.60 => TruckType.BoxTruck,
+        < 0.60 => TruckType.BoxVan,
         < 0.75 => TruckType.Flatbed,
         < 0.90 => TruckType.Refrigerated,
         _ => TruckType.Tanker,
     };
 }
 
-TruckCapacity RandomCapacity(TruckType type)
+TruckSize RandomTruckSize()
 {
-    var (weightMin, weightMax, volMin, volMax) = type switch
+    var roll = random.NextDouble();
+    return roll switch
     {
-        TruckType.BoxTruck => (3000.0, 12000.0, 15.0, 60.0),
-        TruckType.Flatbed => (5000.0, 20000.0, 20.0, 50.0),
-        TruckType.Refrigerated => (3000.0, 10000.0, 15.0, 40.0),
-        TruckType.Tanker => (10000.0, 25000.0, 20.0, 35.0),
-        _ => throw new ArgumentOutOfRangeException(nameof(type)),
+        < 0.40 => TruckSize.Small,
+        < 0.75 => TruckSize.Medium,
+        _ => TruckSize.Large,
     };
-
-    var weight = weightMin + random.NextDouble() * (weightMax - weightMin);
-    var volume = volMin + random.NextDouble() * (volMax - volMin);
-    return new TruckCapacity(Capacity.Create(Math.Round(weight, 0), Math.Round(volume, 1)));
 }
-
-bool IsBiggerTruck(TruckCapacity capacity) =>
-    capacity.Total.WeightKg >= 12000 || capacity.Total.VolumeCubicMeters >= 60;
 
 var driverQueue = new Queue<Driver>(drivers.OrderBy(_ => random.Next()));
 Driver DequeueDriver()
@@ -174,23 +168,23 @@ Driver DequeueDriver()
     if (driverQueue.Count == 0)
     {
         // The 24-combinations x 4-5-per-combination pool is sized for the
-        // *expected* mix of Single/Team assignments, but random capacity
-        // generation can occasionally push more trucks over the "bigger"
-        // threshold than expected, consuming drivers faster via Team (2 each).
-        // Rather than fail the whole run, top up with an overflow driver
-        // outside the 24-combination scheme (still gets a real, valid
-        // DrivingRule so the invariant "every Driver has a matching rule
-        // entry" still holds) - keeps the seeder robust across runs
-        // without hand-tuning the pool size to match one particular random
-        // outcome.
+        // *expected* mix of Single/Team assignments, but random size generation
+        // can occasionally push more trucks to Large than expected, consuming
+        // drivers faster via Team (2 each). Rather than fail the whole run, top
+        // up with an overflow driver outside the 24-combination scheme (still
+        // gets a real, valid DrivingRules so the invariant "every Driver has a
+        // matching rule entry" still holds) - keeps the seeder robust across
+        // runs without hand-tuning the pool size to match one particular
+        // random outcome.
         var overflowIndex = drivers.Count;
-        var overflowDriver = new Driver(Guid.NewGuid(), NextFirstName(), $"OVF{overflowIndex:D3}");
-        drivers.Add(overflowDriver);
-        driverRules[overflowDriver.Id] = DrivingRule.Create(
+        var overflowRules = DrivingRules.Create(
             DrivingBreakRule.FullBreak,
             DailyRestRule.FullRest,
             WeeklyRestRule.FullWeeklyRest,
             extendDailyDrivingWhenEligible: false);
+        var overflowDriver = Driver.Create(Guid.NewGuid(), NextFirstName(), $"OVF{overflowIndex:D3}", overflowRules);
+        drivers.Add(overflowDriver);
+        driverRules[overflowDriver.Id] = overflowRules;
 
         return overflowDriver;
     }
@@ -227,22 +221,29 @@ for (var c = 0; c < companies.Count; c++)
     for (var t = 0; t < truckCountsPerCompany[c]; t++)
     {
         var type = RandomTruckType();
-        var capacity = RandomCapacity(type);
+        var size = RandomTruckSize();
         var hazmat = hazmatSlots.Contains((c, t));
 
-        DriverAssignment assignment;
-        if (IsBiggerTruck(capacity) && random.NextDouble() < 0.5)
+        var truck = Truck.Create(Guid.NewGuid(), $"{company.Name} #{t + 1:D2}", type, size);
+        truck.AssignToCompany(company.Id);
+        truck.Activate();
+
+        if (hazmat)
+        {
+            truck.CertifyForHazmat();
+        }
+
+        if (size == TruckSize.Large && random.NextDouble() < 0.5)
         {
             var first = DequeueDriver();
             var second = DequeueDriver();
-            assignment = DriverAssignment.Team(first, second);
+            truck.AssignDrivers(first, second);
         }
         else
         {
-            assignment = DriverAssignment.Single(DequeueDriver());
+            truck.AssignDrivers(DequeueDriver());
         }
 
-        var truck = new Truck(Guid.NewGuid(), company.Id, type, capacity, assignment, hazmat);
         allTrucks.Add((truck, company));
     }
 }
@@ -342,20 +343,19 @@ foreach (var (truck, _) in allTrucks)
 Console.WriteLine($"Generated {shipments.Count} shipments (one per truck), each with a Pickup+Delivery Stop.");
 
 // ---------------------------------------------------------------------------
-// Persist everything. DriverComplianceStates, driver DrivingRules,
-// RouteProgresses, and RouteLegs are intentionally left empty for
-// this pass - all trucks are Idle with no active tick-engine state, and
-// DrivingRule persistence is not yet wired up.
-//
-// TruckingCompany and Shipper are explicitly added here (Slice 2) now that
-// TruckingCompany no longer owns Truck as a navigation EF could discover them
-// through transitively. Truck/Driver/Shipment tracking is a pre-existing gap
-// (nothing in this seeder ever added them explicitly either) left for a future
-// slice to address alongside Truck's proper redesign.
+// Persist everything except Shipments. Trucks and Drivers now have real EF
+// mappings (this reconciliation slice) and are persisted here, closing the
+// previous gap where they were only ever generated in memory. Shipment
+// persistence remains out of scope for this slice (Shipment's booking
+// lifecycle belongs to a later slice) - shipments are generated above only to
+// exercise Truck.AssignShipment's in-memory route-insertion logic, never
+// added to the DbContext.
 // ---------------------------------------------------------------------------
 
 db.AddRange(companies);
 db.AddRange(shippers);
+db.AddRange(drivers);
+db.AddRange(allTrucks.Select(x => x.Truck));
 
 await db.SaveChangesAsync();
 
