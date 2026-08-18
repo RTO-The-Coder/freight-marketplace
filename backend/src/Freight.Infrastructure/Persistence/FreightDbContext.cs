@@ -1,7 +1,4 @@
-using Freight.Domain.Fleet;
-using Freight.Domain.Tracking;
 using Microsoft.EntityFrameworkCore;
-using ShipmentAggregate = Freight.Domain.Shipment.Shipment;
 
 namespace Freight.Infrastructure.Persistence;
 
