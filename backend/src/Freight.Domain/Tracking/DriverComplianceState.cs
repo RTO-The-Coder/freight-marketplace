@@ -49,7 +49,7 @@ public sealed class DriverComplianceState : Entity
 
     /// <summary>
     /// A snapshot copy for hypothetical/what-if projection (e.g.
-    /// <see cref="Abstractions.IRestRuleEngine.IsEligibleToDriveFuture"/>) — never used
+    /// <see cref="Abstractions.IDriverRuleEngine.IsEligibleToDriveFuture"/>) — never used
     /// to mutate the real, tracked ledger. All fields are value types, so this is a
     /// complete copy, not just a reference-shallow one.
     /// </summary>

@@ -1,19 +1,20 @@
 using Freight.Domain.Tracking;
 using Freight.Domain.Tracking.Abstractions;
+using Freight.Domain.ValueObjects;
+using Freight.Domain.ValueObjects.DrivingRules;
 
 namespace Freight.Domain.Tests.Tracking;
 
 public class DriverEligibilityQueryTests
 {
-    private static readonly IRestRuleEngine Engine = new RestRuleEngine();
+    private static readonly IDriverRuleEngine Engine = new DriverRuleEngine();
     private static readonly RestRuleLimits Limits = RestRuleLimits.Default;
     private static readonly DateTime Start = new(2026, 1, 5, 6, 0, 0, DateTimeKind.Utc);
 
-    private static readonly DriverRulePreference DefaultPreference = new(
-        Guid.NewGuid(),
-        BreakPreference.FullBreak,
-        DailyRestPreference.FullRest,
-        WeeklyRestPreference.FullWeeklyRest,
+    private static readonly DrivingRule DefaultRule = DrivingRule.Create(
+        DrivingBreakRule.FullBreak,
+        DailyRestRule.FullRest,
+        WeeklyRestRule.FullWeeklyRest,
         extendDailyDrivingWhenEligible: false);
 
     [Fact]
@@ -88,7 +89,7 @@ public class DriverEligibilityQueryTests
         DriveUntilDailyMinutes(ledger, 100);
 
         var now = Engine.IsEligibleToDriveNow(ledger, Limits);
-        var future = Engine.IsEligibleToDriveFuture(ledger, DefaultPreference, 0, Limits);
+        var future = Engine.IsEligibleToDriveFuture(ledger, DefaultRule, 0, Limits);
 
         Assert.Equal(now, future);
     }
@@ -101,7 +102,7 @@ public class DriverEligibilityQueryTests
         var minutesBefore = ledger.DailyDrivingMinutesToday;
         var activityBefore = ledger.CurrentActivity;
 
-        Engine.IsEligibleToDriveFuture(ledger, DefaultPreference, Limits.MaxDailyDrivingMinutes, Limits);
+        Engine.IsEligibleToDriveFuture(ledger, DefaultRule, Limits.MaxDailyDrivingMinutes, Limits);
 
         Assert.Equal(minutesBefore, ledger.DailyDrivingMinutesToday);
         Assert.Equal(activityBefore, ledger.CurrentActivity);
@@ -119,7 +120,7 @@ public class DriverEligibilityQueryTests
         // OnDailyRest, not DailyCapReached — that reason only fires for the instant
         // eligibility is checked before the rest itself has started).
         var elapsedToReachDailyCap = Limits.MaxDailyDrivingMinutes + Limits.RequiredBreakMinutes;
-        var future = Engine.IsEligibleToDriveFuture(ledger, DefaultPreference, elapsedToReachDailyCap, Limits);
+        var future = Engine.IsEligibleToDriveFuture(ledger, DefaultRule, elapsedToReachDailyCap, Limits);
 
         Assert.False(future.IsEligible);
         Assert.Equal(IneligibilityReason.OnDailyRest, future.Reason);
@@ -132,7 +133,7 @@ public class DriverEligibilityQueryTests
 
         var elapsedToReachDailyCap = Limits.MaxDailyDrivingMinutes + Limits.RequiredBreakMinutes;
         var future = Engine.IsEligibleToDriveFuture(
-            ledger, DefaultPreference, elapsedToReachDailyCap + Limits.FullDailyRestMinutes, Limits);
+            ledger, DefaultRule, elapsedToReachDailyCap + Limits.FullDailyRestMinutes, Limits);
 
         Assert.True(future.IsEligible);
     }
@@ -143,7 +144,7 @@ public class DriverEligibilityQueryTests
         var ledger = new DriverComplianceState(Guid.NewGuid(), Start);
 
         Assert.Throws<ArgumentOutOfRangeException>(
-            () => Engine.IsEligibleToDriveFuture(ledger, DefaultPreference, -1, Limits));
+            () => Engine.IsEligibleToDriveFuture(ledger, DefaultRule, -1, Limits));
     }
 
     private static void DriveUntilDailyMinutes(DriverComplianceState ledger, int targetDailyDrivingMinutes)
@@ -153,14 +154,14 @@ public class DriverEligibilityQueryTests
 
         while (ledger.DailyDrivingMinutesToday < targetDailyDrivingMinutes && safetyLimit-- > 0)
         {
-            Engine.Advance(ledger, TimeSpan.FromMinutes(1), simulatedNow, DefaultPreference, Limits);
+            Engine.Advance(ledger, TimeSpan.FromMinutes(1), simulatedNow, DefaultRule, Limits);
             simulatedNow = simulatedNow.AddMinutes(1);
         }
     }
 
     private static DriverComplianceState Advance(DriverComplianceState ledger, TimeSpan elapsed)
     {
-        Engine.Advance(ledger, elapsed, Start, DefaultPreference, Limits);
+        Engine.Advance(ledger, elapsed, Start, DefaultRule, Limits);
         return ledger;
     }
 }

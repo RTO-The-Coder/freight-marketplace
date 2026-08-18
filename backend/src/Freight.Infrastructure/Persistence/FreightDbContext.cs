@@ -11,15 +11,6 @@ public sealed class FreightDbContext : DbContext
     {
     }
 
-    public DbSet<TruckingCompany> TruckingCompanies => Set<TruckingCompany>();
-    public DbSet<Driver> Drivers => Set<Driver>();
-    public DbSet<DriverRulePreference> DriverRulePreferences => Set<DriverRulePreference>();
-    public DbSet<Freight.Domain.Shipment.Shipper> Shippers => Set<Freight.Domain.Shipment.Shipper>();
-    public DbSet<ShipmentAggregate> Shipments => Set<ShipmentAggregate>();
-    public DbSet<DriverComplianceState> DriverComplianceStates => Set<DriverComplianceState>();
-    public DbSet<RouteProgress> RouteProgresses => Set<RouteProgress>();
-    public DbSet<RouteLeg> RouteLegs => Set<RouteLeg>();
-
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
         base.OnModelCreating(modelBuilder);

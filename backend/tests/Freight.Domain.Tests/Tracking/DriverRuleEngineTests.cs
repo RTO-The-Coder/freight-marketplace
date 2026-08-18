@@ -1,20 +1,22 @@
 using Freight.Domain.Tracking;
 using Freight.Domain.Tracking.Abstractions;
+using Freight.Domain.ValueObjects;
+using Freight.Domain.ValueObjects.DrivingRules;
 
 namespace Freight.Domain.Tests.Tracking;
 
-public class RestRuleEngineTests
+public class DriverRuleEngineTests
 {
-    private static readonly IRestRuleEngine Engine = new RestRuleEngine();
+    private static readonly IDriverRuleEngine Engine = new DriverRuleEngine();
     private static readonly RestRuleLimits Limits = RestRuleLimits.Default;
     private static readonly DateTime Start = new(2026, 1, 5, 6, 0, 0, DateTimeKind.Utc); // a Monday
 
-    private static DriverRulePreference Preference(
-        BreakPreference breakPreference = BreakPreference.FullBreak,
-        DailyRestPreference dailyRestPreference = DailyRestPreference.FullRest,
-        WeeklyRestPreference weeklyRestPreference = WeeklyRestPreference.FullWeeklyRest,
+    private static DrivingRule Rule(
+        DrivingBreakRule breakRule = DrivingBreakRule.FullBreak,
+        DailyRestRule dailyRestRule = DailyRestRule.FullRest,
+        WeeklyRestRule weeklyRestRule = WeeklyRestRule.FullWeeklyRest,
         bool extend = false) =>
-        new(Guid.NewGuid(), breakPreference, dailyRestPreference, weeklyRestPreference, extend);
+        DrivingRule.Create(breakRule, dailyRestRule, weeklyRestRule, extend);
 
     private static DriverComplianceState NewLedger() => new(Guid.NewGuid(), Start);
 
@@ -28,14 +30,14 @@ public class RestRuleEngineTests
     /// overshoot muddying the assertion; the engine's tick-size handling itself is
     /// covered separately (see the 10-minute-tick tests elsewhere in this file).
     /// </summary>
-    private static DateTime DriveUntilDailyMinutes(DriverComplianceState ledger, DriverRulePreference preference, int targetDailyDrivingMinutes, DateTime? from = null)
+    private static DateTime DriveUntilDailyMinutes(DriverComplianceState ledger, DrivingRule rule, int targetDailyDrivingMinutes, DateTime? from = null)
     {
         var simulatedNow = from ?? Start;
         var safetyLimit = 100_000;
 
         while (ledger.DailyDrivingMinutesToday < targetDailyDrivingMinutes && safetyLimit-- > 0)
         {
-            Engine.Advance(ledger, TimeSpan.FromMinutes(1), simulatedNow, preference, Limits);
+            Engine.Advance(ledger, TimeSpan.FromMinutes(1), simulatedNow, rule, Limits);
             simulatedNow = simulatedNow.AddMinutes(1);
         }
 
@@ -43,14 +45,14 @@ public class RestRuleEngineTests
     }
 
     /// <summary>Ticks the engine in 10-minute steps for a fixed number of simulated minutes.</summary>
-    private static DateTime Tick(DriverComplianceState ledger, DriverRulePreference preference, int minutes, DateTime? from = null)
+    private static DateTime Tick(DriverComplianceState ledger, DrivingRule rule, int minutes, DateTime? from = null)
     {
         var simulatedNow = from ?? Start;
         var remaining = minutes;
         while (remaining > 0)
         {
             var step = Math.Min(10, remaining);
-            Engine.Advance(ledger, TimeSpan.FromMinutes(step), simulatedNow, preference, Limits);
+            Engine.Advance(ledger, TimeSpan.FromMinutes(step), simulatedNow, rule, Limits);
             simulatedNow = simulatedNow.AddMinutes(step);
             remaining -= step;
         }
@@ -65,10 +67,10 @@ public class RestRuleEngineTests
     {
         var ledger = NewLedger();
         var eveningStart = new DateTime(2026, 1, 5, 20, 0, 0, DateTimeKind.Utc);
-        var preference = Preference(breakPreference: BreakPreference.FullBreak);
+        var rule = Rule(breakRule: DrivingBreakRule.FullBreak);
 
         // 3h driving (under the 4.5h break trigger) crosses simulated midnight.
-        Tick(ledger, preference, 180, eveningStart);
+        Tick(ledger, rule, 180, eveningStart);
 
         Assert.Equal(180, ledger.DailyDrivingMinutesToday);
         Assert.Equal(DriverActivity.Driving, ledger.CurrentActivity);
@@ -78,11 +80,11 @@ public class RestRuleEngineTests
     public void DailyDrivingMinutes_ResetsOnlyAfterQualifyingDailyRestCompletes()
     {
         var ledger = NewLedger();
-        var now = DriveUntilDailyMinutes(ledger, Preference(), Limits.MaxDailyDrivingMinutes);
+        var now = DriveUntilDailyMinutes(ledger, Rule(), Limits.MaxDailyDrivingMinutes);
 
         Assert.Equal(DriverActivity.OnDailyRest, ledger.CurrentActivity);
 
-        Tick(ledger, Preference(), Limits.FullDailyRestMinutes, now);
+        Tick(ledger, Rule(), Limits.FullDailyRestMinutes, now);
 
         Assert.Equal(0, ledger.DailyDrivingMinutesToday);
         Assert.Equal(DriverActivity.Driving, ledger.CurrentActivity);
@@ -91,22 +93,22 @@ public class RestRuleEngineTests
     // ---- Daily driving cap ----
 
     [Fact]
-    public void DrivesExactlyToNineHours_NoExtensionPreference_MustStop()
+    public void DrivesExactlyToNineHours_NoExtensionRule_MustStop()
     {
         var ledger = NewLedger();
-        DriveUntilDailyMinutes(ledger, Preference(extend: false), Limits.MaxDailyDrivingMinutes);
+        DriveUntilDailyMinutes(ledger, Rule(extend: false), Limits.MaxDailyDrivingMinutes);
 
         Assert.Equal(DriverActivity.OnDailyRest, ledger.CurrentActivity);
         Assert.Equal(Limits.MaxDailyDrivingMinutes, ledger.DailyDrivingMinutesToday);
     }
 
     [Fact]
-    public void DrivesToNineHours_ExtensionPreferred_QuotaAvailable_ContinuesToTenHours()
+    public void DrivesToNineHours_ExtensionAllowed_QuotaAvailable_ContinuesToTenHours()
     {
         var ledger = NewLedger();
-        var preference = Preference(extend: true);
+        var rule = Rule(extend: true);
 
-        DriveUntilDailyMinutes(ledger, preference, Limits.ExtendedDailyDrivingMinutes);
+        DriveUntilDailyMinutes(ledger, rule, Limits.ExtendedDailyDrivingMinutes);
 
         Assert.Equal(DriverActivity.OnDailyRest, ledger.CurrentActivity);
         Assert.Equal(Limits.ExtendedDailyDrivingMinutes, ledger.DailyDrivingMinutesToday);
@@ -114,13 +116,13 @@ public class RestRuleEngineTests
     }
 
     [Fact]
-    public void DrivesToNineHours_ExtensionPreferred_QuotaExhausted_OverriddenToStopAtNine()
+    public void DrivesToNineHours_ExtensionAllowed_QuotaExhausted_OverriddenToStopAtNine()
     {
         var ledger = NewLedger();
-        var preference = Preference(extend: true);
+        var rule = Rule(extend: true);
         ledger.ExtendedDaysUsedThisWeek = Limits.MaxExtendedDaysPerWeek; // already used up
 
-        DriveUntilDailyMinutes(ledger, preference, Limits.MaxDailyDrivingMinutes);
+        DriveUntilDailyMinutes(ledger, rule, Limits.MaxDailyDrivingMinutes);
 
         Assert.False(ledger.IsTodayExtended);
         Assert.Equal(DriverActivity.OnDailyRest, ledger.CurrentActivity);
@@ -131,10 +133,10 @@ public class RestRuleEngineTests
     public void ThirdExtendedDayAttemptInAWeek_Rejected()
     {
         var ledger = NewLedger();
-        var preference = Preference(extend: true);
+        var rule = Rule(extend: true);
         ledger.ExtendedDaysUsedThisWeek = Limits.MaxExtendedDaysPerWeek; // both allowed extensions already used
 
-        DriveUntilDailyMinutes(ledger, preference, Limits.MaxDailyDrivingMinutes);
+        DriveUntilDailyMinutes(ledger, rule, Limits.MaxDailyDrivingMinutes);
 
         Assert.False(ledger.IsTodayExtended);
         Assert.Equal(Limits.MaxExtendedDaysPerWeek, ledger.ExtendedDaysUsedThisWeek);
@@ -147,7 +149,7 @@ public class RestRuleEngineTests
     public void ReachesFourAndHalfHoursContinuousDriving_MustBreak()
     {
         var ledger = NewLedger();
-        Tick(ledger, Preference(), Limits.MaxContinuousDrivingMinutesBeforeBreak);
+        Tick(ledger, Rule(), Limits.MaxContinuousDrivingMinutesBeforeBreak);
 
         Assert.Equal(DriverActivity.OnBreak, ledger.CurrentActivity);
     }
@@ -156,13 +158,13 @@ public class RestRuleEngineTests
     public void BreakTakenAsSingleFortyFiveMinuteBlock()
     {
         var ledger = NewLedger();
-        var preference = Preference(breakPreference: BreakPreference.FullBreak);
-        var now = Tick(ledger, preference, Limits.MaxContinuousDrivingMinutesBeforeBreak);
+        var rule = Rule(breakRule: DrivingBreakRule.FullBreak);
+        var now = Tick(ledger, rule, Limits.MaxContinuousDrivingMinutesBeforeBreak);
 
         Assert.Equal(DriverActivity.OnBreak, ledger.CurrentActivity);
         Assert.Equal(Limits.RequiredBreakMinutes, ledger.MinutesRemainingInCurrentActivity);
 
-        Engine.Advance(ledger, TimeSpan.FromMinutes(Limits.RequiredBreakMinutes), now, preference, Limits);
+        Engine.Advance(ledger, TimeSpan.FromMinutes(Limits.RequiredBreakMinutes), now, rule, Limits);
 
         Assert.Equal(DriverActivity.Driving, ledger.CurrentActivity);
         Assert.Equal(0, ledger.ContinuousDrivingMinutesSinceBreak);
@@ -172,12 +174,12 @@ public class RestRuleEngineTests
     public void BreakTakenAsSplitFifteenThenThirty_InOrder()
     {
         var ledger = NewLedger();
-        var preference = Preference(breakPreference: BreakPreference.SplitBreak);
-        var now = Tick(ledger, preference, Limits.MaxContinuousDrivingMinutesBeforeBreak);
+        var rule = Rule(breakRule: DrivingBreakRule.SplitBreak);
+        var now = Tick(ledger, rule, Limits.MaxContinuousDrivingMinutesBeforeBreak);
 
         Assert.Equal(Limits.SplitBreakFirstBlockMinutes, ledger.MinutesRemainingInCurrentActivity);
 
-        var outcome = Engine.Advance(ledger, TimeSpan.FromMinutes(Limits.SplitBreakFirstBlockMinutes), now, preference, Limits);
+        var outcome = Engine.Advance(ledger, TimeSpan.FromMinutes(Limits.SplitBreakFirstBlockMinutes), now, rule, Limits);
         now = now.AddMinutes(Limits.SplitBreakFirstBlockMinutes);
 
         // First block complete -> immediately begins second block, not driving.
@@ -185,7 +187,7 @@ public class RestRuleEngineTests
         Assert.Equal(Limits.SplitBreakSecondBlockMinutes, ledger.MinutesRemainingInCurrentActivity);
         Assert.True(ledger.AwaitingSecondBreakBlock);
 
-        Engine.Advance(ledger, TimeSpan.FromMinutes(Limits.SplitBreakSecondBlockMinutes), now, preference, Limits);
+        Engine.Advance(ledger, TimeSpan.FromMinutes(Limits.SplitBreakSecondBlockMinutes), now, rule, Limits);
 
         Assert.Equal(DriverActivity.Driving, ledger.CurrentActivity);
         Assert.Equal(0, ledger.ContinuousDrivingMinutesSinceBreak);
@@ -198,8 +200,8 @@ public class RestRuleEngineTests
     public void DailyRest_Full_ElevenHours()
     {
         var ledger = NewLedger();
-        var preference = Preference(dailyRestPreference: DailyRestPreference.FullRest);
-        DriveUntilDailyMinutes(ledger, preference, Limits.MaxDailyDrivingMinutes);
+        var rule = Rule(dailyRestRule: DailyRestRule.FullRest);
+        DriveUntilDailyMinutes(ledger, rule, Limits.MaxDailyDrivingMinutes);
 
         Assert.Equal(Limits.FullDailyRestMinutes, ledger.MinutesRemainingInCurrentActivity);
     }
@@ -208,8 +210,8 @@ public class RestRuleEngineTests
     public void DailyRest_Reduced_NineHours_WithinCap()
     {
         var ledger = NewLedger();
-        var preference = Preference(dailyRestPreference: DailyRestPreference.ReducedRest);
-        DriveUntilDailyMinutes(ledger, preference, Limits.MaxDailyDrivingMinutes);
+        var rule = Rule(dailyRestRule: DailyRestRule.ReducedRest);
+        DriveUntilDailyMinutes(ledger, rule, Limits.MaxDailyDrivingMinutes);
 
         Assert.Equal(Limits.ReducedDailyRestMinutes, ledger.MinutesRemainingInCurrentActivity);
         Assert.Equal(1, ledger.ReducedDailyRestsUsedSinceWeeklyRest);
@@ -219,19 +221,19 @@ public class RestRuleEngineTests
     public void DailyRest_Split_ThreeThenNine_InOrder()
     {
         var ledger = NewLedger();
-        var preference = Preference(dailyRestPreference: DailyRestPreference.SplitRest);
-        var now = DriveUntilDailyMinutes(ledger, preference, Limits.MaxDailyDrivingMinutes);
+        var rule = Rule(dailyRestRule: DailyRestRule.SplitRest);
+        var now = DriveUntilDailyMinutes(ledger, rule, Limits.MaxDailyDrivingMinutes);
 
         Assert.Equal(Limits.SplitDailyRestFirstBlockMinutes, ledger.MinutesRemainingInCurrentActivity);
 
-        Engine.Advance(ledger, TimeSpan.FromMinutes(Limits.SplitDailyRestFirstBlockMinutes), now, preference, Limits);
+        Engine.Advance(ledger, TimeSpan.FromMinutes(Limits.SplitDailyRestFirstBlockMinutes), now, rule, Limits);
         now = now.AddMinutes(Limits.SplitDailyRestFirstBlockMinutes);
 
         Assert.Equal(DriverActivity.OnDailyRest, ledger.CurrentActivity);
         Assert.Equal(Limits.SplitDailyRestSecondBlockMinutes, ledger.MinutesRemainingInCurrentActivity);
         Assert.True(ledger.AwaitingSecondDailyRestBlock);
 
-        Engine.Advance(ledger, TimeSpan.FromMinutes(Limits.SplitDailyRestSecondBlockMinutes), now, preference, Limits);
+        Engine.Advance(ledger, TimeSpan.FromMinutes(Limits.SplitDailyRestSecondBlockMinutes), now, rule, Limits);
 
         Assert.Equal(DriverActivity.Driving, ledger.CurrentActivity);
         Assert.Equal(0, ledger.DailyDrivingMinutesToday);
@@ -241,10 +243,10 @@ public class RestRuleEngineTests
     public void FourthReducedRestAttempt_SinceLastWeeklyRest_Overridden()
     {
         var ledger = NewLedger();
-        var preference = Preference(dailyRestPreference: DailyRestPreference.ReducedRest);
+        var rule = Rule(dailyRestRule: DailyRestRule.ReducedRest);
         ledger.ReducedDailyRestsUsedSinceWeeklyRest = Limits.MaxReducedDailyRestsSinceWeeklyRest;
 
-        DriveUntilDailyMinutes(ledger, preference, Limits.MaxDailyDrivingMinutes);
+        DriveUntilDailyMinutes(ledger, rule, Limits.MaxDailyDrivingMinutes);
 
         Assert.Equal(DriverActivity.OnDailyRest, ledger.CurrentActivity);
         Assert.Equal(Limits.FullDailyRestMinutes, ledger.MinutesRemainingInCurrentActivity);
@@ -259,7 +261,7 @@ public class RestRuleEngineTests
         var ledger = NewLedger();
         ledger.WeeklyDrivingMinutesThisWeek = Limits.MaxWeeklyDrivingMinutes - 10;
 
-        Engine.Advance(ledger, TimeSpan.FromMinutes(10), Start, Preference(), Limits);
+        Engine.Advance(ledger, TimeSpan.FromMinutes(10), Start, Rule(), Limits);
 
         Assert.Equal(DriverActivity.OnWeeklyRest, ledger.CurrentActivity);
     }
@@ -271,7 +273,7 @@ public class RestRuleEngineTests
         ledger.WeeklyDrivingMinutesPriorWeek = Limits.MaxWeeklyDrivingMinutes; // full 56h prior week
         ledger.WeeklyDrivingMinutesThisWeek = Limits.MaxTwoWeekDrivingMinutes - Limits.MaxWeeklyDrivingMinutes - 10;
 
-        Engine.Advance(ledger, TimeSpan.FromMinutes(10), Start, Preference(), Limits);
+        Engine.Advance(ledger, TimeSpan.FromMinutes(10), Start, Rule(), Limits);
 
         Assert.Equal(DriverActivity.OnWeeklyRest, ledger.CurrentActivity);
     }
@@ -282,8 +284,8 @@ public class RestRuleEngineTests
         var ledger = NewLedger();
         ledger.WeeklyDrivingMinutesThisWeek = Limits.MaxWeeklyDrivingMinutes;
 
-        var preference = Preference(weeklyRestPreference: WeeklyRestPreference.FullWeeklyRest);
-        Engine.Advance(ledger, TimeSpan.FromMinutes(10), Start, preference, Limits);
+        var rule = Rule(weeklyRestRule: WeeklyRestRule.FullWeeklyRest);
+        Engine.Advance(ledger, TimeSpan.FromMinutes(10), Start, rule, Limits);
 
         Assert.Equal(Limits.FullWeeklyRestMinutes, ledger.MinutesRemainingInCurrentActivity);
     }
@@ -294,8 +296,8 @@ public class RestRuleEngineTests
         var ledger = NewLedger();
         ledger.WeeklyDrivingMinutesThisWeek = Limits.MaxWeeklyDrivingMinutes;
 
-        var preference = Preference(weeklyRestPreference: WeeklyRestPreference.ReducedWeeklyRest);
-        Engine.Advance(ledger, TimeSpan.FromMinutes(10), Start, preference, Limits);
+        var rule = Rule(weeklyRestRule: WeeklyRestRule.ReducedWeeklyRest);
+        Engine.Advance(ledger, TimeSpan.FromMinutes(10), Start, rule, Limits);
 
         Assert.Equal(Limits.ReducedWeeklyRestMinutes, ledger.MinutesRemainingInCurrentActivity);
     }
@@ -309,10 +311,10 @@ public class RestRuleEngineTests
         ledger.ReducedDailyRestsUsedSinceWeeklyRest = 2;
 
         var now = Start;
-        Engine.Advance(ledger, TimeSpan.FromMinutes(10), now, Preference(), Limits);
+        Engine.Advance(ledger, TimeSpan.FromMinutes(10), now, Rule(), Limits);
         now = now.AddMinutes(10);
 
-        Engine.Advance(ledger, TimeSpan.FromMinutes(Limits.FullWeeklyRestMinutes), now, Preference(), Limits);
+        Engine.Advance(ledger, TimeSpan.FromMinutes(Limits.FullWeeklyRestMinutes), now, Rule(), Limits);
 
         Assert.Equal(0, ledger.WeeklyDrivingMinutesThisWeek);
         Assert.Equal(Limits.MaxWeeklyDrivingMinutes, ledger.WeeklyDrivingMinutesPriorWeek);
@@ -327,17 +329,17 @@ public class RestRuleEngineTests
     public void AcceptanceCriteria_SingleDriverTruck_EntersRestingAfterNineHours_RemainsElevenHours()
     {
         var ledger = NewLedger();
-        var preference = Preference();
-        var now = DriveUntilDailyMinutes(ledger, preference, Limits.MaxDailyDrivingMinutes);
+        var rule = Rule();
+        var now = DriveUntilDailyMinutes(ledger, rule, Limits.MaxDailyDrivingMinutes);
 
         Assert.Equal(DriverActivity.OnDailyRest, ledger.CurrentActivity);
 
         // Not yet eligible partway through the rest.
-        Engine.Advance(ledger, TimeSpan.FromMinutes(Limits.FullDailyRestMinutes - 10), now, preference, Limits);
+        Engine.Advance(ledger, TimeSpan.FromMinutes(Limits.FullDailyRestMinutes - 10), now, rule, Limits);
         Assert.Equal(DriverActivity.OnDailyRest, ledger.CurrentActivity);
         now = now.AddMinutes(Limits.FullDailyRestMinutes - 10);
 
-        Engine.Advance(ledger, TimeSpan.FromMinutes(10), now, preference, Limits);
+        Engine.Advance(ledger, TimeSpan.FromMinutes(10), now, rule, Limits);
         Assert.Equal(DriverActivity.Driving, ledger.CurrentActivity);
     }
 
@@ -345,7 +347,7 @@ public class RestRuleEngineTests
     public void AcceptanceCriteria_MultiDayRoute_RespectsFiftySixHourCap_InsertsFortyFiveHourRest()
     {
         var ledger = NewLedger();
-        var preference = Preference();
+        var rule = Rule();
         var now = Start;
 
         // Drive/rest cycles until the weekly cap is hit.
@@ -353,7 +355,7 @@ public class RestRuleEngineTests
         {
             var eligibility = Engine.IsEligibleToDriveNow(ledger, Limits);
             var step = eligibility.IsEligible ? 10 : Math.Max(10, eligibility.MinutesUntilEligible ?? 10);
-            Engine.Advance(ledger, TimeSpan.FromMinutes(step), now, preference, Limits);
+            Engine.Advance(ledger, TimeSpan.FromMinutes(step), now, rule, Limits);
             now = now.AddMinutes(step);
         }
 

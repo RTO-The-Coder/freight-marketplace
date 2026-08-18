@@ -384,7 +384,7 @@ namespace Freight.Infrastructure.Persistence.Migrations
                             b1.Navigation("RouteStops");
                         });
 
-                    b.OwnsOne("Freight.Domain.ValueObjects.GeoCoordinate", "OfficeLocation", b1 =>
+                    b.OwnsOne("Freight.Domain.ValueObjects.GeoLocation", "OfficeLocation", b1 =>
                         {
                             b1.Property<Guid>("TruckingCompanyId")
                                 .HasColumnType("uuid");
@@ -440,7 +440,7 @@ namespace Freight.Infrastructure.Persistence.Migrations
                                 .HasForeignKey("ShipmentId");
                         });
 
-                    b.OwnsOne("Freight.Domain.ValueObjects.GeoCoordinate", "DeliveryLocation", b1 =>
+                    b.OwnsOne("Freight.Domain.ValueObjects.GeoLocation", "DeliveryLocation", b1 =>
                         {
                             b1.Property<Guid>("ShipmentId")
                                 .HasColumnType("uuid");
@@ -461,7 +461,7 @@ namespace Freight.Infrastructure.Persistence.Migrations
                                 .HasForeignKey("ShipmentId");
                         });
 
-                    b.OwnsOne("Freight.Domain.ValueObjects.GeoCoordinate", "PickupLocation", b1 =>
+                    b.OwnsOne("Freight.Domain.ValueObjects.GeoLocation", "PickupLocation", b1 =>
                         {
                             b1.Property<Guid>("ShipmentId")
                                 .HasColumnType("uuid");

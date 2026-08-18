@@ -2,6 +2,7 @@ using Freight.Domain.Fleet;
 using Freight.Domain.Shipment;
 using Freight.Domain.Tracking;
 using Freight.Domain.ValueObjects;
+using Freight.Domain.ValueObjects.DrivingRules;
 using Freight.Infrastructure.Persistence;
 using Microsoft.EntityFrameworkCore;
 using ShipmentAggregate = Freight.Domain.Shipment.Shipment;
@@ -15,13 +16,6 @@ var optionsBuilder = new DbContextOptionsBuilder<FreightDbContext>();
 optionsBuilder.UseNpgsql(connectionString);
 
 await using var db = new FreightDbContext(optionsBuilder.Options);
-
-if (await db.TruckingCompanies.AnyAsync())
-{
-    Console.WriteLine("Seed data already present (TruckingCompanies is non-empty) - skipping. " +
-                       "Delete existing rows first if you want to reseed.");
-    return;
-}
 
 // Fixed seed for reproducible runs - re-running the seeder from a clean database
 // always produces the same dataset.
@@ -58,7 +52,7 @@ var realPlaces = new (string Name, double Lat, double Lon)[]
 };
 
 (string Name, double Lat, double Lon) RandomPlace() => realPlaces[random.Next(realPlaces.Length)];
-GeoCoordinate RandomLocation() { var (_, lat, lon) = RandomPlace(); return new GeoCoordinate(lat, lon); }
+GeoLocation RandomLocation() { var (_, lat, lon) = RandomPlace(); return GeoLocation.Create(lat, lon); }
 
 // ---------------------------------------------------------------------------
 // 1. TruckingCompanies (8) - each with a real office location.
@@ -83,20 +77,20 @@ foreach (var name in companyNames)
 }
 
 // ---------------------------------------------------------------------------
-// 2. Drivers + DriverRulePreferences - 24 distinct preference combinations
-//    (2 BreakPreference x 3 DailyRestPreference x 2 WeeklyRestPreference x
+// 2. Drivers + DrivingRules - 24 distinct rule combinations
+//    (2 DrivingBreakRule x 3 DailyRestRule x 2 WeeklyRestRule x
 //    2 ExtendDailyDrivingWhenEligible), 4-5 Driver rows generated per combination.
 //    LastName encodes the combination as a 4-letter code so the seed data is
 //    self-documenting.
 // ---------------------------------------------------------------------------
-string BreakCode(BreakPreference p) => p == BreakPreference.FullBreak ? "F" : "S";
-string DailyRestCode(DailyRestPreference p) => p switch
+string BreakCode(DrivingBreakRule p) => p == DrivingBreakRule.FullBreak ? "F" : "S";
+string DailyRestCode(DailyRestRule p) => p switch
 {
-    DailyRestPreference.FullRest => "F",
-    DailyRestPreference.ReducedRest => "R",
+    DailyRestRule.FullRest => "F",
+    DailyRestRule.ReducedRest => "R",
     _ => "S",
 };
-string WeeklyRestCode(WeeklyRestPreference p) => p == WeeklyRestPreference.FullWeeklyRest ? "F" : "R";
+string WeeklyRestCode(WeeklyRestRule p) => p == WeeklyRestRule.FullWeeklyRest ? "F" : "R";
 string ExtendCode(bool extend) => extend ? "E" : "N";
 
 string[] firstNames =
@@ -110,13 +104,13 @@ var firstNameIndex = 0;
 string NextFirstName() => firstNames[firstNameIndex++ % firstNames.Length];
 
 var drivers = new List<Driver>();
-var driverPreferences = new List<DriverRulePreference>();
+var driverRules = new Dictionary<Guid, DrivingRule>();
 
-foreach (BreakPreference breakPref in Enum.GetValues<BreakPreference>())
+foreach (DrivingBreakRule breakPref in Enum.GetValues<DrivingBreakRule>())
 {
-    foreach (DailyRestPreference dailyPref in Enum.GetValues<DailyRestPreference>())
+    foreach (DailyRestRule dailyPref in Enum.GetValues<DailyRestRule>())
     {
-        foreach (WeeklyRestPreference weeklyPref in Enum.GetValues<WeeklyRestPreference>())
+        foreach (WeeklyRestRule weeklyPref in Enum.GetValues<WeeklyRestRule>())
         {
             foreach (var extend in new[] { true, false })
             {
@@ -127,14 +121,14 @@ foreach (BreakPreference breakPref in Enum.GetValues<BreakPreference>())
                 {
                     var driver = new Driver(Guid.NewGuid(), NextFirstName(), code);
                     drivers.Add(driver);
-                    driverPreferences.Add(new DriverRulePreference(driver.Id, breakPref, dailyPref, weeklyPref, extend));
+                    driverRules[driver.Id] = DrivingRule.Create(breakPref, dailyPref, weeklyPref, extend);
                 }
             }
         }
     }
 }
 
-Console.WriteLine($"Generated {drivers.Count} drivers across 24 preference combinations.");
+Console.WriteLine($"Generated {drivers.Count} drivers across 24 rule combinations.");
 
 // ---------------------------------------------------------------------------
 // 3. Trucks (12-15 per company) - type mix ~60% BoxTruck/15% Flatbed/
@@ -168,7 +162,7 @@ TruckCapacity RandomCapacity(TruckType type)
 
     var weight = weightMin + random.NextDouble() * (weightMax - weightMin);
     var volume = volMin + random.NextDouble() * (volMax - volMin);
-    return new TruckCapacity(new Capacity(Math.Round(weight, 0), Math.Round(volume, 1)));
+    return new TruckCapacity(Capacity.Create(Math.Round(weight, 0), Math.Round(volume, 1)));
 }
 
 bool IsBiggerTruck(TruckCapacity capacity) =>
@@ -185,19 +179,18 @@ Driver DequeueDriver()
         // threshold than expected, consuming drivers faster via Team (2 each).
         // Rather than fail the whole run, top up with an overflow driver
         // outside the 24-combination scheme (still gets a real, valid
-        // DriverRulePreference so the invariant "every Driver has a matching
-        // preference row" still holds) - keeps the seeder robust across runs
+        // DrivingRule so the invariant "every Driver has a matching rule
+        // entry" still holds) - keeps the seeder robust across runs
         // without hand-tuning the pool size to match one particular random
         // outcome.
         var overflowIndex = drivers.Count;
         var overflowDriver = new Driver(Guid.NewGuid(), NextFirstName(), $"OVF{overflowIndex:D3}");
         drivers.Add(overflowDriver);
-        driverPreferences.Add(new DriverRulePreference(
-            overflowDriver.Id,
-            BreakPreference.FullBreak,
-            DailyRestPreference.FullRest,
-            WeeklyRestPreference.FullWeeklyRest,
-            extendDailyDrivingWhenEligible: false));
+        driverRules[overflowDriver.Id] = DrivingRule.Create(
+            DrivingBreakRule.FullBreak,
+            DailyRestRule.FullRest,
+            WeeklyRestRule.FullWeeklyRest,
+            extendDailyDrivingWhenEligible: false);
 
         return overflowDriver;
     }
@@ -312,7 +305,7 @@ foreach (var (truck, _) in allTrucks)
     // Cargo size: a random fraction of the truck's total capacity, always leaving
     // room within Remaining (checked by Truck.AssignShipment itself).
     var fraction = 0.3 + random.NextDouble() * 0.5; // 30-80% of capacity
-    var cargoSize = new Capacity(
+    var cargoSize = Capacity.Create(
         Math.Round(truck.Capacity.Total.WeightKg * fraction, 0),
         Math.Round(truck.Capacity.Total.VolumeCubicMeters * fraction, 1));
 
@@ -349,15 +342,12 @@ foreach (var (truck, _) in allTrucks)
 Console.WriteLine($"Generated {shipments.Count} shipments (one per truck), each with a Pickup+Delivery Stop.");
 
 // ---------------------------------------------------------------------------
-// Persist everything. DriverComplianceStates, DriverRulePreferences-consuming
-// repositories, RouteProgresses, and RouteLegs are intentionally left empty for
-// this pass - all trucks are Idle with no active tick-engine state.
+// Persist everything. DriverComplianceStates, driver DrivingRules,
+// RouteProgresses, and RouteLegs are intentionally left empty for
+// this pass - all trucks are Idle with no active tick-engine state, and
+// DrivingRule persistence is not yet wired up.
 // ---------------------------------------------------------------------------
-db.TruckingCompanies.AddRange(companies);
-db.Drivers.AddRange(drivers);
-db.DriverRulePreferences.AddRange(driverPreferences);
-db.Shippers.AddRange(shippers);
-db.Shipments.AddRange(shipments);
+
 
 await db.SaveChangesAsync();
 

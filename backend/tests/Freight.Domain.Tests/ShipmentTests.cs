@@ -5,9 +5,9 @@ namespace Freight.Domain.Tests;
 
 public class ShipmentTests
 {
-    private static GeoCoordinate Pickup() => new(52.5200, 13.4050);
-    private static GeoCoordinate Delivery() => new(48.1351, 11.5820);
-    private static Capacity ValidCargoSize() => new(500, 5);
+    private static GeoLocation Pickup() => GeoLocation.Create(52.5200, 13.4050);
+    private static GeoLocation Delivery() => GeoLocation.Create(48.1351, 11.5820);
+    private static Capacity ValidCargoSize() => Capacity.Create(500, 5);
     private static DateTime PickupWindowStart() => new(2026, 1, 1, 8, 0, 0, DateTimeKind.Utc);
     private static DateTime PickupWindowEnd() => new(2026, 1, 1, 10, 0, 0, DateTimeKind.Utc);
     private static DateTime DeliveryDeadline() => new(2026, 1, 1, 18, 0, 0, DateTimeKind.Utc);
@@ -88,7 +88,7 @@ public class ShipmentTests
     [Fact]
     public void Constructor_ZeroWeightCargoSize_Throws()
     {
-        var zeroWeight = new Capacity(0, 5);
+        var zeroWeight = Capacity.Create(0, 5);
 
         Assert.Throws<ArgumentOutOfRangeException>(() =>
             new ShipmentAggregate(Guid.NewGuid(), Guid.NewGuid(), Pickup(), Delivery(), Freight.Domain.Shipment.CargoKind.GeneralDryGoods, zeroWeight, PickupWindowStart(), PickupWindowEnd(), DeliveryDeadline()));
@@ -97,7 +97,7 @@ public class ShipmentTests
     [Fact]
     public void Constructor_ZeroVolumeCargoSize_Throws()
     {
-        var zeroVolume = new Capacity(500, 0);
+        var zeroVolume = Capacity.Create(500, 0);
 
         Assert.Throws<ArgumentOutOfRangeException>(() =>
             new ShipmentAggregate(Guid.NewGuid(), Guid.NewGuid(), Pickup(), Delivery(), Freight.Domain.Shipment.CargoKind.GeneralDryGoods, zeroVolume, PickupWindowStart(), PickupWindowEnd(), DeliveryDeadline()));

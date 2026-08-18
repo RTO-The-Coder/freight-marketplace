@@ -1,17 +1,19 @@
 using Freight.Domain.Fleet;
 using Freight.Domain.Tracking;
 using Freight.Domain.Tracking.Abstractions;
+using Freight.Domain.ValueObjects;
+using Freight.Domain.ValueObjects.DrivingRules;
 
 namespace Freight.Domain.Tests.Tracking;
 
 public class TeamAlternationTests
 {
-    private static readonly IRestRuleEngine Engine = new RestRuleEngine();
+    private static readonly IDriverRuleEngine Engine = new DriverRuleEngine();
     private static readonly RestRuleLimits Limits = RestRuleLimits.Default;
     private static readonly DateTime Start = new(2026, 1, 5, 6, 0, 0, DateTimeKind.Utc);
 
-    private static DriverRulePreference Preference(bool extend = false) =>
-        new(Guid.NewGuid(), BreakPreference.FullBreak, DailyRestPreference.FullRest, WeeklyRestPreference.FullWeeklyRest, extend);
+    private static DrivingRule Rule(bool extend = false) =>
+        DrivingRule.Create(DrivingBreakRule.FullBreak, DailyRestRule.FullRest, WeeklyRestRule.FullWeeklyRest, extend);
 
     private sealed record TickResult(Guid ActiveDriverId, DateTime SimulatedNow, MovementState LastState);
 
@@ -19,14 +21,14 @@ public class TeamAlternationTests
     private static TickResult TickTeam(
         DriverComplianceState primary, DriverComplianceState secondary,
         Guid activeId, DateTime now, int minutes,
-        DriverRulePreference primaryPreference, DriverRulePreference secondaryPreference)
+        DrivingRule primaryRule, DrivingRule secondaryRule)
     {
         var remaining = minutes;
         var lastState = MovementState.Driving;
         while (remaining > 0)
         {
             var step = Math.Min(10, remaining);
-            var outcome = Engine.EvaluateTeam(primary, secondary, activeId, TimeSpan.FromMinutes(step), now, primaryPreference, secondaryPreference, Limits);
+            var outcome = Engine.EvaluateTeam(primary, secondary, activeId, TimeSpan.FromMinutes(step), now, primaryRule, secondaryRule, Limits);
             activeId = outcome.ActiveDriverId;
             lastState = outcome.ResultingMovementState;
             now = now.AddMinutes(step);
@@ -40,14 +42,14 @@ public class TeamAlternationTests
     private static TickResult TickTeamUntilPrimaryDailyMinutes(
         DriverComplianceState primary, DriverComplianceState secondary,
         Guid activeId, DateTime now, int targetPrimaryDailyMinutes,
-        DriverRulePreference primaryPreference, DriverRulePreference secondaryPreference)
+        DrivingRule primaryRule, DrivingRule secondaryRule)
     {
         var lastState = MovementState.Driving;
         var safetyLimit = 100_000;
 
         while (primary.DailyDrivingMinutesToday < targetPrimaryDailyMinutes && safetyLimit-- > 0)
         {
-            var outcome = Engine.EvaluateTeam(primary, secondary, activeId, TimeSpan.FromMinutes(1), now, primaryPreference, secondaryPreference, Limits);
+            var outcome = Engine.EvaluateTeam(primary, secondary, activeId, TimeSpan.FromMinutes(1), now, primaryRule, secondaryRule, Limits);
             activeId = outcome.ActiveDriverId;
             lastState = outcome.ResultingMovementState;
             now = now.AddMinutes(1);
@@ -65,7 +67,7 @@ public class TeamAlternationTests
         var outcome = Engine.EvaluateTeam(
             primary, secondary, primary.DriverId,
             TimeSpan.FromMinutes(10), Start,
-            Preference(), Preference(), Limits);
+            Rule(), Rule(), Limits);
 
         Assert.Equal(MovementState.Driving, outcome.ResultingMovementState);
         Assert.Equal(primary.DriverId, outcome.ActiveDriverId);
@@ -79,7 +81,7 @@ public class TeamAlternationTests
         var primary = new DriverComplianceState(Guid.NewGuid(), Start);
         var secondary = new DriverComplianceState(Guid.NewGuid(), Start);
 
-        var result = TickTeam(primary, secondary, primary.DriverId, Start, Limits.MaxContinuousDrivingMinutesBeforeBreak, Preference(), Preference());
+        var result = TickTeam(primary, secondary, primary.DriverId, Start, Limits.MaxContinuousDrivingMinutesBeforeBreak, Rule(), Rule());
 
         // Break rule is not a swap trigger: truck keeps driving, primary stays active,
         // break is tracked on primary's own ledger only.
@@ -93,7 +95,7 @@ public class TeamAlternationTests
         var primary = new DriverComplianceState(Guid.NewGuid(), Start);
         var secondary = new DriverComplianceState(Guid.NewGuid(), Start);
 
-        var result = TickTeamUntilPrimaryDailyMinutes(primary, secondary, primary.DriverId, Start, Limits.MaxDailyDrivingMinutes, Preference(), Preference());
+        var result = TickTeamUntilPrimaryDailyMinutes(primary, secondary, primary.DriverId, Start, Limits.MaxDailyDrivingMinutes, Rule(), Rule());
 
         Assert.Equal(DriverActivity.OnDailyRest, primary.CurrentActivity);
         Assert.Equal(secondary.DriverId, result.ActiveDriverId);
@@ -107,12 +109,12 @@ public class TeamAlternationTests
         var secondary = new DriverComplianceState(Guid.NewGuid(), Start);
 
         // Drive primary to daily cap -> swap to secondary.
-        var toCap = TickTeamUntilPrimaryDailyMinutes(primary, secondary, primary.DriverId, Start, Limits.MaxDailyDrivingMinutes, Preference(), Preference());
+        var toCap = TickTeamUntilPrimaryDailyMinutes(primary, secondary, primary.DriverId, Start, Limits.MaxDailyDrivingMinutes, Rule(), Rule());
         Assert.Equal(secondary.DriverId, toCap.ActiveDriverId);
 
         // Advance through primary's full daily rest; secondary continues driving and
         // remains eligible throughout (well under any of secondary's own caps).
-        var afterRest = TickTeam(primary, secondary, toCap.ActiveDriverId, toCap.SimulatedNow, Limits.FullDailyRestMinutes, Preference(), Preference());
+        var afterRest = TickTeam(primary, secondary, toCap.ActiveDriverId, toCap.SimulatedNow, Limits.FullDailyRestMinutes, Rule(), Rule());
 
         Assert.Equal(DriverActivity.Driving, primary.CurrentActivity); // primary recovered
         Assert.Equal(secondary.DriverId, afterRest.ActiveDriverId); // but truck stayed on secondary
@@ -127,11 +129,11 @@ public class TeamAlternationTests
             WeeklyDrivingMinutesThisWeek = 54 * 60 // 54h already logged this week
         };
 
-        var primaryPreference = Preference(extend: true);
-        var secondaryPreference = Preference();
+        var primaryRule = Rule(extend: true);
+        var secondaryRule = Rule();
 
         // Primary drives to their 10h (extended) daily cap -> swap to secondary.
-        var toCap = TickTeamUntilPrimaryDailyMinutes(primary, secondary, primary.DriverId, Start, Limits.ExtendedDailyDrivingMinutes, primaryPreference, secondaryPreference);
+        var toCap = TickTeamUntilPrimaryDailyMinutes(primary, secondary, primary.DriverId, Start, Limits.ExtendedDailyDrivingMinutes, primaryRule, secondaryRule);
 
         Assert.Equal(DriverActivity.OnDailyRest, primary.CurrentActivity);
         Assert.Equal(secondary.DriverId, toCap.ActiveDriverId);
@@ -139,7 +141,7 @@ public class TeamAlternationTests
 
         // Secondary drives 2 more hours, reaching their 56h weekly cap; primary is
         // still mid-daily-rest, so both become simultaneously ineligible.
-        var afterWeeklyCap = TickTeam(primary, secondary, toCap.ActiveDriverId, toCap.SimulatedNow, 120, primaryPreference, secondaryPreference);
+        var afterWeeklyCap = TickTeam(primary, secondary, toCap.ActiveDriverId, toCap.SimulatedNow, 120, primaryRule, secondaryRule);
 
         Assert.Equal(DriverActivity.OnWeeklyRest, secondary.CurrentActivity);
         Assert.Equal(DriverActivity.OnDailyRest, primary.CurrentActivity); // primary still resting
@@ -154,7 +156,7 @@ public class TeamAlternationTests
         var primary = new DriverComplianceState(Guid.NewGuid(), Start);
         var secondary = new DriverComplianceState(Guid.NewGuid(), Start);
 
-        var future = Engine.EvaluateTeamFuture(primary, secondary, primary.DriverId, 0, Preference(), Preference(), Limits);
+        var future = Engine.EvaluateTeamFuture(primary, secondary, primary.DriverId, 0, Rule(), Rule(), Limits);
 
         Assert.Equal(MovementState.Driving, future.ResultingMovementState);
         Assert.Equal(primary.DriverId, future.ActiveDriverId);
@@ -166,7 +168,7 @@ public class TeamAlternationTests
         var primary = new DriverComplianceState(Guid.NewGuid(), Start);
         var secondary = new DriverComplianceState(Guid.NewGuid(), Start);
 
-        Engine.EvaluateTeamFuture(primary, secondary, primary.DriverId, Limits.MaxDailyDrivingMinutes, Preference(), Preference(), Limits);
+        Engine.EvaluateTeamFuture(primary, secondary, primary.DriverId, Limits.MaxDailyDrivingMinutes, Rule(), Rule(), Limits);
 
         Assert.Equal(0, primary.DailyDrivingMinutesToday);
         Assert.Equal(0, secondary.DailyDrivingMinutesToday);
@@ -183,7 +185,7 @@ public class TeamAlternationTests
         // Primary alone would hit their 9h daily cap at 540 elapsed driving minutes,
         // but reaching that requires the mandatory 4.5h break in between too.
         var elapsedToSwap = Limits.MaxDailyDrivingMinutes + Limits.RequiredBreakMinutes + 10;
-        var future = Engine.EvaluateTeamFuture(primary, secondary, primary.DriverId, elapsedToSwap, Preference(), Preference(), Limits);
+        var future = Engine.EvaluateTeamFuture(primary, secondary, primary.DriverId, elapsedToSwap, Rule(), Rule(), Limits);
 
         Assert.Equal(MovementState.Driving, future.ResultingMovementState);
         Assert.Equal(secondary.DriverId, future.ActiveDriverId);
@@ -196,17 +198,17 @@ public class TeamAlternationTests
         // scenario walked forward tick-by-tick via EvaluateTeam (the worked example).
         var stepPrimary = new DriverComplianceState(Guid.NewGuid(), Start);
         var stepSecondary = new DriverComplianceState(Guid.NewGuid(), Start) { WeeklyDrivingMinutesThisWeek = 54 * 60 };
-        var primaryPreference = Preference(extend: true);
-        var secondaryPreference = Preference();
+        var primaryRule = Rule(extend: true);
+        var secondaryRule = Rule();
 
-        var toCap = TickTeamUntilPrimaryDailyMinutes(stepPrimary, stepSecondary, stepPrimary.DriverId, Start, Limits.ExtendedDailyDrivingMinutes, primaryPreference, secondaryPreference);
-        var stepResult = TickTeam(stepPrimary, stepSecondary, toCap.ActiveDriverId, toCap.SimulatedNow, 120, primaryPreference, secondaryPreference);
+        var toCap = TickTeamUntilPrimaryDailyMinutes(stepPrimary, stepSecondary, stepPrimary.DriverId, Start, Limits.ExtendedDailyDrivingMinutes, primaryRule, secondaryRule);
+        var stepResult = TickTeam(stepPrimary, stepSecondary, toCap.ActiveDriverId, toCap.SimulatedNow, 120, primaryRule, secondaryRule);
         var totalElapsedMinutes = (int)(stepResult.SimulatedNow - Start).TotalMinutes;
 
         var futurePrimary = new DriverComplianceState(stepPrimary.DriverId, Start);
         var futureSecondary = new DriverComplianceState(stepSecondary.DriverId, Start) { WeeklyDrivingMinutesThisWeek = 54 * 60 };
 
-        var future = Engine.EvaluateTeamFuture(futurePrimary, futureSecondary, stepPrimary.DriverId, totalElapsedMinutes, primaryPreference, secondaryPreference, Limits);
+        var future = Engine.EvaluateTeamFuture(futurePrimary, futureSecondary, stepPrimary.DriverId, totalElapsedMinutes, primaryRule, secondaryRule, Limits);
 
         Assert.Equal(stepResult.LastState, future.ResultingMovementState);
     }
@@ -218,6 +220,6 @@ public class TeamAlternationTests
         var secondary = new DriverComplianceState(Guid.NewGuid(), Start);
 
         Assert.Throws<ArgumentOutOfRangeException>(
-            () => Engine.EvaluateTeamFuture(primary, secondary, primary.DriverId, -1, Preference(), Preference(), Limits));
+            () => Engine.EvaluateTeamFuture(primary, secondary, primary.DriverId, -1, Rule(), Rule(), Limits));
     }
 }

@@ -1,6 +1,9 @@
+using Freight.Domain.ValueObjects;
+using Freight.Domain.ValueObjects.DrivingRules;
+
 namespace Freight.Domain.Tracking.Abstractions;
 
-public interface IRestRuleEngine
+public interface IDriverRuleEngine
 {
     /// <summary>
     /// Is this driver eligible to drive right now, given their current ledger state?
@@ -15,14 +18,14 @@ public interface IRestRuleEngine
     /// <summary>
     /// Will this driver be eligible to drive <paramref name="afterMinutes"/> of
     /// simulated time from now? Since a driver's future is fully determined by their
-    /// fixed <paramref name="preference"/> (no live interruption is possible in this
+    /// fixed <paramref name="rule"/> (no live interruption is possible in this
     /// simulation), this replays the deterministic drive/break/rest sequence forward
     /// on a private copy of the ledger — never mutating <paramref name="ledger"/> — and
     /// reports eligibility at that point.
     /// </summary>
     DriverEligibility IsEligibleToDriveFuture(
         DriverComplianceState ledger,
-        DriverRulePreference preference,
+        DrivingRule rule,
         int afterMinutes,
         RestRuleLimits limits);
 
@@ -30,7 +33,7 @@ public interface IRestRuleEngine
         DriverComplianceState ledger,
         TimeSpan elapsedTick,
         DateTime simulatedNow,
-        DriverRulePreference preference,
+        DrivingRule rule,
         RestRuleLimits limits);
 
     TeamRestRuleOutcome EvaluateTeam(
@@ -39,15 +42,15 @@ public interface IRestRuleEngine
         Guid currentlyActiveDriverId,
         TimeSpan elapsedTick,
         DateTime simulatedNow,
-        DriverRulePreference primaryPreference,
-        DriverRulePreference secondaryPreference,
+        DrivingRule primaryRule,
+        DrivingRule secondaryRule,
         RestRuleLimits limits);
 
     /// <summary>
     /// What would this team truck's <see cref="MovementState"/> and active driver be
     /// <paramref name="afterMinutes"/> of simulated time from now? Mirrors
     /// <see cref="IsEligibleToDriveFuture"/> for the two-driver case: since both
-    /// drivers' futures are fully determined by their fixed preferences, this replays
+    /// drivers' futures are fully determined by their fixed rules, this replays
     /// <see cref="EvaluateTeam"/>'s deterministic swap logic forward on private copies
     /// of both ledgers — never mutating <paramref name="primaryLedger"/> or
     /// <paramref name="secondaryLedger"/> — and reports the resulting state.
@@ -57,7 +60,7 @@ public interface IRestRuleEngine
         DriverComplianceState secondaryLedger,
         Guid currentlyActiveDriverId,
         int afterMinutes,
-        DriverRulePreference primaryPreference,
-        DriverRulePreference secondaryPreference,
+        DrivingRule primaryRule,
+        DrivingRule secondaryRule,
         RestRuleLimits limits);
 }

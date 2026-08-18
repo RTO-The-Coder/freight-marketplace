@@ -4,5 +4,5 @@ namespace Freight.Domain.Fleet.Abstractions;
 
 public interface IPositionProvider
 {
-    GeoCoordinate GetCurrentPosition(Truck truck);
+    GeoLocation GetCurrentPosition(Truck truck);
 }

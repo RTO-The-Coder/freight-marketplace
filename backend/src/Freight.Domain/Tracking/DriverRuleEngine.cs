@@ -2,10 +2,12 @@ using Freight.Domain.Common;
 using Freight.Domain.Fleet;
 using Freight.Domain.Tracking.Abstractions;
 using Freight.Domain.Tracking.Events;
+using Freight.Domain.ValueObjects;
+using Freight.Domain.ValueObjects.DrivingRules;
 
 namespace Freight.Domain.Tracking;
 
-public sealed class RestRuleEngine : IRestRuleEngine
+public sealed class DriverRuleEngine : IDriverRuleEngine
 {
     public DriverEligibility IsEligibleToDriveNow(
         DriverComplianceState ledger,
@@ -38,7 +40,7 @@ public sealed class RestRuleEngine : IRestRuleEngine
         // the same instant (e.g. the default limits make 4.5h-break x2 == 9h-daily —
         // a driver landing exactly there needs daily rest, not another break).
         // Whether today is extended is decided once, by AccrueDriving (which has
-        // `preference`), the moment the base 9h mark is first reached — recorded on
+        // `rule`), the moment the base 9h mark is first reached — recorded on
         // ledger.IsTodayExtended. This query just reads that decision back.
         var dailyCap = ledger.IsTodayExtended ? limits.ExtendedDailyDrivingMinutes : limits.MaxDailyDrivingMinutes;
 
@@ -57,12 +59,12 @@ public sealed class RestRuleEngine : IRestRuleEngine
 
     public DriverEligibility IsEligibleToDriveFuture(
         DriverComplianceState ledger,
-        DriverRulePreference preference,
+        DrivingRule rule,
         int afterMinutes,
         RestRuleLimits limits)
     {
         ArgumentNullException.ThrowIfNull(ledger);
-        ArgumentNullException.ThrowIfNull(preference);
+        ArgumentNullException.ThrowIfNull(rule);
         ArgumentNullException.ThrowIfNull(limits);
 
         if (afterMinutes < 0)
@@ -75,13 +77,13 @@ public sealed class RestRuleEngine : IRestRuleEngine
             return IsEligibleToDriveNow(ledger, limits);
         }
 
-        // The driver's future is fully determined by their fixed preference — no live
+        // The driver's future is fully determined by their fixed rule — no live
         // interruption is possible in this simulation — so replaying forward on a
         // private copy always produces the one correct answer, not an estimate.
         var projectedLedger = ledger.Clone();
         var projectedNow = projectedLedger.LastEvaluatedSimulatedTime;
 
-        AdvanceCore(projectedLedger, afterMinutes, projectedNow, preference, limits, events: []);
+        AdvanceCore(projectedLedger, afterMinutes, projectedNow, rule, limits, events: []);
 
         return IsEligibleToDriveNow(projectedLedger, limits);
     }
@@ -90,15 +92,15 @@ public sealed class RestRuleEngine : IRestRuleEngine
         DriverComplianceState ledger,
         TimeSpan elapsedTick,
         DateTime simulatedNow,
-        DriverRulePreference preference,
+        DrivingRule rule,
         RestRuleLimits limits)
     {
         ArgumentNullException.ThrowIfNull(ledger);
-        ArgumentNullException.ThrowIfNull(preference);
+        ArgumentNullException.ThrowIfNull(rule);
         ArgumentNullException.ThrowIfNull(limits);
 
         var events = new List<IDomainEvent>();
-        var wasPolicyOverridden = AdvanceCore(ledger, (int)elapsedTick.TotalMinutes, simulatedNow, preference, limits, events);
+        var wasPolicyOverridden = AdvanceCore(ledger, (int)elapsedTick.TotalMinutes, simulatedNow, rule, limits, events);
 
         ledger.LastEvaluatedSimulatedTime = simulatedNow;
 
@@ -111,22 +113,22 @@ public sealed class RestRuleEngine : IRestRuleEngine
         Guid currentlyActiveDriverId,
         TimeSpan elapsedTick,
         DateTime simulatedNow,
-        DriverRulePreference primaryPreference,
-        DriverRulePreference secondaryPreference,
+        DrivingRule primaryRule,
+        DrivingRule secondaryRule,
         RestRuleLimits limits)
     {
         ArgumentNullException.ThrowIfNull(primaryLedger);
         ArgumentNullException.ThrowIfNull(secondaryLedger);
-        ArgumentNullException.ThrowIfNull(primaryPreference);
-        ArgumentNullException.ThrowIfNull(secondaryPreference);
+        ArgumentNullException.ThrowIfNull(primaryRule);
+        ArgumentNullException.ThrowIfNull(secondaryRule);
         ArgumentNullException.ThrowIfNull(limits);
 
         var activeIsPrimary = currentlyActiveDriverId == primaryLedger.DriverId;
 
         var activeLedger = activeIsPrimary ? primaryLedger : secondaryLedger;
-        var activePreference = activeIsPrimary ? primaryPreference : secondaryPreference;
+        var activeRule = activeIsPrimary ? primaryRule : secondaryRule;
         var inactiveLedger = activeIsPrimary ? secondaryLedger : primaryLedger;
-        var inactivePreference = activeIsPrimary ? secondaryPreference : primaryPreference;
+        var inactiveRule = activeIsPrimary ? secondaryRule : primaryRule;
 
         var events = new List<IDomainEvent>();
         var elapsedMinutes = (int)elapsedTick.TotalMinutes;
@@ -141,8 +143,8 @@ public sealed class RestRuleEngine : IRestRuleEngine
         if (activeEligibility.IsEligible)
         {
             // Active driver keeps driving; inactive driver's clock progresses as rest/break.
-            activeOverridden = AdvanceCore(activeLedger, elapsedMinutes, simulatedNow, activePreference, limits, events);
-            inactiveOverridden = AdvanceRestingCore(inactiveLedger, elapsedMinutes, simulatedNow, inactivePreference, limits, events);
+            activeOverridden = AdvanceCore(activeLedger, elapsedMinutes, simulatedNow, activeRule, limits, events);
+            inactiveOverridden = AdvanceRestingCore(inactiveLedger, elapsedMinutes, simulatedNow, inactiveRule, limits, events);
 
             if (activeLedger.CurrentActivity == DriverActivity.Driving || activeLedger.CurrentActivity == DriverActivity.OnBreak)
             {
@@ -177,8 +179,8 @@ public sealed class RestRuleEngine : IRestRuleEngine
             // break is never a swap trigger, so the truck stays on the active driver
             // through their own break regardless. The inactive driver simply waits
             // (AdvanceRestingCore leaves them untouched if they're still eligible).
-            activeOverridden = AdvanceRestingCore(activeLedger, elapsedMinutes, simulatedNow, activePreference, limits, events);
-            inactiveOverridden = AdvanceRestingCore(inactiveLedger, elapsedMinutes, simulatedNow, inactivePreference, limits, events);
+            activeOverridden = AdvanceRestingCore(activeLedger, elapsedMinutes, simulatedNow, activeRule, limits, events);
+            inactiveOverridden = AdvanceRestingCore(inactiveLedger, elapsedMinutes, simulatedNow, inactiveRule, limits, events);
 
             resultingActiveDriverId = activeLedger.DriverId;
             resultingState = MovementState.Driving;
@@ -188,19 +190,19 @@ public sealed class RestRuleEngine : IRestRuleEngine
             // Active driver failed a real hard-cap boundary (daily/weekly/two-week) or
             // is mid-required-rest — they now continue/begin whatever stop is required.
             // Check whether the other driver can take over.
-            activeOverridden = AdvanceRestingCore(activeLedger, elapsedMinutes, simulatedNow, activePreference, limits, events);
+            activeOverridden = AdvanceRestingCore(activeLedger, elapsedMinutes, simulatedNow, activeRule, limits, events);
 
             var otherEligibility = IsEligibleToDriveNow(inactiveLedger, limits);
             if (otherEligibility.IsEligible)
             {
-                inactiveOverridden = AdvanceCore(inactiveLedger, elapsedMinutes, simulatedNow, inactivePreference, limits, events);
+                inactiveOverridden = AdvanceCore(inactiveLedger, elapsedMinutes, simulatedNow, inactiveRule, limits, events);
 
                 resultingActiveDriverId = inactiveLedger.DriverId;
                 resultingState = MovementState.Driving;
             }
             else
             {
-                inactiveOverridden = AdvanceRestingCore(inactiveLedger, elapsedMinutes, simulatedNow, inactivePreference, limits, events);
+                inactiveOverridden = AdvanceRestingCore(inactiveLedger, elapsedMinutes, simulatedNow, inactiveRule, limits, events);
 
                 resultingActiveDriverId = currentlyActiveDriverId;
                 resultingState = MovementState.Resting;
@@ -228,14 +230,14 @@ public sealed class RestRuleEngine : IRestRuleEngine
         DriverComplianceState secondaryLedger,
         Guid currentlyActiveDriverId,
         int afterMinutes,
-        DriverRulePreference primaryPreference,
-        DriverRulePreference secondaryPreference,
+        DrivingRule primaryRule,
+        DrivingRule secondaryRule,
         RestRuleLimits limits)
     {
         ArgumentNullException.ThrowIfNull(primaryLedger);
         ArgumentNullException.ThrowIfNull(secondaryLedger);
-        ArgumentNullException.ThrowIfNull(primaryPreference);
-        ArgumentNullException.ThrowIfNull(secondaryPreference);
+        ArgumentNullException.ThrowIfNull(primaryRule);
+        ArgumentNullException.ThrowIfNull(secondaryRule);
         ArgumentNullException.ThrowIfNull(limits);
 
         if (afterMinutes < 0)
@@ -253,7 +255,7 @@ public sealed class RestRuleEngine : IRestRuleEngine
                 currentlyActiveDriverId);
         }
 
-        // Both drivers' futures are fully determined by their fixed preferences, so
+        // Both drivers' futures are fully determined by their fixed rules, so
         // replaying EvaluateTeam's deterministic swap logic forward on private copies
         // always produces the one correct answer. Neither real ledger is touched.
         //
@@ -281,8 +283,8 @@ public sealed class RestRuleEngine : IRestRuleEngine
                 activeDriverId,
                 TimeSpan.FromMinutes(step),
                 projectedNow,
-                primaryPreference,
-                secondaryPreference,
+                primaryRule,
+                secondaryRule,
                 limits);
 
             activeDriverId = outcome.ActiveDriverId;
@@ -302,13 +304,13 @@ public sealed class RestRuleEngine : IRestRuleEngine
         DriverComplianceState ledger,
         int elapsedMinutes,
         DateTime simulatedNow,
-        DriverRulePreference preference,
+        DrivingRule rule,
         RestRuleLimits limits,
         List<IDomainEvent> events)
     {
         if (ledger.CurrentActivity != DriverActivity.Driving)
         {
-            return AdvanceOngoingActivity(ledger, elapsedMinutes, simulatedNow, preference, limits, events);
+            return AdvanceOngoingActivity(ledger, elapsedMinutes, simulatedNow, rule, limits, events);
         }
 
         var eligibility = IsEligibleToDriveNow(ledger, limits);
@@ -316,7 +318,7 @@ public sealed class RestRuleEngine : IRestRuleEngine
         {
             // Ledger says Driving but a boundary was already reached (e.g. carried over
             // from a prior tick without a stop being started yet) — begin the stop now.
-            return BeginRequiredStop(ledger, preference, limits, simulatedNow, eligibility.Reason!.Value, events);
+            return BeginRequiredStop(ledger, rule, limits, simulatedNow, eligibility.Reason!.Value, events);
         }
 
         // Clamp accrual to exactly the minutes the driver may legally drive within this
@@ -328,17 +330,17 @@ public sealed class RestRuleEngine : IRestRuleEngine
         var minutesToAccrue = Math.Min(elapsedMinutes, drivableMinutes);
 
         AccrueDriving(ledger, minutesToAccrue);
-        DecideDailyExtension(ledger, preference, limits);
+        DecideDailyExtension(ledger, rule, limits);
 
         var postDriveEligibility = IsEligibleToDriveNow(ledger, limits);
         if (!postDriveEligibility.IsEligible)
         {
-            var stopOverridden = BeginRequiredStop(ledger, preference, limits, simulatedNow, postDriveEligibility.Reason!.Value, events);
+            var stopOverridden = BeginRequiredStop(ledger, rule, limits, simulatedNow, postDriveEligibility.Reason!.Value, events);
 
             var leftoverMinutes = elapsedMinutes - minutesToAccrue;
             if (leftoverMinutes > 0)
             {
-                AdvanceOngoingActivity(ledger, leftoverMinutes, simulatedNow, preference, limits, events);
+                AdvanceOngoingActivity(ledger, leftoverMinutes, simulatedNow, rule, limits, events);
             }
 
             return stopOverridden;
@@ -378,13 +380,13 @@ public sealed class RestRuleEngine : IRestRuleEngine
         DriverComplianceState ledger,
         int elapsedMinutes,
         DateTime simulatedNow,
-        DriverRulePreference preference,
+        DrivingRule rule,
         RestRuleLimits limits,
         List<IDomainEvent> events)
     {
         if (ledger.CurrentActivity != DriverActivity.Driving)
         {
-            return AdvanceOngoingActivity(ledger, elapsedMinutes, simulatedNow, preference, limits, events);
+            return AdvanceOngoingActivity(ledger, elapsedMinutes, simulatedNow, rule, limits, events);
         }
 
         var eligibility = IsEligibleToDriveNow(ledger, limits);
@@ -393,24 +395,24 @@ public sealed class RestRuleEngine : IRestRuleEngine
             return false;
         }
 
-        return BeginRequiredStop(ledger, preference, limits, simulatedNow, eligibility.Reason!.Value, events);
+        return BeginRequiredStop(ledger, rule, limits, simulatedNow, eligibility.Reason!.Value, events);
     }
 
     /// <summary>
     /// Called once per tick, right after driving minutes accrue. The moment a driver's
-    /// daily total first reaches the base 9h mark, decide — per their preference and
+    /// daily total first reaches the base 9h mark, decide — per their rule and
     /// remaining weekly quota — whether today becomes an extended (10h) day. This is the
     /// only place <see cref="DriverComplianceState.IsTodayExtended"/> is set, and the
     /// only place <see cref="DriverComplianceState.ExtendedDaysUsedThisWeek"/> increments.
     /// </summary>
-    private void DecideDailyExtension(DriverComplianceState ledger, DriverRulePreference preference, RestRuleLimits limits)
+    private void DecideDailyExtension(DriverComplianceState ledger, DrivingRule rule, RestRuleLimits limits)
     {
         if (ledger.IsTodayExtended || ledger.DailyDrivingMinutesToday < limits.MaxDailyDrivingMinutes)
         {
             return;
         }
 
-        if (preference.ExtendDailyDrivingWhenEligible && ledger.ExtendedDaysUsedThisWeek < limits.MaxExtendedDaysPerWeek)
+        if (rule.ExtendDailyDrivingWhenEligible && ledger.ExtendedDaysUsedThisWeek < limits.MaxExtendedDaysPerWeek)
         {
             ledger.IsTodayExtended = true;
             ledger.ExtendedDaysUsedThisWeek++;
@@ -427,7 +429,7 @@ public sealed class RestRuleEngine : IRestRuleEngine
 
     private bool BeginRequiredStop(
         DriverComplianceState ledger,
-        DriverRulePreference preference,
+        DrivingRule rule,
         RestRuleLimits limits,
         DateTime simulatedNow,
         IneligibilityReason reason,
@@ -436,16 +438,16 @@ public sealed class RestRuleEngine : IRestRuleEngine
         return reason switch
         {
             IneligibilityReason.WeeklyCapReached or IneligibilityReason.TwoWeekCapReached =>
-                BeginWeeklyRest(ledger, preference, limits, simulatedNow, events),
+                BeginWeeklyRest(ledger, rule, limits, simulatedNow, events),
             IneligibilityReason.DailyCapReached =>
-                BeginDailyRest(ledger, preference, limits, simulatedNow, events),
-            _ => BeginBreak(ledger, preference, limits, simulatedNow, events)
+                BeginDailyRest(ledger, rule, limits, simulatedNow, events),
+            _ => BeginBreak(ledger, rule, limits, simulatedNow, events)
         };
     }
 
     private bool BeginBreak(
         DriverComplianceState ledger,
-        DriverRulePreference preference,
+        DrivingRule rule,
         RestRuleLimits limits,
         DateTime simulatedNow,
         List<IDomainEvent> events)
@@ -456,7 +458,7 @@ public sealed class RestRuleEngine : IRestRuleEngine
         {
             duration = limits.SplitBreakSecondBlockMinutes;
         }
-        else if (preference.BreakPreference == BreakPreference.SplitBreak)
+        else if (rule.BreakRule == DrivingBreakRule.SplitBreak)
         {
             duration = limits.SplitBreakFirstBlockMinutes;
         }
@@ -475,7 +477,7 @@ public sealed class RestRuleEngine : IRestRuleEngine
 
     private bool BeginDailyRest(
         DriverComplianceState ledger,
-        DriverRulePreference preference,
+        DrivingRule rule,
         RestRuleLimits limits,
         DateTime simulatedNow,
         List<IDomainEvent> events)
@@ -489,23 +491,23 @@ public sealed class RestRuleEngine : IRestRuleEngine
         }
         else
         {
-            var requestedPreference = preference.DailyRestPreference;
+            var requestedRule = rule.DailyRestRule;
 
-            if (requestedPreference == DailyRestPreference.ReducedRest
+            if (requestedRule == DailyRestRule.ReducedRest
                 && ledger.ReducedDailyRestsUsedSinceWeeklyRest >= limits.MaxReducedDailyRestsSinceWeeklyRest)
             {
-                requestedPreference = DailyRestPreference.FullRest;
+                requestedRule = DailyRestRule.FullRest;
                 overridden = true;
             }
 
-            duration = requestedPreference switch
+            duration = requestedRule switch
             {
-                DailyRestPreference.ReducedRest => limits.ReducedDailyRestMinutes,
-                DailyRestPreference.SplitRest => limits.SplitDailyRestFirstBlockMinutes,
+                DailyRestRule.ReducedRest => limits.ReducedDailyRestMinutes,
+                DailyRestRule.SplitRest => limits.SplitDailyRestFirstBlockMinutes,
                 _ => limits.FullDailyRestMinutes
             };
 
-            if (requestedPreference == DailyRestPreference.ReducedRest)
+            if (requestedRule == DailyRestRule.ReducedRest)
             {
                 ledger.ReducedDailyRestsUsedSinceWeeklyRest++;
             }
@@ -521,12 +523,12 @@ public sealed class RestRuleEngine : IRestRuleEngine
 
     private bool BeginWeeklyRest(
         DriverComplianceState ledger,
-        DriverRulePreference preference,
+        DrivingRule rule,
         RestRuleLimits limits,
         DateTime simulatedNow,
         List<IDomainEvent> events)
     {
-        var isReduced = preference.WeeklyRestPreference == WeeklyRestPreference.ReducedWeeklyRest;
+        var isReduced = rule.WeeklyRestRule == WeeklyRestRule.ReducedWeeklyRest;
         var duration = isReduced ? limits.ReducedWeeklyRestMinutes : limits.FullWeeklyRestMinutes;
 
         ledger.CurrentActivity = DriverActivity.OnWeeklyRest;
@@ -547,7 +549,7 @@ public sealed class RestRuleEngine : IRestRuleEngine
         DriverComplianceState ledger,
         int elapsedMinutes,
         DateTime simulatedNow,
-        DriverRulePreference preference,
+        DrivingRule rule,
         RestRuleLimits limits,
         List<IDomainEvent> events)
     {
@@ -563,8 +565,8 @@ public sealed class RestRuleEngine : IRestRuleEngine
 
         var startsSecondBlock = completedActivity switch
         {
-            DriverActivity.OnBreak => CompleteBreakBlock(ledger, preference),
-            DriverActivity.OnDailyRest => CompleteDailyRestBlock(ledger, preference),
+            DriverActivity.OnBreak => CompleteBreakBlock(ledger, rule),
+            DriverActivity.OnDailyRest => CompleteDailyRestBlock(ledger, rule),
             _ => false
         };
 
@@ -576,8 +578,8 @@ public sealed class RestRuleEngine : IRestRuleEngine
         if (startsSecondBlock)
         {
             var beginOverridden = completedActivity == DriverActivity.OnBreak
-                ? BeginBreak(ledger, preference, limits, simulatedNow, events)
-                : BeginDailyRest(ledger, preference, limits, simulatedNow, events);
+                ? BeginBreak(ledger, rule, limits, simulatedNow, events)
+                : BeginDailyRest(ledger, rule, limits, simulatedNow, events);
 
             if (overrun > 0)
             {
@@ -586,7 +588,7 @@ public sealed class RestRuleEngine : IRestRuleEngine
                 // duration, not discarded, since a single multi-hundred-minute
                 // projection (IsEligibleToDriveFuture/EvaluateTeamFuture) can cross this
                 // transition mid-call rather than one minute at a time.
-                var overrunOverridden = AdvanceOngoingActivity(ledger, overrun, simulatedNow, preference, limits, events);
+                var overrunOverridden = AdvanceOngoingActivity(ledger, overrun, simulatedNow, rule, limits, events);
                 return beginOverridden || overrunOverridden;
             }
 
@@ -604,15 +606,15 @@ public sealed class RestRuleEngine : IRestRuleEngine
             // could themselves cross another boundary (e.g. break ends exactly as the
             // daily cap is also reached) and must be clamped/handled the same way any
             // other driving tick is.
-            return AdvanceCore(ledger, overrun, simulatedNow, preference, limits, events);
+            return AdvanceCore(ledger, overrun, simulatedNow, rule, limits, events);
         }
 
         return false;
     }
 
-    private bool CompleteBreakBlock(DriverComplianceState ledger, DriverRulePreference preference)
+    private bool CompleteBreakBlock(DriverComplianceState ledger, DrivingRule rule)
     {
-        if (!ledger.AwaitingSecondBreakBlock && preference.BreakPreference == BreakPreference.SplitBreak)
+        if (!ledger.AwaitingSecondBreakBlock && rule.BreakRule == DrivingBreakRule.SplitBreak)
         {
             ledger.AwaitingSecondBreakBlock = true;
             return true;
@@ -623,9 +625,9 @@ public sealed class RestRuleEngine : IRestRuleEngine
         return false;
     }
 
-    private bool CompleteDailyRestBlock(DriverComplianceState ledger, DriverRulePreference preference)
+    private bool CompleteDailyRestBlock(DriverComplianceState ledger, DrivingRule rule)
     {
-        if (!ledger.AwaitingSecondDailyRestBlock && preference.DailyRestPreference == DailyRestPreference.SplitRest)
+        if (!ledger.AwaitingSecondDailyRestBlock && rule.DailyRestRule == DailyRestRule.SplitRest)
         {
             ledger.AwaitingSecondDailyRestBlock = true;
             return true;

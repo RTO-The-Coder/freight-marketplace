@@ -8,7 +8,7 @@ public class TruckTests
     private static readonly DateTime PickupTime = new(2026, 1, 1, 8, 0, 0, DateTimeKind.Utc);
     private static readonly DateTime DeliveryTime = new(2026, 1, 1, 14, 0, 0, DateTimeKind.Utc);
 
-    private static TruckingCompany NewCompany() => new(Guid.NewGuid(), "Acme Trucking", new GeoCoordinate(52.5200, 13.4050));
+    private static TruckingCompany NewCompany() => new(Guid.NewGuid(), "Acme Trucking", GeoLocation.Create(52.5200, 13.4050));
 
     private static DriverAssignment SingleDriverAssignment() =>
         DriverAssignment.Single(new Driver(Guid.NewGuid(), "Jane", "Doe"));
@@ -17,7 +17,7 @@ public class TruckTests
         company.RegisterTruck(
             Guid.NewGuid(),
             TruckType.BoxTruck,
-            new TruckCapacity(new Capacity(1000, 20)),
+            new TruckCapacity(Capacity.Create(1000, 20)),
             SingleDriverAssignment());
 
     private static void AssignShipment(Truck truck, Guid shipmentId, Capacity size, int pickupInsertIndex, int deliveryInsertIndex) =>
@@ -59,7 +59,7 @@ public class TruckTests
         var truck = NewTruck(NewCompany());
         var originalTotal = truck.Capacity.Total;
 
-        AssignShipment(truck, Guid.NewGuid(), new Capacity(400, 8), pickupInsertIndex: 0, deliveryInsertIndex: 0);
+        AssignShipment(truck, Guid.NewGuid(), Capacity.Create(400, 8), pickupInsertIndex: 0, deliveryInsertIndex: 0);
 
         Assert.Equal(originalTotal, truck.Capacity.Total);
         Assert.Equal(600, truck.Capacity.Remaining.WeightKg);
@@ -72,7 +72,7 @@ public class TruckTests
         var truck = NewTruck(NewCompany());
 
         Assert.Throws<InvalidOperationException>(() =>
-            AssignShipment(truck, Guid.NewGuid(), new Capacity(1001, 5), pickupInsertIndex: 0, deliveryInsertIndex: 0));
+            AssignShipment(truck, Guid.NewGuid(), Capacity.Create(1001, 5), pickupInsertIndex: 0, deliveryInsertIndex: 0));
         Assert.Empty(truck.RouteStops);
     }
 
@@ -83,7 +83,7 @@ public class TruckTests
         var originalRemaining = truck.Capacity.Remaining;
 
         Assert.Throws<InvalidOperationException>(() =>
-            AssignShipment(truck, Guid.NewGuid(), new Capacity(5, 21), pickupInsertIndex: 0, deliveryInsertIndex: 0));
+            AssignShipment(truck, Guid.NewGuid(), Capacity.Create(5, 21), pickupInsertIndex: 0, deliveryInsertIndex: 0));
 
         Assert.Equal(originalRemaining, truck.Capacity.Remaining);
     }
@@ -96,7 +96,7 @@ public class TruckTests
         Assert.Empty(truck.RouteStops);
     }
 
-    private static Capacity SmallShipment() => new(100, 2);
+    private static Capacity SmallShipment() => Capacity.Create(100, 2);
 
     [Fact]
     public void AssignShipment_InterleavedWithExistingStops_InsertsAtCorrectPositions()

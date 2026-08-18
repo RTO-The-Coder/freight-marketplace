@@ -8,7 +8,7 @@ public class TruckingCompanyTests
     private static DriverAssignment SingleDriverAssignment() =>
         DriverAssignment.Single(new Driver(Guid.NewGuid(), "Jane", "Doe"));
 
-    private static GeoCoordinate SomeLocation() => new(52.5200, 13.4050);
+    private static GeoLocation SomeLocation() => GeoLocation.Create(52.5200, 13.4050);
 
     [Fact]
     public void RegisterTruck_AddsTruckOwnedByThisCompany()
@@ -18,7 +18,7 @@ public class TruckingCompanyTests
         var truck = company.RegisterTruck(
             Guid.NewGuid(),
             TruckType.BoxTruck,
-            new TruckCapacity(new Capacity(1000, 20)),
+            new TruckCapacity(Capacity.Create(1000, 20)),
             SingleDriverAssignment());
 
         Assert.Equal(company.Id, truck.TruckingCompanyId);
@@ -30,8 +30,8 @@ public class TruckingCompanyTests
     {
         var company = new TruckingCompany(Guid.NewGuid(), "Acme Trucking", SomeLocation());
 
-        var first = company.RegisterTruck(Guid.NewGuid(), TruckType.BoxTruck, new TruckCapacity(new Capacity(1000, 20)), SingleDriverAssignment());
-        var second = company.RegisterTruck(Guid.NewGuid(), TruckType.Flatbed, new TruckCapacity(new Capacity(2000, 30)), SingleDriverAssignment());
+        var first = company.RegisterTruck(Guid.NewGuid(), TruckType.BoxTruck, new TruckCapacity(Capacity.Create(1000, 20)), SingleDriverAssignment());
+        var second = company.RegisterTruck(Guid.NewGuid(), TruckType.Flatbed, new TruckCapacity(Capacity.Create(2000, 30)), SingleDriverAssignment());
 
         Assert.Equal(2, company.Trucks.Count);
         Assert.All(company.Trucks, t => Assert.Equal(company.Id, t.TruckingCompanyId));
@@ -77,7 +77,7 @@ public class TruckingCompanyTests
         Assert.Throws<ArgumentNullException>(() => company.RegisterTruck(
             Guid.NewGuid(),
             TruckType.BoxTruck,
-            new TruckCapacity(new Capacity(1000, 20)),
+            new TruckCapacity(Capacity.Create(1000, 20)),
             driverAssignment: null!));
     }
 }

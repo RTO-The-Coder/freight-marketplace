@@ -8,7 +8,7 @@ public sealed class TruckingCompany
 
     public Guid Id { get; private set; }
     public string Name { get; private set; } = null!;
-    public GeoCoordinate OfficeLocation { get; private set; } = null!;
+    public GeoLocation OfficeLocation { get; private set; } = null!;
     public IReadOnlyCollection<Truck> Trucks => _trucks;
 
     // EF Core cannot bind officeLocation through the constructor below (it is an
@@ -21,7 +21,7 @@ public sealed class TruckingCompany
     {
     }
 
-    public TruckingCompany(Guid id, string name, GeoCoordinate officeLocation)
+    public TruckingCompany(Guid id, string name, GeoLocation officeLocation)
     {
         if (id == Guid.Empty)
         {

@@ -6,8 +6,8 @@ public sealed class Shipment
 {
     public Guid Id { get; private set; }
     public Guid ShipperId { get; private set; }
-    public GeoCoordinate PickupLocation { get; private set; } = null!;
-    public GeoCoordinate DeliveryLocation { get; private set; } = null!;
+    public GeoLocation PickupLocation { get; private set; } = null!;
+    public GeoLocation DeliveryLocation { get; private set; } = null!;
     public CargoKind CargoKind { get; private set; }
     public Capacity CargoSize { get; private set; } = null!;
     public DateTime PickupWindowStart { get; private set; }
@@ -27,8 +27,8 @@ public sealed class Shipment
     public Shipment(
         Guid id,
         Guid shipperId,
-        GeoCoordinate pickupLocation,
-        GeoCoordinate deliveryLocation,
+        GeoLocation pickupLocation,
+        GeoLocation deliveryLocation,
         CargoKind cargoKind,
         Capacity cargoSize,
         DateTime pickupWindowStart,
