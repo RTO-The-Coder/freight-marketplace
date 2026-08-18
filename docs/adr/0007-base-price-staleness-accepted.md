@@ -1,7 +1,7 @@
 # 7. Base price staleness (GPS-tick vs. bid-engine race) is an accepted non-guarantee
 
 ## Status
-Accepted
+Accepted for Phase 2. The current (Phase 1) offer model in `freight-domain-model.md` has no platform-calculated base price at all — offers carry only the submitting company's own proposed pickup time. This ADR's base-price staleness concern is deferred, not active, until Phase 2's competitive-bidding layer introduces base pricing. Kept as a forward-looking decision record.
 
 ## Context
 The GPS tick simulation (Section 9 / FR-8) can change a truck's position and movement state (e.g. into `Resting`) at any time. Base price (Section 10.1) is calculated from a truck's current location "at the moment a company requests to bid." It is possible for a truck's state to change between the moment a base price is calculated and the moment a bid built on that price is accepted — a real race between the tick engine and the bidding engine.

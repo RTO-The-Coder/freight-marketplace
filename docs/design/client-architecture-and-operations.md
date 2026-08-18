@@ -1,8 +1,8 @@
 # Client Architecture, Concurrency, Notifications & Capacity Planning
 
-**Status:** Placeholder — to be elaborated when the relevant slices begin (concurrency strategy at the Bidding engine slice; client/UI/notification/geography detail at the shipper/dispatcher UI slices and beyond). See [trucking-marketplace-requirements.md](../../trucking-marketplace-requirements.md) Section 18 for current slice numbers — deliberately not repeated here since they've already shifted once (ADR 0010) and this placeholder predates the current numbering.
+**Status:** Mixed. The concurrency/bidding sections below (live bid feed, submit/withdraw/decline bid) describe Phase 2's competitive-bidding layer — see ADR 0003/0004/0007 and `freight-domain-model.md` §8 — and are not active in Phase 1. The client/UI/notification/geography sections are closer to current (Phase 1 uses the same web-shipper/mobile-dispatcher split, per `freight-ui-screens.md`), but should be cross-checked against `freight-domain-model.md` and `freight-ui-screens.md` before being treated as settled, since some detail (e.g. bid-specific screens) is Phase 2-only.
 
-This document previously existed as Section 16 of [trucking-marketplace-requirements.md](../../trucking-marketplace-requirements.md). It was relocated here because it describes implementation-close detail for modules not yet under active development, per the document-structure plan agreed on 2026-08-14. The content below is preserved from that discussion as reference material; it will be revisited, verified, and elaborated properly when its owning slice starts — treat it as prior thinking to validate, not settled design.
+The content below predates the current documentation set (`freight-overview.md`, `freight-frd.md`, `freight-domain-model.md`, `freight-ui-screens.md`, `freight-build-plan.md`) and is preserved as reference material only — treat it as prior thinking to validate against those documents, not settled design.
 
 ---
 

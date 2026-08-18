@@ -1,7 +1,7 @@
 # 3. Pessimistic locking for Bid state transitions
 
 ## Status
-Accepted
+Accepted for Phase 2. The current (Phase 1) offer model is the simpler `ShipmentOffer` submit-and-approve flow in `freight-domain-model.md` — this ADR's `Bid`/two-clock design is deferred, not active, until Phase 2's competitive-bidding layer is built. Kept as a forward-looking decision record.
 
 ## Context
 The Bid aggregate has several real race conditions given the two-clock bidding model (see [docs/design/client-architecture-and-operations.md](../design/client-architecture-and-operations.md), Concurrency strategy):

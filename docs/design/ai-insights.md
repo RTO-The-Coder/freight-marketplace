@@ -1,8 +1,8 @@
 # AI/RAG Integration — Insights Context
 
-**Status:** Placeholder — to be elaborated when the AI/Insights slice begins (last in the build order, after core marketplace and shipper/dispatcher UI slices are functional, since it consumes their completed data).
+**Status:** Phase 2. Depends on Phase 2's competitive-bidding layer (bid price, margin, winning bid — see ADR 0003/0004/0007 and `freight-domain-model.md` §8) for the historical data it advises on, which does not exist in Phase 1's `ShipmentOffer` model. To be elaborated once Phase 2 bidding is built and core marketplace/UI slices from `freight-build-plan.md` are functional, since it consumes their completed data.
 
-This document previously existed as Section 18 of [trucking-marketplace-requirements.md](../../trucking-marketplace-requirements.md). It was relocated here because it describes a module not yet under active development, per the document-structure plan agreed on 2026-08-14. The content below is preserved from that discussion as reference material; it will be revisited, verified, and elaborated properly when this slice starts — treat it as prior thinking to validate, not settled design.
+The content below predates the current documentation set (`freight-overview.md`, `freight-frd.md`, `freight-domain-model.md`, `freight-ui-screens.md`, `freight-build-plan.md`) and is preserved as reference material only — treat it as prior thinking to validate against those documents, not settled design.
 
 ---
 

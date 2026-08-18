@@ -1,7 +1,7 @@
 # 4. Bid immutability and automatic cross-bid withdrawal
 
 ## Status
-Accepted
+Accepted for Phase 2. The current (Phase 1) offer model is the simpler `ShipmentOffer` submit-and-approve flow in `freight-domain-model.md`, with no bid-revision or cross-shipment-withdrawal rule yet — this ADR is deferred, not active, until Phase 2's competitive-bidding layer is built. Kept as a forward-looking decision record.
 
 ## Context
 The original requirements spec (Section 13) left two related questions open:

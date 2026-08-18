@@ -31,3 +31,9 @@ Thumbs.db
 # Logs
 *.log
 npm-debug.log*
+
+# Internal tracking docs (not published) — freight-overview.md is the public exception
+/freight-frd.md
+/freight-domain-model.md
+/freight-ui-screens.md
+/freight-build-plan.md
