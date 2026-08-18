@@ -1,13 +1,19 @@
 namespace Freight.Domain.ValueObjects;
 
-public sealed record GeoCoordinate
+public sealed record GeoLocation
 {
     private const double EarthRadiusKm = 6371.0;
 
     public double Latitude { get; }
     public double Longitude { get; }
 
-    public GeoCoordinate(double latitude, double longitude)
+    private GeoLocation(double latitude, double longitude)
+    {
+        Latitude = latitude;
+        Longitude = longitude;
+    }
+
+    public static GeoLocation Create(double latitude, double longitude)
     {
         if (latitude is < -90 or > 90)
         {
@@ -19,11 +25,10 @@ public sealed record GeoCoordinate
             throw new ArgumentOutOfRangeException(nameof(longitude), longitude, "Longitude must be between -180 and 180 degrees.");
         }
 
-        Latitude = latitude;
-        Longitude = longitude;
+        return new GeoLocation(latitude, longitude);
     }
 
-    public double DistanceTo(GeoCoordinate other)
+    public double DistanceTo(GeoLocation other)
     {
         ArgumentNullException.ThrowIfNull(other);
 

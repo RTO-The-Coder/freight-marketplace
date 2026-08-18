@@ -5,7 +5,13 @@ public sealed record Capacity
     public double WeightKg { get; }
     public double VolumeCubicMeters { get; }
 
-    public Capacity(double weightKg, double volumeCubicMeters)
+    private Capacity(double weightKg, double volumeCubicMeters)
+    {
+        WeightKg = weightKg;
+        VolumeCubicMeters = volumeCubicMeters;
+    }
+
+    public static Capacity Create(double weightKg, double volumeCubicMeters)
     {
         if (weightKg < 0)
         {
@@ -17,8 +23,7 @@ public sealed record Capacity
             throw new ArgumentOutOfRangeException(nameof(volumeCubicMeters), volumeCubicMeters, "Volume cannot be negative.");
         }
 
-        WeightKg = weightKg;
-        VolumeCubicMeters = volumeCubicMeters;
+        return new Capacity(weightKg, volumeCubicMeters);
     }
 
     public bool CanAccommodate(Capacity required)
