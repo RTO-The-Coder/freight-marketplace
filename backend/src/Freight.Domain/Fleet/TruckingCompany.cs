@@ -4,24 +4,28 @@ namespace Freight.Domain.Fleet;
 
 public sealed class TruckingCompany
 {
-    private readonly List<Truck> _trucks = [];
-
     public Guid Id { get; private set; }
     public string Name { get; private set; } = null!;
     public GeoLocation OfficeLocation { get; private set; } = null!;
-    public IReadOnlyCollection<Truck> Trucks => _trucks;
 
     // EF Core cannot bind officeLocation through the constructor below (it is an
     // owned-type navigation, and EF's constructor injection only binds scalar
     // properties) - this parameterless constructor exists solely so EF's
     // materializer can construct an instance and set the properties above via
-    // reflection. The public constructor below remains the only construction path
-    // reachable from application code.
+    // reflection. The private constructor below remains the only construction path
+    // reachable from application code, via Create(...).
     private TruckingCompany()
     {
     }
 
-    public TruckingCompany(Guid id, string name, GeoLocation officeLocation)
+    private TruckingCompany(Guid id, string name, GeoLocation officeLocation)
+    {
+        Id = id;
+        Name = name;
+        OfficeLocation = officeLocation;
+    }
+
+    public static TruckingCompany Create(Guid id, string name, GeoLocation officeLocation)
     {
         if (id == Guid.Empty)
         {
@@ -35,22 +39,6 @@ public sealed class TruckingCompany
 
         ArgumentNullException.ThrowIfNull(officeLocation);
 
-        Id = id;
-        Name = name;
-        OfficeLocation = officeLocation;
-    }
-
-    public Truck RegisterTruck(
-        Guid truckId,
-        TruckType truckType,
-        TruckCapacity capacity,
-        DriverAssignment driverAssignment,
-        bool hazmatCertified = false)
-    {
-        var truck = new Truck(truckId, Id, truckType, capacity, driverAssignment, hazmatCertified);
-
-        _trucks.Add(truck);
-
-        return truck;
+        return new TruckingCompany(id, name, officeLocation);
     }
 }

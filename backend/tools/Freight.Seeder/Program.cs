@@ -72,7 +72,7 @@ string[] companyNames =
 var companies = new List<TruckingCompany>();
 foreach (var name in companyNames)
 {
-    var company = new TruckingCompany(Guid.NewGuid(), name, RandomLocation());
+    var company = TruckingCompany.Create(Guid.NewGuid(), name, RandomLocation());
     companies.Add(company);
 }
 
@@ -242,7 +242,7 @@ for (var c = 0; c < companies.Count; c++)
             assignment = DriverAssignment.Single(DequeueDriver());
         }
 
-        var truck = company.RegisterTruck(Guid.NewGuid(), type, capacity, assignment, hazmat);
+        var truck = new Truck(Guid.NewGuid(), company.Id, type, capacity, assignment, hazmat);
         allTrucks.Add((truck, company));
     }
 }
@@ -263,7 +263,7 @@ string[] shipperNames =
 ];
 
 var shippers = shipperNames
-    .Select((name, i) => new ShipperAggregate(
+    .Select((name, i) => ShipperAggregate.Create(
         Guid.NewGuid(),
         name,
         $"{name.ToLowerInvariant().Replace(" ", ".")}@example.com"))
@@ -346,8 +346,16 @@ Console.WriteLine($"Generated {shipments.Count} shipments (one per truck), each 
 // RouteProgresses, and RouteLegs are intentionally left empty for
 // this pass - all trucks are Idle with no active tick-engine state, and
 // DrivingRule persistence is not yet wired up.
+//
+// TruckingCompany and Shipper are explicitly added here (Slice 2) now that
+// TruckingCompany no longer owns Truck as a navigation EF could discover them
+// through transitively. Truck/Driver/Shipment tracking is a pre-existing gap
+// (nothing in this seeder ever added them explicitly either) left for a future
+// slice to address alongside Truck's proper redesign.
 // ---------------------------------------------------------------------------
 
+db.AddRange(companies);
+db.AddRange(shippers);
 
 await db.SaveChangesAsync();
 

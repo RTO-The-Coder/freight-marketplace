@@ -25,7 +25,11 @@ public sealed class Truck
     {
     }
 
-    internal Truck(
+    // TODO(Slice 3): temporary public constructor, standing in for the construction
+    // path that TruckingCompany.RegisterTruck used to provide before TruckingCompany
+    // stopped owning Truck (see Slice 2's ownership fix). Slice 3 owns redesigning
+    // Truck as a proper independent aggregate.
+    public Truck(
         Guid id,
         Guid truckingCompanyId,
         TruckType truckType,
