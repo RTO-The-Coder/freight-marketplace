@@ -1,3 +1,4 @@
+using Freight.Domain.Common;
 using Freight.Infrastructure.Persistence;
 using Microsoft.EntityFrameworkCore;
 
@@ -6,6 +7,8 @@ var builder = WebApplication.CreateBuilder(args);
 builder.Services.AddOpenApi();
 builder.Services.AddDbContext<FreightDbContext>(options =>
     options.UseNpgsql(builder.Configuration.GetConnectionString("FreightDb")));
+
+builder.Services.AddScoped<IUnitOfWork, UnitOfWork>();
 
 var app = builder.Build();
 
