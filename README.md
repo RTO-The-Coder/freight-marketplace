@@ -2,7 +2,7 @@
 
 A real-time trucking marketplace: a shipper posts cargo that needs to move, the platform computes which trucks in the marketplace can legally and physically reach the pickup in time — accounting for EU driver rest-hour law — and trucking companies with an eligible truck can offer to take the job. The shipper approves one offer and tracks the shipment to delivery.
 
-See [freight-overview.md](freight-overview.md) for a plain-English description of what the platform does and why the arrival-time calculation is the hard part. Architectural decisions are recorded as they're made in [docs/adr/](docs/adr/).
+[freight-overview.md](freight-overview.md) explains what the platform does and why the arrival-time calculation is the hardest part to get right. Architectural decisions are recorded as they're made in [docs/adr/](docs/adr/).
 
 ## About this project
 
