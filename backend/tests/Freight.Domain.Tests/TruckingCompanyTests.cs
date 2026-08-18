@@ -5,79 +5,36 @@ namespace Freight.Domain.Tests;
 
 public class TruckingCompanyTests
 {
-    private static DriverAssignment SingleDriverAssignment() =>
-        DriverAssignment.Single(new Driver(Guid.NewGuid(), "Jane", "Doe"));
-
     private static GeoLocation SomeLocation() => GeoLocation.Create(52.5200, 13.4050);
 
     [Fact]
-    public void RegisterTruck_AddsTruckOwnedByThisCompany()
+    public void Create_ValidInput_SetsProperties()
     {
-        var company = new TruckingCompany(Guid.NewGuid(), "Acme Trucking", SomeLocation());
+        var id = Guid.NewGuid();
+        var location = SomeLocation();
 
-        var truck = company.RegisterTruck(
-            Guid.NewGuid(),
-            TruckType.BoxTruck,
-            new TruckCapacity(Capacity.Create(1000, 20)),
-            SingleDriverAssignment());
+        var company = TruckingCompany.Create(id, "Acme Trucking", location);
 
-        Assert.Equal(company.Id, truck.TruckingCompanyId);
-        Assert.Contains(truck, company.Trucks);
+        Assert.Equal(id, company.Id);
+        Assert.Equal("Acme Trucking", company.Name);
+        Assert.Equal(location, company.OfficeLocation);
     }
 
     [Fact]
-    public void RegisterTruck_MultipleTrucks_AllBelongToSameCompany()
+    public void Create_EmptyName_Throws()
     {
-        var company = new TruckingCompany(Guid.NewGuid(), "Acme Trucking", SomeLocation());
-
-        var first = company.RegisterTruck(Guid.NewGuid(), TruckType.BoxTruck, new TruckCapacity(Capacity.Create(1000, 20)), SingleDriverAssignment());
-        var second = company.RegisterTruck(Guid.NewGuid(), TruckType.Flatbed, new TruckCapacity(Capacity.Create(2000, 30)), SingleDriverAssignment());
-
-        Assert.Equal(2, company.Trucks.Count);
-        Assert.All(company.Trucks, t => Assert.Equal(company.Id, t.TruckingCompanyId));
-        Assert.Contains(first, company.Trucks);
-        Assert.Contains(second, company.Trucks);
+        Assert.Throws<ArgumentException>(() => TruckingCompany.Create(Guid.NewGuid(), "", SomeLocation()));
     }
 
     [Fact]
-    public void Constructor_EmptyName_Throws()
+    public void Create_EmptyId_Throws()
     {
-        Assert.Throws<ArgumentException>(() => new TruckingCompany(Guid.NewGuid(), "", SomeLocation()));
+        Assert.Throws<ArgumentException>(() => TruckingCompany.Create(Guid.Empty, "Acme Trucking", SomeLocation()));
     }
 
     [Fact]
-    public void Constructor_EmptyId_Throws()
+    public void Create_NullOfficeLocation_Throws()
     {
-        Assert.Throws<ArgumentException>(() => new TruckingCompany(Guid.Empty, "Acme Trucking", SomeLocation()));
-    }
-
-    [Fact]
-    public void Constructor_NullOfficeLocation_Throws()
-    {
-        Assert.Throws<ArgumentNullException>(() => new TruckingCompany(Guid.NewGuid(), "Acme Trucking", null!));
-    }
-
-    [Fact]
-    public void RegisterTruck_NullCapacity_Throws()
-    {
-        var company = new TruckingCompany(Guid.NewGuid(), "Acme Trucking", SomeLocation());
-
-        Assert.Throws<ArgumentNullException>(() => company.RegisterTruck(
-            Guid.NewGuid(),
-            TruckType.BoxTruck,
-            capacity: null!,
-            SingleDriverAssignment()));
-    }
-
-    [Fact]
-    public void RegisterTruck_NullDriverAssignment_Throws()
-    {
-        var company = new TruckingCompany(Guid.NewGuid(), "Acme Trucking", SomeLocation());
-
-        Assert.Throws<ArgumentNullException>(() => company.RegisterTruck(
-            Guid.NewGuid(),
-            TruckType.BoxTruck,
-            new TruckCapacity(Capacity.Create(1000, 20)),
-            driverAssignment: null!));
+        Assert.Throws<ArgumentNullException>(() => TruckingCompany.Create(Guid.NewGuid(), "Acme Trucking", null!));
     }
 }

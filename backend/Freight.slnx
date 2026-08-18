@@ -9,6 +9,7 @@
     <Project Path="tests/Freight.Api.Tests/Freight.Api.Tests.csproj" />
     <Project Path="tests/Freight.Application.Tests/Freight.Application.Tests.csproj" />
     <Project Path="tests/Freight.Domain.Tests/Freight.Domain.Tests.csproj" />
+    <Project Path="tests/Freight.Infrastructure.Tests/Freight.Infrastructure.Tests.csproj" />
   </Folder>
   <Folder Name="/tools/">
     <Project Path="tools/Freight.Seeder/Freight.Seeder.csproj" />

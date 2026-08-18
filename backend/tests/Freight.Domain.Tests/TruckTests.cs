@@ -8,17 +8,19 @@ public class TruckTests
     private static readonly DateTime PickupTime = new(2026, 1, 1, 8, 0, 0, DateTimeKind.Utc);
     private static readonly DateTime DeliveryTime = new(2026, 1, 1, 14, 0, 0, DateTimeKind.Utc);
 
-    private static TruckingCompany NewCompany() => new(Guid.NewGuid(), "Acme Trucking", GeoLocation.Create(52.5200, 13.4050));
+    private static TruckingCompany NewCompany() => TruckingCompany.Create(Guid.NewGuid(), "Acme Trucking", GeoLocation.Create(52.5200, 13.4050));
 
     private static DriverAssignment SingleDriverAssignment() =>
         DriverAssignment.Single(new Driver(Guid.NewGuid(), "Jane", "Doe"));
 
     private static Truck NewTruck(TruckingCompany company) =>
-        company.RegisterTruck(
+        new(
             Guid.NewGuid(),
+            company.Id,
             TruckType.BoxTruck,
             new TruckCapacity(Capacity.Create(1000, 20)),
-            SingleDriverAssignment());
+            SingleDriverAssignment(),
+            hazmatCertified: false);
 
     private static void AssignShipment(Truck truck, Guid shipmentId, Capacity size, int pickupInsertIndex, int deliveryInsertIndex) =>
         truck.AssignShipment(shipmentId, size, pickupInsertIndex, deliveryInsertIndex, PickupTime, DeliveryTime);
