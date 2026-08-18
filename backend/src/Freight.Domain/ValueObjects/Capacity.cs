@@ -1,3 +1,5 @@
+using Freight.Domain.Fleet;
+
 namespace Freight.Domain.ValueObjects;
 
 public sealed record Capacity
@@ -25,6 +27,19 @@ public sealed record Capacity
 
         return new Capacity(weightKg, volumeCubicMeters);
     }
+
+    /// <summary>
+    /// The fixed capacity for a <see cref="TruckSize"/> tier. A truck's capacity is
+    /// always derived from its size - never entered independently - so this lookup is
+    /// the single source of truth for the three tiers.
+    /// </summary>
+    public static Capacity ForTruckSize(TruckSize size) => size switch
+    {
+        TruckSize.Small => Create(2_800, 20),
+        TruckSize.Medium => Create(9_000, 45),
+        TruckSize.Large => Create(24_000, 90),
+        _ => throw new ArgumentOutOfRangeException(nameof(size), size, "Unknown truck size."),
+    };
 
     public bool CanAccommodate(Capacity required)
     {

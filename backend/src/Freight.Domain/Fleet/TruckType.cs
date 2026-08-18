@@ -2,7 +2,7 @@ namespace Freight.Domain.Fleet;
 
 public enum TruckType
 {
-    BoxTruck,
+    BoxVan,
     Flatbed,
     Refrigerated,
     Tanker

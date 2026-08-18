@@ -1,15 +1,15 @@
-using Freight.Domain.ValueObjects.DrivingRules;
+using Freight.Domain.ValueObjects.RuleVariants;
 
 namespace Freight.Domain.ValueObjects;
 
-public sealed class DrivingRule
+public sealed class DrivingRules
 {
     public DrivingBreakRule BreakRule { get; }
     public DailyRestRule DailyRestRule { get; }
     public WeeklyRestRule WeeklyRestRule { get; }
     public bool ExtendDailyDrivingWhenEligible { get; }
 
-    private DrivingRule(
+    private DrivingRules(
         DrivingBreakRule breakRule,
         DailyRestRule dailyRestRule,
         WeeklyRestRule weeklyRestRule,
@@ -21,7 +21,7 @@ public sealed class DrivingRule
         ExtendDailyDrivingWhenEligible = extendDailyDrivingWhenEligible;
     }
 
-    public static DrivingRule Create(
+    public static DrivingRules Create(
         DrivingBreakRule breakRule,
         DailyRestRule dailyRestRule,
         WeeklyRestRule weeklyRestRule,

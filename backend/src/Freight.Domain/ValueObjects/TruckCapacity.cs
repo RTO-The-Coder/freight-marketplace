@@ -1,34 +1,26 @@
 namespace Freight.Domain.ValueObjects;
 
+/// <summary>
+/// A Truck's fixed capacity ceiling, derived from its <see cref="Fleet.TruckSize"/> at
+/// creation. Remaining capacity is deliberately not stored here - per the domain model,
+/// "remaining" must always be derived (from the route's Pickup stops still outstanding,
+/// see <see cref="Fleet.Truck.RemainingCapacity"/>) rather than tracked as a
+/// separately-mutated field, to avoid a duplicated, driftable number.
+/// </summary>
 public sealed record TruckCapacity
 {
     public Capacity Total { get; private set; } = null!;
-    public Capacity Remaining { get; private set; } = null!;
 
-    // EF Core cannot bind Total/Remaining through either constructor below (both are
-    // owned-type navigations, and EF's constructor injection only binds scalar
-    // properties) - this parameterless constructor exists solely so EF's materializer
-    // can construct an instance and set the properties above via reflection.
+    // EF Core materializes owned types through a parameterless constructor and sets the
+    // properties above via reflection.
     private TruckCapacity()
     {
     }
 
-    private TruckCapacity(Capacity total, Capacity remaining)
-    {
-        Total = total;
-        Remaining = remaining;
-    }
-
     public TruckCapacity(Capacity total)
-        : this(total, remaining: total)
     {
         ArgumentNullException.ThrowIfNull(total);
-    }
 
-    public TruckCapacity AssignShipment(Capacity shipmentSize)
-    {
-        ArgumentNullException.ThrowIfNull(shipmentSize);
-
-        return new TruckCapacity(Total, Remaining.Subtract(shipmentSize));
+        Total = total;
     }
 }

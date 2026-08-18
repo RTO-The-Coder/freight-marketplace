@@ -1,5 +1,5 @@
 using Freight.Domain.Common;
-using Freight.Domain.ValueObjects.DrivingRules;
+using Freight.Domain.ValueObjects.RuleVariants;
 
 namespace Freight.Domain.Tracking.Events;
 

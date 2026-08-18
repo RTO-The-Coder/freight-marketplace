@@ -4,9 +4,9 @@ namespace Freight.Domain.Tracking;
 
 public sealed class DrivingRuleRegistry
 {
-    private readonly Dictionary<Guid, DrivingRule> _rules = [];
+    private readonly Dictionary<Guid, DrivingRules> _rules = [];
 
-    public void Assign(Guid driverId, DrivingRule rule)
+    public void Assign(Guid driverId, DrivingRules rule)
     {
         if (driverId == Guid.Empty)
         {
@@ -18,10 +18,10 @@ public sealed class DrivingRuleRegistry
         _rules[driverId] = rule;
     }
 
-    public bool TryGet(Guid driverId, out DrivingRule? rule) =>
+    public bool TryGet(Guid driverId, out DrivingRules? rule) =>
         _rules.TryGetValue(driverId, out rule);
 
-    public DrivingRule Get(Guid driverId)
+    public DrivingRules Get(Guid driverId)
     {
         if (!_rules.TryGetValue(driverId, out var rule))
         {

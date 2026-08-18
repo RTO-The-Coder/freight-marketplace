@@ -3,7 +3,7 @@ using Freight.Domain.Fleet;
 using Freight.Domain.Tracking.Abstractions;
 using Freight.Domain.Tracking.Events;
 using Freight.Domain.ValueObjects;
-using Freight.Domain.ValueObjects.DrivingRules;
+using Freight.Domain.ValueObjects.RuleVariants;
 
 namespace Freight.Domain.Tracking;
 
@@ -59,7 +59,7 @@ public sealed class DriverRuleEngine : IDriverRuleEngine
 
     public DriverEligibility IsEligibleToDriveFuture(
         DriverComplianceState ledger,
-        DrivingRule rule,
+        DrivingRules rule,
         int afterMinutes,
         RestRuleLimits limits)
     {
@@ -92,7 +92,7 @@ public sealed class DriverRuleEngine : IDriverRuleEngine
         DriverComplianceState ledger,
         TimeSpan elapsedTick,
         DateTime simulatedNow,
-        DrivingRule rule,
+        DrivingRules rule,
         RestRuleLimits limits)
     {
         ArgumentNullException.ThrowIfNull(ledger);
@@ -113,8 +113,8 @@ public sealed class DriverRuleEngine : IDriverRuleEngine
         Guid currentlyActiveDriverId,
         TimeSpan elapsedTick,
         DateTime simulatedNow,
-        DrivingRule primaryRule,
-        DrivingRule secondaryRule,
+        DrivingRules primaryRule,
+        DrivingRules secondaryRule,
         RestRuleLimits limits)
     {
         ArgumentNullException.ThrowIfNull(primaryLedger);
@@ -230,8 +230,8 @@ public sealed class DriverRuleEngine : IDriverRuleEngine
         DriverComplianceState secondaryLedger,
         Guid currentlyActiveDriverId,
         int afterMinutes,
-        DrivingRule primaryRule,
-        DrivingRule secondaryRule,
+        DrivingRules primaryRule,
+        DrivingRules secondaryRule,
         RestRuleLimits limits)
     {
         ArgumentNullException.ThrowIfNull(primaryLedger);
@@ -304,7 +304,7 @@ public sealed class DriverRuleEngine : IDriverRuleEngine
         DriverComplianceState ledger,
         int elapsedMinutes,
         DateTime simulatedNow,
-        DrivingRule rule,
+        DrivingRules rule,
         RestRuleLimits limits,
         List<IDomainEvent> events)
     {
@@ -380,7 +380,7 @@ public sealed class DriverRuleEngine : IDriverRuleEngine
         DriverComplianceState ledger,
         int elapsedMinutes,
         DateTime simulatedNow,
-        DrivingRule rule,
+        DrivingRules rule,
         RestRuleLimits limits,
         List<IDomainEvent> events)
     {
@@ -405,7 +405,7 @@ public sealed class DriverRuleEngine : IDriverRuleEngine
     /// only place <see cref="DriverComplianceState.IsTodayExtended"/> is set, and the
     /// only place <see cref="DriverComplianceState.ExtendedDaysUsedThisWeek"/> increments.
     /// </summary>
-    private void DecideDailyExtension(DriverComplianceState ledger, DrivingRule rule, RestRuleLimits limits)
+    private void DecideDailyExtension(DriverComplianceState ledger, DrivingRules rule, RestRuleLimits limits)
     {
         if (ledger.IsTodayExtended || ledger.DailyDrivingMinutesToday < limits.MaxDailyDrivingMinutes)
         {
@@ -429,7 +429,7 @@ public sealed class DriverRuleEngine : IDriverRuleEngine
 
     private bool BeginRequiredStop(
         DriverComplianceState ledger,
-        DrivingRule rule,
+        DrivingRules rule,
         RestRuleLimits limits,
         DateTime simulatedNow,
         IneligibilityReason reason,
@@ -447,7 +447,7 @@ public sealed class DriverRuleEngine : IDriverRuleEngine
 
     private bool BeginBreak(
         DriverComplianceState ledger,
-        DrivingRule rule,
+        DrivingRules rule,
         RestRuleLimits limits,
         DateTime simulatedNow,
         List<IDomainEvent> events)
@@ -477,7 +477,7 @@ public sealed class DriverRuleEngine : IDriverRuleEngine
 
     private bool BeginDailyRest(
         DriverComplianceState ledger,
-        DrivingRule rule,
+        DrivingRules rule,
         RestRuleLimits limits,
         DateTime simulatedNow,
         List<IDomainEvent> events)
@@ -523,7 +523,7 @@ public sealed class DriverRuleEngine : IDriverRuleEngine
 
     private bool BeginWeeklyRest(
         DriverComplianceState ledger,
-        DrivingRule rule,
+        DrivingRules rule,
         RestRuleLimits limits,
         DateTime simulatedNow,
         List<IDomainEvent> events)
@@ -549,7 +549,7 @@ public sealed class DriverRuleEngine : IDriverRuleEngine
         DriverComplianceState ledger,
         int elapsedMinutes,
         DateTime simulatedNow,
-        DrivingRule rule,
+        DrivingRules rule,
         RestRuleLimits limits,
         List<IDomainEvent> events)
     {
@@ -612,7 +612,7 @@ public sealed class DriverRuleEngine : IDriverRuleEngine
         return false;
     }
 
-    private bool CompleteBreakBlock(DriverComplianceState ledger, DrivingRule rule)
+    private bool CompleteBreakBlock(DriverComplianceState ledger, DrivingRules rule)
     {
         if (!ledger.AwaitingSecondBreakBlock && rule.BreakRule == DrivingBreakRule.SplitBreak)
         {
@@ -625,7 +625,7 @@ public sealed class DriverRuleEngine : IDriverRuleEngine
         return false;
     }
 
-    private bool CompleteDailyRestBlock(DriverComplianceState ledger, DrivingRule rule)
+    private bool CompleteDailyRestBlock(DriverComplianceState ledger, DrivingRules rule)
     {
         if (!ledger.AwaitingSecondDailyRestBlock && rule.DailyRestRule == DailyRestRule.SplitRest)
         {

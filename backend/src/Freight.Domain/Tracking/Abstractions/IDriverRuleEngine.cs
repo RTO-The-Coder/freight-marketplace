@@ -1,5 +1,5 @@
 using Freight.Domain.ValueObjects;
-using Freight.Domain.ValueObjects.DrivingRules;
+using Freight.Domain.ValueObjects.RuleVariants;
 
 namespace Freight.Domain.Tracking.Abstractions;
 
@@ -25,7 +25,7 @@ public interface IDriverRuleEngine
     /// </summary>
     DriverEligibility IsEligibleToDriveFuture(
         DriverComplianceState ledger,
-        DrivingRule rule,
+        DrivingRules rule,
         int afterMinutes,
         RestRuleLimits limits);
 
@@ -33,7 +33,7 @@ public interface IDriverRuleEngine
         DriverComplianceState ledger,
         TimeSpan elapsedTick,
         DateTime simulatedNow,
-        DrivingRule rule,
+        DrivingRules rule,
         RestRuleLimits limits);
 
     TeamRestRuleOutcome EvaluateTeam(
@@ -42,8 +42,8 @@ public interface IDriverRuleEngine
         Guid currentlyActiveDriverId,
         TimeSpan elapsedTick,
         DateTime simulatedNow,
-        DrivingRule primaryRule,
-        DrivingRule secondaryRule,
+        DrivingRules primaryRule,
+        DrivingRules secondaryRule,
         RestRuleLimits limits);
 
     /// <summary>
@@ -60,7 +60,7 @@ public interface IDriverRuleEngine
         DriverComplianceState secondaryLedger,
         Guid currentlyActiveDriverId,
         int afterMinutes,
-        DrivingRule primaryRule,
-        DrivingRule secondaryRule,
+        DrivingRules primaryRule,
+        DrivingRules secondaryRule,
         RestRuleLimits limits);
 }

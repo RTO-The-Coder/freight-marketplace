@@ -1,4 +1,4 @@
-namespace Freight.Domain.ValueObjects.DrivingRules;
+namespace Freight.Domain.Tracking;
 
 public sealed record RestRuleLimits
 {
