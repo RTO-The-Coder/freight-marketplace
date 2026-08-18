@@ -1,13 +1,13 @@
 using Freight.Domain.Tracking;
 using Freight.Domain.Tracking.Abstractions;
 using Freight.Domain.ValueObjects;
-using Freight.Domain.ValueObjects.DrivingRules;
+using Freight.Domain.ValueObjects.RuleVariants;
 
 namespace Freight.Domain.Tests.Tracking;
 
 /// <summary>
 /// Checks eligibility now / +5h / +10h from a fresh ledger for all 24
-/// <see cref="DrivingRule"/> combinations (see
+/// <see cref="DrivingRules"/> combinations (see
 /// <see cref="DrivingRuleCombinations"/>), against exact, hand-derived expected
 /// values — not just internal consistency. The expected values follow directly from
 /// EC 561/2006's own numbers (see the walkthrough below); this file exists to catch a

@@ -1,7 +1,7 @@
 using Freight.Domain.Tracking;
 using Freight.Domain.Tracking.Abstractions;
 using Freight.Domain.ValueObjects;
-using Freight.Domain.ValueObjects.DrivingRules;
+using Freight.Domain.ValueObjects.RuleVariants;
 
 namespace Freight.Domain.Tests.Tracking;
 
@@ -11,12 +11,12 @@ public class DriverRuleEngineTests
     private static readonly RestRuleLimits Limits = RestRuleLimits.Default;
     private static readonly DateTime Start = new(2026, 1, 5, 6, 0, 0, DateTimeKind.Utc); // a Monday
 
-    private static DrivingRule Rule(
+    private static DrivingRules Rule(
         DrivingBreakRule breakRule = DrivingBreakRule.FullBreak,
         DailyRestRule dailyRestRule = DailyRestRule.FullRest,
         WeeklyRestRule weeklyRestRule = WeeklyRestRule.FullWeeklyRest,
         bool extend = false) =>
-        DrivingRule.Create(breakRule, dailyRestRule, weeklyRestRule, extend);
+        DrivingRules.Create(breakRule, dailyRestRule, weeklyRestRule, extend);
 
     private static DriverComplianceState NewLedger() => new(Guid.NewGuid(), Start);
 
@@ -30,7 +30,7 @@ public class DriverRuleEngineTests
     /// overshoot muddying the assertion; the engine's tick-size handling itself is
     /// covered separately (see the 10-minute-tick tests elsewhere in this file).
     /// </summary>
-    private static DateTime DriveUntilDailyMinutes(DriverComplianceState ledger, DrivingRule rule, int targetDailyDrivingMinutes, DateTime? from = null)
+    private static DateTime DriveUntilDailyMinutes(DriverComplianceState ledger, DrivingRules rule, int targetDailyDrivingMinutes, DateTime? from = null)
     {
         var simulatedNow = from ?? Start;
         var safetyLimit = 100_000;
@@ -45,7 +45,7 @@ public class DriverRuleEngineTests
     }
 
     /// <summary>Ticks the engine in 10-minute steps for a fixed number of simulated minutes.</summary>
-    private static DateTime Tick(DriverComplianceState ledger, DrivingRule rule, int minutes, DateTime? from = null)
+    private static DateTime Tick(DriverComplianceState ledger, DrivingRules rule, int minutes, DateTime? from = null)
     {
         var simulatedNow = from ?? Start;
         var remaining = minutes;

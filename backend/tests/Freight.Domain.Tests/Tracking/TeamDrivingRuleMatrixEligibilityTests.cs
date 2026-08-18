@@ -2,7 +2,7 @@ using Freight.Domain.Fleet;
 using Freight.Domain.Tracking;
 using Freight.Domain.Tracking.Abstractions;
 using Freight.Domain.ValueObjects;
-using Freight.Domain.ValueObjects.DrivingRules;
+using Freight.Domain.ValueObjects.RuleVariants;
 
 namespace Freight.Domain.Tests.Tracking;
 

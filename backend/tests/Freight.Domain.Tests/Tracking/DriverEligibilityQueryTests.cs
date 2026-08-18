@@ -1,7 +1,7 @@
 using Freight.Domain.Tracking;
 using Freight.Domain.Tracking.Abstractions;
 using Freight.Domain.ValueObjects;
-using Freight.Domain.ValueObjects.DrivingRules;
+using Freight.Domain.ValueObjects.RuleVariants;
 
 namespace Freight.Domain.Tests.Tracking;
 
@@ -11,7 +11,7 @@ public class DriverEligibilityQueryTests
     private static readonly RestRuleLimits Limits = RestRuleLimits.Default;
     private static readonly DateTime Start = new(2026, 1, 5, 6, 0, 0, DateTimeKind.Utc);
 
-    private static readonly DrivingRule DefaultRule = DrivingRule.Create(
+    private static readonly DrivingRules DefaultRule = DrivingRules.Create(
         DrivingBreakRule.FullBreak,
         DailyRestRule.FullRest,
         WeeklyRestRule.FullWeeklyRest,

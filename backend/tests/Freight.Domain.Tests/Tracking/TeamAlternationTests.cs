@@ -2,7 +2,7 @@ using Freight.Domain.Fleet;
 using Freight.Domain.Tracking;
 using Freight.Domain.Tracking.Abstractions;
 using Freight.Domain.ValueObjects;
-using Freight.Domain.ValueObjects.DrivingRules;
+using Freight.Domain.ValueObjects.RuleVariants;
 
 namespace Freight.Domain.Tests.Tracking;
 
@@ -12,8 +12,8 @@ public class TeamAlternationTests
     private static readonly RestRuleLimits Limits = RestRuleLimits.Default;
     private static readonly DateTime Start = new(2026, 1, 5, 6, 0, 0, DateTimeKind.Utc);
 
-    private static DrivingRule Rule(bool extend = false) =>
-        DrivingRule.Create(DrivingBreakRule.FullBreak, DailyRestRule.FullRest, WeeklyRestRule.FullWeeklyRest, extend);
+    private static DrivingRules Rule(bool extend = false) =>
+        DrivingRules.Create(DrivingBreakRule.FullBreak, DailyRestRule.FullRest, WeeklyRestRule.FullWeeklyRest, extend);
 
     private sealed record TickResult(Guid ActiveDriverId, DateTime SimulatedNow, MovementState LastState);
 
@@ -21,7 +21,7 @@ public class TeamAlternationTests
     private static TickResult TickTeam(
         DriverComplianceState primary, DriverComplianceState secondary,
         Guid activeId, DateTime now, int minutes,
-        DrivingRule primaryRule, DrivingRule secondaryRule)
+        DrivingRules primaryRule, DrivingRules secondaryRule)
     {
         var remaining = minutes;
         var lastState = MovementState.Driving;
@@ -42,7 +42,7 @@ public class TeamAlternationTests
     private static TickResult TickTeamUntilPrimaryDailyMinutes(
         DriverComplianceState primary, DriverComplianceState secondary,
         Guid activeId, DateTime now, int targetPrimaryDailyMinutes,
-        DrivingRule primaryRule, DrivingRule secondaryRule)
+        DrivingRules primaryRule, DrivingRules secondaryRule)
     {
         var lastState = MovementState.Driving;
         var safetyLimit = 100_000;

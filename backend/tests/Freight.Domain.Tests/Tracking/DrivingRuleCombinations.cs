@@ -1,10 +1,10 @@
 using Freight.Domain.ValueObjects;
-using Freight.Domain.ValueObjects.DrivingRules;
+using Freight.Domain.ValueObjects.RuleVariants;
 
 namespace Freight.Domain.Tests.Tracking;
 
 /// <summary>
-/// Generates every possible <see cref="DrivingRule"/> combination (2 break x
+/// Generates every possible <see cref="DrivingRules"/> combination (2 break x
 /// 3 daily-rest x 2 weekly-rest x 2 extend = 24), so eligibility can be verified across
 /// the full rule space instead of a handful of hand-picked cases. For team tests,
 /// the 24 combinations are split into 4 fixed groups of 6 so a 4x4 pairing matrix can
@@ -32,7 +32,7 @@ internal static class DrivingRuleCombinations
     public static IReadOnlyList<((DrivingBreakRule Break, DailyRestRule DailyRest, WeeklyRestRule WeeklyRest, bool Extend) Primary, (DrivingBreakRule Break, DailyRestRule DailyRest, WeeklyRestRule WeeklyRest, bool Extend) Secondary)> TeamPairs { get; } =
         Groups.SelectMany(group => group.Chunk(2).Select(pair => (pair[0], pair[1]))).ToList();
 
-    public static DrivingRule ToRule(
+    public static DrivingRules ToRule(
         this (DrivingBreakRule Break, DailyRestRule DailyRest, WeeklyRestRule WeeklyRest, bool Extend) combination) =>
-        DrivingRule.Create(combination.Break, combination.DailyRest, combination.WeeklyRest, combination.Extend);
+        DrivingRules.Create(combination.Break, combination.DailyRest, combination.WeeklyRest, combination.Extend);
 }

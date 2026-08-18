@@ -1,7 +1,7 @@
 using Freight.Domain.Tracking;
 using Freight.Domain.Tracking.Abstractions;
 using Freight.Domain.ValueObjects;
-using Freight.Domain.ValueObjects.DrivingRules;
+using Freight.Domain.ValueObjects.RuleVariants;
 
 namespace Freight.Domain.Tests.Tracking;
 
@@ -16,7 +16,7 @@ public class DrivingRuleRegistryTests
     {
         var registry = new DrivingRuleRegistry();
         var driverId = Guid.NewGuid();
-        var rule = DrivingRule.Create(
+        var rule = DrivingRules.Create(
             DrivingBreakRule.SplitBreak, DailyRestRule.ReducedRest,
             WeeklyRestRule.FullWeeklyRest, extendDailyDrivingWhenEligible: true);
 
@@ -51,8 +51,8 @@ public class DrivingRuleRegistryTests
         var registry = new DrivingRuleRegistry();
         var driverId = Guid.NewGuid();
 
-        registry.Assign(driverId, DrivingRule.Create(DrivingBreakRule.FullBreak, DailyRestRule.FullRest, WeeklyRestRule.FullWeeklyRest, false));
-        registry.Assign(driverId, DrivingRule.Create(DrivingBreakRule.SplitBreak, DailyRestRule.ReducedRest, WeeklyRestRule.ReducedWeeklyRest, true));
+        registry.Assign(driverId, DrivingRules.Create(DrivingBreakRule.FullBreak, DailyRestRule.FullRest, WeeklyRestRule.FullWeeklyRest, false));
+        registry.Assign(driverId, DrivingRules.Create(DrivingBreakRule.SplitBreak, DailyRestRule.ReducedRest, WeeklyRestRule.ReducedWeeklyRest, true));
 
         var current = registry.Get(driverId);
 
@@ -79,11 +79,11 @@ public class DrivingRuleRegistryTests
         var reducedRestDriverId = Guid.NewGuid();
         var fullRestDriverId = Guid.NewGuid();
 
-        registry.Assign(reducedRestDriverId, DrivingRule.Create(
+        registry.Assign(reducedRestDriverId, DrivingRules.Create(
             DrivingBreakRule.FullBreak, DailyRestRule.ReducedRest,
             WeeklyRestRule.FullWeeklyRest, extendDailyDrivingWhenEligible: false));
 
-        registry.Assign(fullRestDriverId, DrivingRule.Create(
+        registry.Assign(fullRestDriverId, DrivingRules.Create(
             DrivingBreakRule.FullBreak, DailyRestRule.FullRest,
             WeeklyRestRule.FullWeeklyRest, extendDailyDrivingWhenEligible: false));
 
@@ -97,7 +97,7 @@ public class DrivingRuleRegistryTests
         Assert.Equal(Limits.FullDailyRestMinutes, fullRestLedger.MinutesRemainingInCurrentActivity);
     }
 
-    private static void DriveToDailyCap(DriverComplianceState ledger, DrivingRule rule)
+    private static void DriveToDailyCap(DriverComplianceState ledger, DrivingRules rule)
     {
         var simulatedNow = Start;
         var safetyLimit = 100_000;
