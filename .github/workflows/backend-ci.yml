@@ -44,6 +44,24 @@ jobs:
         working-directory: backend
         run: dotnet build --no-restore --configuration Release
 
-      - name: Test
+      # Freight.Api.Tests and Freight.Infrastructure.Tests each migrate the same
+      # shared Postgres service container in their test setup; a single
+      # solution-wide `dotnet test` run runs test projects concurrently, which
+      # let those migrations race across process boundaries and fail
+      # intermittently ("relation already exists" / "table does not exist").
+      # One step per project keeps every project's tests fully sequential.
+      - name: Test (Freight.Domain.Tests)
         working-directory: backend
-        run: dotnet test --no-build --configuration Release
+        run: dotnet test tests/Freight.Domain.Tests --no-build --configuration Release
+
+      - name: Test (Freight.Application.Tests)
+        working-directory: backend
+        run: dotnet test tests/Freight.Application.Tests --no-build --configuration Release
+
+      - name: Test (Freight.Infrastructure.Tests)
+        working-directory: backend
+        run: dotnet test tests/Freight.Infrastructure.Tests --no-build --configuration Release
+
+      - name: Test (Freight.Api.Tests)
+        working-directory: backend
+        run: dotnet test tests/Freight.Api.Tests --no-build --configuration Release
