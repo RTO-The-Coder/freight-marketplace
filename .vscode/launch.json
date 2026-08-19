@@ -1,0 +1,19 @@
+{
+  "version": "0.2.0",
+  "configurations": [
+    {
+      "name": "Freight.Api",
+      "type": "coreclr",
+      "request": "launch",
+      "preLaunchTask": "build-freight-api",
+      "program": "${workspaceFolder}/backend/src/Freight.Api/bin/Debug/net10.0/Freight.Api.dll",
+      "args": [],
+      "cwd": "${workspaceFolder}/backend/src/Freight.Api",
+      "stopAtEntry": false,
+      "env": {
+        "ASPNETCORE_ENVIRONMENT": "Development"
+      },
+      "console": "internalConsole"
+    }
+  ]
+}

@@ -10,4 +10,7 @@ public sealed class TruckRepository(FreightDbContext dbContext)
         await DbContext.Set<Truck>()
             .Where(truck => truck.TruckingCompanyId == truckingCompanyId)
             .ToListAsync(cancellationToken);
+
+    public async Task<IReadOnlyList<Truck>> GetAllAsync(CancellationToken cancellationToken = default) =>
+        await DbContext.Set<Truck>().ToListAsync(cancellationToken);
 }

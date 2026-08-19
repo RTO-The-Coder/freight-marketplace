@@ -1,0 +1,15 @@
+{
+  "version": "2.0.0",
+  "tasks": [
+    {
+      "label": "build-freight-api",
+      "type": "process",
+      "command": "dotnet",
+      "args": [
+        "build",
+        "${workspaceFolder}/backend/src/Freight.Api/Freight.Api.csproj"
+      ],
+      "problemMatcher": "$msCompile"
+    }
+  ]
+}
