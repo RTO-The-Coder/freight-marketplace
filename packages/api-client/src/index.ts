@@ -36,3 +36,17 @@ export type {
   TruckingCompaniesApi,
   TruckingCompanySummaryDto,
 } from './truckingCompaniesApi'
+export { createShipmentsApi } from './shipmentsApi'
+export type {
+  BookShipmentRequest,
+  BookShipmentResponse,
+  ShipmentsApi,
+  UpdatePickupWindowRequest,
+} from './shipmentsApi'
+export type {
+  GetShipmentsByShipperResponse,
+  GetShippersResponse,
+  ShipmentStatus,
+  ShipmentSummaryDto,
+  ShipperSummaryDto,
+} from './shipmentTypes'
