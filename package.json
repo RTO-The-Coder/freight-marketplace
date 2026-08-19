@@ -1,0 +1,7 @@
+{
+  "name": "freight-marketplace",
+  "private": true,
+  "workspaces": [
+    "packages/*"
+  ]
+}
