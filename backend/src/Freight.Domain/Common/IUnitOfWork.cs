@@ -13,5 +13,7 @@ public interface IUnitOfWork
 
     IDriverRepository Drivers { get; }
 
+    IShipmentRepository Shipments { get; }
+
     Task<int> SaveChangesAsync(CancellationToken cancellationToken = default);
 }

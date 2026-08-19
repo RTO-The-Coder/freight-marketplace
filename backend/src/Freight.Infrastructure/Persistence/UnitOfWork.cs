@@ -16,6 +16,7 @@ public sealed class UnitOfWork : IUnitOfWork
         Shippers = new ShipperRepository(dbContext);
         Trucks = new TruckRepository(dbContext);
         Drivers = new DriverRepository(dbContext);
+        Shipments = new ShipmentRepository(dbContext);
     }
 
     public ITruckingCompanyRepository TruckingCompanies { get; }
@@ -25,6 +26,8 @@ public sealed class UnitOfWork : IUnitOfWork
     public ITruckRepository Trucks { get; }
 
     public IDriverRepository Drivers { get; }
+
+    public IShipmentRepository Shipments { get; }
 
     public Task<int> SaveChangesAsync(CancellationToken cancellationToken = default) =>
         _dbContext.SaveChangesAsync(cancellationToken);
