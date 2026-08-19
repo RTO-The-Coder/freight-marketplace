@@ -8,6 +8,8 @@ using Microsoft.EntityFrameworkCore;
 using ShipmentAggregate = Freight.Domain.Shipment.Shipment;
 using ShipperAggregate = Freight.Domain.Shipment.Shipper;
 
+// Allow overriding the target DB via CLI arg so the seeder can be pointed at
+// non-local environments without editing source.
 var connectionString = args.Length > 0
     ? args[0]
     : "Host=localhost;Port=5432;Database=freight_marketplace;Username=freight;Password=freight_dev_password";
@@ -51,11 +53,14 @@ var realPlaces = new (string Name, double Lat, double Lon)[]
     ("Augsburg-Antonsviertel", 48.3660, 10.8940),
 };
 
+// Picks one of the fixed real places at random - used everywhere a location is needed.
 (string Name, double Lat, double Lon) RandomPlace() => realPlaces[random.Next(realPlaces.Length)];
+// Convenience wrapper: most call sites only need the coordinates, not the place name.
 GeoLocation RandomLocation() { var (_, lat, lon) = RandomPlace(); return GeoLocation.Create(lat, lon); }
 
 // ---------------------------------------------------------------------------
-// 1. TruckingCompanies (8) - each with a real office location.
+// 1. TruckingCompanies (5) - each with a real office location. Kept small so
+//    the seeded fleet counts stay easy to eyeball in dev/demo use.
 // ---------------------------------------------------------------------------
 string[] companyNames =
 [
@@ -64,34 +69,25 @@ string[] companyNames =
     "Elbstrom Transporte KG",
     "Süddeutsche Fernfracht GmbH",
     "Alpen-Trans Spedition",
-    "Ruhrgebiet Cargo Systeme",
-    "Ostsee Fracht & Logistik",
-    "Bayerische Güterlinie GmbH",
 ];
 
 var companies = new List<TruckingCompany>();
 foreach (var name in companyNames)
 {
+    // Each company gets a random real place as its office location - see the
+    // "real, named" convention above.
     var company = TruckingCompany.Create(Guid.NewGuid(), name, RandomLocation());
     companies.Add(company);
 }
 
 // ---------------------------------------------------------------------------
-// 2. Drivers + DrivingRules - 24 distinct rule combinations
-//    (2 DrivingBreakRule x 3 DailyRestRule x 2 WeeklyRestRule x
-//    2 ExtendDailyDrivingWhenEligible), 4-5 Driver rows generated per combination.
-//    LastName encodes the combination as a 4-letter code so the seed data is
-//    self-documenting.
+// 2. Drivers + DrivingRules - a fixed pool of 17: 12 will be assigned to the
+//    10 trucks below (2 Team trucks x 2 + 8 Single trucks x 1), the remaining
+//    5 stay unassigned to any truck. Each driver's DrivingRules is picked
+//    independently at random across all 4 rule dimensions, rather than
+//    generated from the systematic combination scheme.
 // ---------------------------------------------------------------------------
-string BreakCode(DrivingBreakRule p) => p == DrivingBreakRule.FullBreak ? "F" : "S";
-string DailyRestCode(DailyRestRule p) => p switch
-{
-    DailyRestRule.FullRest => "F",
-    DailyRestRule.ReducedRest => "R",
-    _ => "S",
-};
-string WeeklyRestCode(WeeklyRestRule p) => p == WeeklyRestRule.FullWeeklyRest ? "F" : "R";
-string ExtendCode(bool extend) => extend ? "E" : "N";
+const int DriverCount = 17;
 
 string[] firstNames =
 [
@@ -100,45 +96,48 @@ string[] firstNames =
     "Rita", "Stefan", "Tanja", "Uwe", "Vera", "Wolfgang", "Yara", "Zoe",
     "Anja", "Bastian", "Carla", "Dennis", "Eva", "Felix",
 ];
+// Cycles through the fixed name list rather than picking randomly, so first names
+// stay distinct as long as possible before repeating.
 var firstNameIndex = 0;
 string NextFirstName() => firstNames[firstNameIndex++ % firstNames.Length];
 
-var drivers = new List<Driver>();
-var driverRules = new Dictionary<Guid, DrivingRules>();
-
-foreach (DrivingBreakRule breakPref in Enum.GetValues<DrivingBreakRule>())
+// Picks a uniformly random value from an enum - used to draw each of the 4
+// DrivingRules dimensions independently.
+T RandomEnumValue<T>() where T : struct, Enum
 {
-    foreach (DailyRestRule dailyPref in Enum.GetValues<DailyRestRule>())
-    {
-        foreach (WeeklyRestRule weeklyPref in Enum.GetValues<WeeklyRestRule>())
-        {
-            foreach (var extend in new[] { true, false })
-            {
-                var code = $"{BreakCode(breakPref)}{DailyRestCode(dailyPref)}{WeeklyRestCode(weeklyPref)}{ExtendCode(extend)}";
-                var driverCount = random.Next(4, 6); // 4 or 5 drivers per combination
-
-                for (var i = 0; i < driverCount; i++)
-                {
-                    var rules = DrivingRules.Create(breakPref, dailyPref, weeklyPref, extend);
-                    var driver = Driver.Create(Guid.NewGuid(), NextFirstName(), code, rules);
-                    drivers.Add(driver);
-                    driverRules[driver.Id] = rules;
-                }
-            }
-        }
-    }
+    var values = Enum.GetValues<T>();
+    return values[random.Next(values.Length)];
 }
 
-Console.WriteLine($"Generated {drivers.Count} drivers across 24 rule combinations.");
+var drivers = new List<Driver>();
+for (var i = 0; i < DriverCount; i++)
+{
+    var rules = DrivingRules.Create(
+        RandomEnumValue<DrivingBreakRule>(),
+        RandomEnumValue<DailyRestRule>(),
+        RandomEnumValue<WeeklyRestRule>(),
+        extendDailyDrivingWhenEligible: random.Next(2) == 0);
+
+    // LastName is just a sequential label now that there's no fixed rule-combination
+    // code to encode (rules are random per-driver, not drawn from a fixed scheme).
+    var driver = Driver.Create(Guid.NewGuid(), NextFirstName(), $"D{i + 1:D2}", rules);
+    drivers.Add(driver);
+}
+
+Console.WriteLine($"Generated {drivers.Count} drivers with randomly assigned driving rules.");
 
 // ---------------------------------------------------------------------------
-// 3. Trucks (12-15 per company) - type mix ~60% BoxVan/15% Flatbed/
-//    15% Refrigerated/10% Tanker, size mix ~40% Small/35% Medium/25% Large
-//    (capacity is derived from size, never entered independently - FR1.2),
-//    4-5 hazmat-certified trucks flat across the whole fleet, single driver
-//    each (drawn from the pool, never reused), Large trucks get Team driving
-//    ~50% of the time.
+// 3. Trucks (10 total) - fixed scenario rather than randomized scale:
+//    7 assigned across all 5 companies (one company gets 3, the other 4 get 1
+//    each), 3 left unassigned (no company, mirrors a truck not yet onboarded).
+//    Every truck gets a driver regardless of assignment status. Exactly 2
+//    trucks are hazmat-certified and exactly 2 run Team driving (forced to
+//    TruckSize.Large, since DriverAssignment.Team requires it - see
+//    Fleet/DriverAssignment.cs). Type/size for the rest is still the weighted
+//    random draw (capacity is derived from size, never entered independently -
+//    FR1.2).
 // ---------------------------------------------------------------------------
+// Weighted draw matching the ~60/15/15/10 BoxVan/Flatbed/Refrigerated/Tanker mix.
 TruckType RandomTruckType()
 {
     var roll = random.NextDouble();
@@ -151,6 +150,8 @@ TruckType RandomTruckType()
     };
 }
 
+// Weighted draw matching the ~40/35/25 Small/Medium/Large mix - overridden to
+// Large for the 2 slots chosen for Team driving (see below).
 TruckSize RandomTruckSize()
 {
     var roll = random.NextDouble();
@@ -162,97 +163,97 @@ TruckSize RandomTruckSize()
     };
 }
 
-var driverQueue = new Queue<Driver>(drivers.OrderBy(_ => random.Next()));
-Driver DequeueDriver()
-{
-    if (driverQueue.Count == 0)
-    {
-        // The 24-combinations x 4-5-per-combination pool is sized for the
-        // *expected* mix of Single/Team assignments, but random size generation
-        // can occasionally push more trucks to Large than expected, consuming
-        // drivers faster via Team (2 each). Rather than fail the whole run, top
-        // up with an overflow driver outside the 24-combination scheme (still
-        // gets a real, valid DrivingRules so the invariant "every Driver has a
-        // matching rule entry" still holds) - keeps the seeder robust across
-        // runs without hand-tuning the pool size to match one particular
-        // random outcome.
-        var overflowIndex = drivers.Count;
-        var overflowRules = DrivingRules.Create(
-            DrivingBreakRule.FullBreak,
-            DailyRestRule.FullRest,
-            WeeklyRestRule.FullWeeklyRest,
-            extendDailyDrivingWhenEligible: false);
-        var overflowDriver = Driver.Create(Guid.NewGuid(), NextFirstName(), $"OVF{overflowIndex:D3}", overflowRules);
-        drivers.Add(overflowDriver);
-        driverRules[overflowDriver.Id] = overflowRules;
+const int TruckCount = 10;
 
-        return overflowDriver;
+// How many of the 7 assigned trucks each company gets: index 0 gets 3, the
+// remaining 4 companies get 1 each - matches the fixed scenario exactly.
+var truckCountsPerCompany = new int[companies.Count];
+truckCountsPerCompany[0] = 3;
+for (var c = 1; c < companies.Count; c++)
+{
+    truckCountsPerCompany[c] = 1;
+}
+var assignedTruckCount = truckCountsPerCompany.Sum(); // 7
+var unassignedTruckCount = TruckCount - assignedTruckCount; // 3
+
+// Pick which 2 of the 10 truck slots (0..9, assigned trucks first then
+// unassigned) are hazmat-certified and which 2 run Team, independently and
+// without regard to company assignment - both picks may overlap each other.
+HashSet<int> RandomDistinctSlots(int count, int total)
+{
+    var slots = new HashSet<int>();
+    while (slots.Count < count)
+    {
+        slots.Add(random.Next(total));
+    }
+    return slots;
+}
+var hazmatSlots = RandomDistinctSlots(2, TruckCount);
+var teamSlots = RandomDistinctSlots(2, TruckCount);
+
+// Shuffled so drivers aren't handed out in a predictable order.
+var driverQueue = new Queue<Driver>(drivers.OrderBy(_ => random.Next()));
+
+var allTrucks = new List<(Truck Truck, TruckingCompany? Company)>();
+var slotIndex = 0;
+
+void BuildTruck(TruckingCompany? company, string name)
+{
+    var hazmat = hazmatSlots.Contains(slotIndex);
+    var isTeam = teamSlots.Contains(slotIndex);
+    slotIndex++;
+
+    var type = RandomTruckType();
+    // Team driving requires a Large truck (DriverAssignment.Team), so force it
+    // for the 2 chosen Team slots regardless of the random size draw.
+    var size = isTeam ? TruckSize.Large : RandomTruckSize();
+
+    var truck = Truck.Create(Guid.NewGuid(), name, type, size);
+    if (company is not null)
+    {
+        truck.AssignToCompany(company.Id);
+        truck.Activate();
     }
 
-    return driverQueue.Dequeue();
-}
+    if (hazmat)
+    {
+        truck.CertifyForHazmat();
+    }
 
-var allTrucks = new List<(Truck Truck, TruckingCompany Company)>();
+    if (isTeam)
+    {
+        truck.AssignDrivers(driverQueue.Dequeue(), driverQueue.Dequeue());
+    }
+    else
+    {
+        truck.AssignDrivers(driverQueue.Dequeue());
+    }
 
-// 4-5 hazmat-certified trucks flat across the whole fleet - decided up front as a
-// small fixed set of (companyIndex, truckIndexWithinCompany) slots, assigned once
-// truck counts per company are known below.
-var hazmatSlotCount = random.Next(4, 6);
-var hazmatSlots = new HashSet<(int CompanyIndex, int TruckIndex)>();
-
-var truckCountsPerCompany = new int[companies.Count];
-for (var c = 0; c < companies.Count; c++)
-{
-    truckCountsPerCompany[c] = random.Next(12, 16); // 12-15 inclusive
-}
-
-var totalTrucks = truckCountsPerCompany.Sum();
-while (hazmatSlots.Count < hazmatSlotCount)
-{
-    var companyIndex = random.Next(companies.Count);
-    var truckIndex = random.Next(truckCountsPerCompany[companyIndex]);
-    hazmatSlots.Add((companyIndex, truckIndex));
+    allTrucks.Add((truck, company));
 }
 
 for (var c = 0; c < companies.Count; c++)
 {
     var company = companies[c];
-
     for (var t = 0; t < truckCountsPerCompany[c]; t++)
     {
-        var type = RandomTruckType();
-        var size = RandomTruckSize();
-        var hazmat = hazmatSlots.Contains((c, t));
-
-        var truck = Truck.Create(Guid.NewGuid(), $"{company.Name} #{t + 1:D2}", type, size);
-        truck.AssignToCompany(company.Id);
-        truck.Activate();
-
-        if (hazmat)
-        {
-            truck.CertifyForHazmat();
-        }
-
-        if (size == TruckSize.Large && random.NextDouble() < 0.5)
-        {
-            var first = DequeueDriver();
-            var second = DequeueDriver();
-            truck.AssignDrivers(first, second);
-        }
-        else
-        {
-            truck.AssignDrivers(DequeueDriver());
-        }
-
-        allTrucks.Add((truck, company));
+        BuildTruck(company, $"{company.Name} #{t + 1:D2}");
     }
 }
 
-Console.WriteLine($"Generated {totalTrucks} trucks across {companies.Count} companies " +
-                   $"({hazmatSlots.Count} hazmat-certified, {driverQueue.Count} drivers left unused).");
+for (var u = 0; u < unassignedTruckCount; u++)
+{
+    BuildTruck(null, $"Unassigned Truck #{u + 1:D2}");
+}
+
+Console.WriteLine($"Generated {allTrucks.Count} trucks ({assignedTruckCount} assigned across " +
+                   $"{companies.Count} companies, {unassignedTruckCount} unassigned; " +
+                   $"{hazmatSlots.Count} hazmat-certified, {teamSlots.Count} Team-driven; " +
+                   $"{driverQueue.Count} drivers left unassigned).");
 
 // ---------------------------------------------------------------------------
-// 4. Shippers - a small shared pool, reused across multiple shipments.
+// 4. Shippers - a small standalone reference pool (not consumed by anything
+//    else this pass, since there are no Shipments here).
 // ---------------------------------------------------------------------------
 string[] shipperNames =
 [
@@ -273,95 +274,74 @@ var shippers = shipperNames
 Console.WriteLine($"Generated {shippers.Count} shippers.");
 
 // ---------------------------------------------------------------------------
-// 5. Shipments - one per truck, cargo kind matched to the truck's type per
-//    Section 8.1's compatibility table, dummy pickup/delivery locations and
-//    time windows, weight/volume sized to fit within the truck's capacity.
-//    Stop.ExpectedArrivalTime is a placeholder - there is no real route-time
-//    engine yet (Slice 4) to compute a genuine arrival time.
+// 5. Shipments - exactly 5 Shippers used (the first 5 from the pool above),
+//    each with exactly 3 Shipments (15 total). Booked via Shipment.Book(...)
+//    - all start Pending, no TruckingCompanyId, exactly as a real Shipper
+//    submission would; Book does not require a truck to exist yet, so these
+//    are independent of the fixed fleet scenario above. Load is sized as a
+//    random fraction of a randomly picked truck-size tier (Capacity.ForTruckSize)
+//    since there's no specific truck to size against at booking time.
 // ---------------------------------------------------------------------------
-CargoKind CargoKindFor(TruckType type, bool hazmat)
-{
-    if (hazmat)
-    {
-        return CargoKind.HazardousMaterials;
-    }
-
-    return type switch
-    {
-        TruckType.Tanker => CargoKind.LiquidBulk,
-        TruckType.Refrigerated => CargoKind.PerishableTemperatureControlled,
-        TruckType.Flatbed => random.NextDouble() < 0.5 ? CargoKind.GeneralDryGoods : CargoKind.OversizedIrregular,
-        _ => CargoKind.GeneralDryGoods,
-    };
-}
+const int ShippersWithShipments = 5;
+const int ShipmentsPerShipper = 3;
 
 var baseDate = new DateTime(2026, 8, 24, 0, 0, 0, DateTimeKind.Utc); // a Monday, arbitrary near-future anchor
 var shipments = new List<ShipmentAggregate>();
 
-foreach (var (truck, _) in allTrucks)
+foreach (var shipper in shippers.Take(ShippersWithShipments))
 {
-    var shipper = shippers[random.Next(shippers.Count)];
-    var cargoKind = CargoKindFor(truck.TruckType, truck.HazmatCertified);
+    for (var s = 0; s < ShipmentsPerShipper; s++)
+    {
+        var sizeTier = RandomTruckSize();
+        var fraction = 0.3 + random.NextDouble() * 0.5; // 30-80% of the tier's capacity
+        var tierCapacity = Capacity.ForTruckSize(sizeTier);
+        var load = Capacity.Create(
+            Math.Round(tierCapacity.WeightKg * fraction, 0),
+            Math.Round(tierCapacity.VolumeCubicMeters * fraction, 1));
 
-    // Cargo size: a random fraction of the truck's total capacity, always leaving
-    // room within Remaining (checked by Truck.AssignShipment itself).
-    var fraction = 0.3 + random.NextDouble() * 0.5; // 30-80% of capacity
-    var cargoSize = Capacity.Create(
-        Math.Round(truck.Capacity.Total.WeightKg * fraction, 0),
-        Math.Round(truck.Capacity.Total.VolumeCubicMeters * fraction, 1));
+        // Spread pickups across a two-week window so shipments don't all land on
+        // one day; pickup/delivery windows and booking lead time are all
+        // randomized within plausible ranges to avoid every shipment looking
+        // identical.
+        var dayOffset = random.Next(0, 14);
+        var pickupStart = baseDate.AddDays(dayOffset).AddHours(6 + random.Next(0, 6));
+        var pickupEnd = pickupStart.AddHours(2 + random.Next(0, 3));
+        var deliveryStart = pickupEnd.AddHours(4 + random.Next(0, 20));
+        var deliveryEnd = deliveryStart.AddHours(2 + random.Next(0, 6));
+        var bookedAt = pickupStart.AddDays(-1 - random.Next(0, 3));
 
-    var dayOffset = random.Next(0, 14);
-    var pickupStart = baseDate.AddDays(dayOffset).AddHours(6 + random.Next(0, 6));
-    var pickupEnd = pickupStart.AddHours(2 + random.Next(0, 3));
-    var deliveryDeadline = pickupEnd.AddHours(4 + random.Next(0, 20));
+        var shipment = ShipmentAggregate.Book(
+            shipper.Id,
+            RandomLocation(),
+            RandomLocation(),
+            load,
+            RandomTruckType(),
+            TimeWindow.Create(pickupStart, pickupEnd),
+            TimeWindow.Create(deliveryStart, deliveryEnd),
+            bookedAt);
 
-    var shipment = new ShipmentAggregate(
-        Guid.NewGuid(),
-        shipper.Id,
-        RandomLocation(),
-        RandomLocation(),
-        cargoKind,
-        cargoSize,
-        pickupStart,
-        pickupEnd,
-        deliveryDeadline);
-
-    shipments.Add(shipment);
-
-    // Dummy arrival-time placeholders: pickup at the window's start, delivery at
-    // the deadline - not a real route-time calculation (Slice 4 doesn't exist
-    // yet), just a plausible-looking value for this seed pass.
-    truck.AssignShipment(
-        shipment.Id,
-        cargoSize,
-        pickupInsertIndex: 0,
-        deliveryInsertIndex: 0,
-        pickupExpectedArrivalTime: pickupStart,
-        deliveryExpectedArrivalTime: deliveryDeadline);
+        shipments.Add(shipment);
+    }
 }
 
-Console.WriteLine($"Generated {shipments.Count} shipments (one per truck), each with a Pickup+Delivery Stop.");
+Console.WriteLine($"Generated {shipments.Count} shipments across {ShippersWithShipments} shippers " +
+                   $"({ShipmentsPerShipper} each).");
 
 // ---------------------------------------------------------------------------
-// Persist everything except Shipments. Trucks and Drivers now have real EF
-// mappings (this reconciliation slice) and are persisted here, closing the
-// previous gap where they were only ever generated in memory. Shipment
-// persistence remains out of scope for this slice (Shipment's booking
-// lifecycle belongs to a later slice) - shipments are generated above only to
-// exercise Truck.AssignShipment's in-memory route-insertion logic, never
-// added to the DbContext.
+// Persist everything.
 // ---------------------------------------------------------------------------
 
 db.AddRange(companies);
 db.AddRange(shippers);
 db.AddRange(drivers);
 db.AddRange(allTrucks.Select(x => x.Truck));
+db.AddRange(shipments);
 
 await db.SaveChangesAsync();
 
 Console.WriteLine("Seed data committed.");
 Console.WriteLine($"  TruckingCompanies: {companies.Count}");
-Console.WriteLine($"  Trucks: {totalTrucks}");
+Console.WriteLine($"  Trucks: {allTrucks.Count}");
 Console.WriteLine($"  Drivers: {drivers.Count}");
 Console.WriteLine($"  Shippers: {shippers.Count}");
 Console.WriteLine($"  Shipments: {shipments.Count}");
