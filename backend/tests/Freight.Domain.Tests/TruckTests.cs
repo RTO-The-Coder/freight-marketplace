@@ -30,8 +30,11 @@ public class TruckTests
         return truck;
     }
 
+    private static readonly GeoLocation PickupLocation = GeoLocation.Create(52.5, 13.4);
+    private static readonly GeoLocation DeliveryLocation = GeoLocation.Create(48.1, 11.6);
+
     private static void AssignShipment(Truck truck, Guid shipmentId, Capacity size, int pickupInsertIndex, int deliveryInsertIndex) =>
-        truck.AssignShipment(shipmentId, size, pickupInsertIndex, deliveryInsertIndex, PickupTime, DeliveryTime);
+        truck.AssignShipment(shipmentId, size, PickupLocation, DeliveryLocation, pickupInsertIndex, deliveryInsertIndex, PickupTime, DeliveryTime);
 
     [Fact]
     public void Create_StartsUnassignedAndInactive()
@@ -141,7 +144,7 @@ public class TruckTests
 
         Assert.Throws<InvalidOperationException>(() =>
             AssignShipment(truck, Guid.NewGuid(), Capacity.Create(truck.Capacity.Total.WeightKg + 1, 5), pickupInsertIndex: 0, deliveryInsertIndex: 0));
-        Assert.Empty(truck.RouteStops);
+        Assert.Empty(truck.Stops);
     }
 
     [Fact]
@@ -161,7 +164,7 @@ public class TruckTests
     {
         var truck = NewTruck();
 
-        Assert.Empty(truck.RouteStops);
+        Assert.Empty(truck.Stops);
     }
 
     private static Capacity SmallShipment() => Capacity.Create(100, 2);
@@ -191,7 +194,7 @@ public class TruckTests
                 (shipment5Id, StopKind.Delivery, DeliveryTime),
                 (newShipmentId, StopKind.Delivery, DeliveryTime),
             ],
-            truck.RouteStops.Select(s => (s.ShipmentId, s.Kind, s.ExpectedArrivalTime)));
+            truck.Stops.Select(s => (s.ShipmentId, s.Kind, s.ExpectedArrivalTime)));
     }
 
     [Theory]
@@ -201,12 +204,12 @@ public class TruckTests
     {
         var truck = NewTruck();
         AssignShipment(truck, Guid.NewGuid(), SmallShipment(), pickupInsertIndex: 0, deliveryInsertIndex: 0);
-        var routeBefore = truck.RouteStops.ToList();
+        var routeBefore = truck.Stops.ToList();
 
         Assert.Throws<ArgumentException>(() =>
             AssignShipment(truck, Guid.NewGuid(), SmallShipment(), pickupIndex, deliveryIndex));
 
-        Assert.Equal(routeBefore, truck.RouteStops);
+        Assert.Equal(routeBefore, truck.Stops);
     }
 
     [Fact]
@@ -219,7 +222,7 @@ public class TruckTests
 
         Assert.Equal(
             [(shipmentId, StopKind.Pickup, PickupTime), (shipmentId, StopKind.Delivery, DeliveryTime)],
-            truck.RouteStops.Select(s => (s.ShipmentId, s.Kind, s.ExpectedArrivalTime)));
+            truck.Stops.Select(s => (s.ShipmentId, s.Kind, s.ExpectedArrivalTime)));
     }
 
     [Fact]
@@ -271,7 +274,7 @@ public class TruckTests
 
         truck.RemoveShipment(shipmentId);
 
-        Assert.Empty(truck.RouteStops);
+        Assert.Empty(truck.Stops);
     }
 
     [Fact]
@@ -287,7 +290,7 @@ public class TruckTests
 
         Assert.Equal(
             [(keepId, StopKind.Pickup, PickupTime), (keepId, StopKind.Delivery, DeliveryTime)],
-            truck.RouteStops.Select(s => (s.ShipmentId, s.Kind, s.ExpectedArrivalTime)));
+            truck.Stops.Select(s => (s.ShipmentId, s.Kind, s.ExpectedArrivalTime)));
     }
 
     [Fact]
@@ -295,11 +298,11 @@ public class TruckTests
     {
         var truck = NewTruck();
         AssignShipment(truck, Guid.NewGuid(), SmallShipment(), pickupInsertIndex: 0, deliveryInsertIndex: 0);
-        var routeBefore = truck.RouteStops.ToList();
+        var routeBefore = truck.Stops.ToList();
 
         truck.RemoveShipment(Guid.NewGuid());
 
-        Assert.Equal(routeBefore, truck.RouteStops);
+        Assert.Equal(routeBefore, truck.Stops);
     }
 
     [Fact]

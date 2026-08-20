@@ -41,5 +41,50 @@ public sealed class DriverConfiguration : IEntityTypeConfiguration<Driver>
         });
 
         builder.Navigation(driver => driver.Rules).IsRequired();
+
+        // ComplianceState is null until the driver first starts driving (Driver.StartDriving) -
+        // an optional 1:1 owned type, not required like Rules.
+        builder.OwnsOne(driver => driver.ComplianceState, state =>
+        {
+            state.WithOwner().HasForeignKey(s => s.DriverId);
+            state.HasKey(s => s.DriverId);
+
+            state.Property(s => s.CurrentActivity)
+                .HasConversion<string>()
+                .HasColumnName("ComplianceState_CurrentActivity");
+
+            state.Property(s => s.MinutesRemainingInCurrentActivity)
+                .HasColumnName("ComplianceState_MinutesRemainingInCurrentActivity");
+
+            state.Property(s => s.ContinuousDrivingMinutesSinceBreak)
+                .HasColumnName("ComplianceState_ContinuousDrivingMinutesSinceBreak");
+
+            state.Property(s => s.AwaitingSecondBreakBlock)
+                .HasColumnName("ComplianceState_AwaitingSecondBreakBlock");
+
+            state.Property(s => s.DailyDrivingMinutesToday)
+                .HasColumnName("ComplianceState_DailyDrivingMinutesToday");
+
+            state.Property(s => s.ExtendedDaysUsedThisWeek)
+                .HasColumnName("ComplianceState_ExtendedDaysUsedThisWeek");
+
+            state.Property(s => s.IsTodayExtended)
+                .HasColumnName("ComplianceState_IsTodayExtended");
+
+            state.Property(s => s.AwaitingSecondDailyRestBlock)
+                .HasColumnName("ComplianceState_AwaitingSecondDailyRestBlock");
+
+            state.Property(s => s.ReducedDailyRestsUsedSinceWeeklyRest)
+                .HasColumnName("ComplianceState_ReducedDailyRestsUsedSinceWeeklyRest");
+
+            state.Property(s => s.WeeklyDrivingMinutesThisWeek)
+                .HasColumnName("ComplianceState_WeeklyDrivingMinutesThisWeek");
+
+            state.Property(s => s.WeeklyDrivingMinutesPriorWeek)
+                .HasColumnName("ComplianceState_WeeklyDrivingMinutesPriorWeek");
+
+            state.Property(s => s.LastEvaluatedSimulatedTime)
+                .HasColumnName("ComplianceState_LastEvaluatedSimulatedTime");
+        });
     }
 }

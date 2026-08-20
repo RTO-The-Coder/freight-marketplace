@@ -78,7 +78,7 @@ public sealed class TruckConfiguration : IEntityTypeConfiguration<Truck>
 
         // Stops are owned by the Truck and only ever reached through it - the domain
         // model deliberately gives Stop no repository of its own.
-        builder.OwnsMany(truck => truck.RouteStops, stop =>
+        builder.OwnsMany(truck => truck.Stops, stop =>
         {
             stop.ToTable("TruckRouteStops");
 
@@ -90,7 +90,17 @@ public sealed class TruckConfiguration : IEntityTypeConfiguration<Truck>
                 .HasConversion<string>()
                 .IsRequired();
 
+            stop.Property(s => s.Sequence).IsRequired();
+
             stop.Property(s => s.ExpectedArrivalTime).IsRequired();
+
+            stop.OwnsOne(s => s.Location, location =>
+            {
+                location.Property(l => l.Latitude).HasColumnName("LocationLatitude");
+                location.Property(l => l.Longitude).HasColumnName("LocationLongitude");
+            });
+
+            stop.Navigation(s => s.Location).IsRequired();
 
             stop.OwnsOne(s => s.ShipmentLoad, load =>
             {
@@ -102,7 +112,15 @@ public sealed class TruckConfiguration : IEntityTypeConfiguration<Truck>
         });
 
         builder.Metadata
-            .FindNavigation(nameof(Truck.RouteStops))!
+            .FindNavigation(nameof(Truck.Stops))!
             .SetPropertyAccessMode(PropertyAccessMode.Field);
+
+        // CurrentProgress is null until the truck starts its first leg.
+        builder.OwnsOne(truck => truck.CurrentProgress, progress =>
+        {
+            progress.Property(p => p.TotalDistanceKm).HasColumnName("CurrentProgress_TotalDistanceKm");
+            progress.Property(p => p.CurrentDistanceKm).HasColumnName("CurrentProgress_CurrentDistanceKm");
+            progress.Property(p => p.TotalTimeTick).HasColumnName("CurrentProgress_TotalTimeTick");
+        });
     }
 }

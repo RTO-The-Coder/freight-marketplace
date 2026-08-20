@@ -13,6 +13,14 @@ public sealed record Stop
     public Guid? ShipmentId { get; private init; }
     public Guid? TruckingCompanyId { get; private init; }
     public StopKind Kind { get; private init; }
+    public GeoLocation Location { get; private init; } = null!;
+
+    /// <summary>
+    /// Gap-based route order (10/20/30...) so a mid-route insertion only needs a
+    /// value between its two neighbors, not a renumbering of every later stop.
+    /// </summary>
+    public int Sequence { get; private init; }
+
     public DateTime ExpectedArrivalTime { get; private init; }
 
     /// <summary>
@@ -30,7 +38,13 @@ public sealed record Stop
     {
     }
 
-    public static Stop ForShipment(Guid shipmentId, Capacity shipmentLoad, StopKind kind, DateTime expectedArrivalTime)
+    public static Stop ForShipment(
+        Guid shipmentId,
+        Capacity shipmentLoad,
+        StopKind kind,
+        GeoLocation location,
+        int sequence,
+        DateTime expectedArrivalTime)
     {
         if (shipmentId == Guid.Empty)
         {
@@ -38,6 +52,7 @@ public sealed record Stop
         }
 
         ArgumentNullException.ThrowIfNull(shipmentLoad);
+        ArgumentNullException.ThrowIfNull(location);
 
         if (kind is not (StopKind.Pickup or StopKind.Delivery))
         {
@@ -50,17 +65,21 @@ public sealed record Stop
             ShipmentId = shipmentId,
             TruckingCompanyId = null,
             Kind = kind,
+            Location = location,
+            Sequence = sequence,
             ExpectedArrivalTime = expectedArrivalTime,
             ShipmentLoad = shipmentLoad,
         };
     }
 
-    public static Stop ForOffice(Guid truckingCompanyId, DateTime expectedArrivalTime)
+    public static Stop ForOffice(Guid truckingCompanyId, GeoLocation location, int sequence, DateTime expectedArrivalTime)
     {
         if (truckingCompanyId == Guid.Empty)
         {
             throw new ArgumentException("Trucking company id cannot be empty.", nameof(truckingCompanyId));
         }
+
+        ArgumentNullException.ThrowIfNull(location);
 
         return new Stop
         {
@@ -68,6 +87,8 @@ public sealed record Stop
             ShipmentId = null,
             TruckingCompanyId = truckingCompanyId,
             Kind = StopKind.Office,
+            Location = location,
+            Sequence = sequence,
             ExpectedArrivalTime = expectedArrivalTime,
         };
     }

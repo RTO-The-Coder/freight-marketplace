@@ -1,34 +1,69 @@
-using Freight.Domain.Common;
-
 namespace Freight.Domain.Tracking;
 
-public sealed class RouteProgress : Entity
+/// <summary>
+/// Progress along a Truck's current route leg, held directly by Truck (see
+/// Truck.CurrentProgress). A single fraction - <see cref="GetProgressFraction"/> -
+/// represents both distance-progress and time-progress along the leg (fraction of
+/// distance == fraction of time is a deliberate Phase 1 simplification; see the
+/// domain model doc's RouteProgress section).
+/// </summary>
+public sealed class RouteProgress
 {
-    public Guid TruckId { get; }
-    public int CurrentLegIndex { get; internal set; }
-    public int TicksElapsedInCurrentLeg { get; internal set; }
+    public double TotalDistanceKm { get; private set; }
+    public double CurrentDistanceKm { get; private set; }
+    public int TotalTimeTick { get; private set; }
 
-    public RouteProgress(Guid truckId, int currentLegIndex = 0, int ticksElapsedInCurrentLeg = 0)
+    // EF Core materializer only - see the equivalent comment on Truck's parameterless
+    // constructor.
+    private RouteProgress()
     {
-        if (truckId == Guid.Empty)
-        {
-            throw new ArgumentException("Truck id cannot be empty.", nameof(truckId));
-        }
-
-        if (currentLegIndex < 0)
-        {
-            throw new ArgumentOutOfRangeException(nameof(currentLegIndex), currentLegIndex,
-                "Current leg index cannot be negative.");
-        }
-
-        if (ticksElapsedInCurrentLeg < 0)
-        {
-            throw new ArgumentOutOfRangeException(nameof(ticksElapsedInCurrentLeg), ticksElapsedInCurrentLeg,
-                "Ticks elapsed in current leg cannot be negative.");
-        }
-
-        TruckId = truckId;
-        CurrentLegIndex = currentLegIndex;
-        TicksElapsedInCurrentLeg = ticksElapsedInCurrentLeg;
     }
+
+    public RouteProgress(double totalDistanceKm, int totalTimeTick)
+    {
+        if (totalDistanceKm < 0)
+        {
+            throw new ArgumentOutOfRangeException(nameof(totalDistanceKm), totalDistanceKm, "Total distance cannot be negative.");
+        }
+
+        if (totalTimeTick < 0)
+        {
+            throw new ArgumentOutOfRangeException(nameof(totalTimeTick), totalTimeTick, "Total time tick cannot be negative.");
+        }
+
+        TotalDistanceKm = totalDistanceKm;
+        CurrentDistanceKm = 0;
+        TotalTimeTick = totalTimeTick;
+    }
+
+    public void UpdateProgress(double currentDistanceKm)
+    {
+        if (currentDistanceKm < 0)
+        {
+            throw new ArgumentOutOfRangeException(nameof(currentDistanceKm), currentDistanceKm, "Current distance cannot be negative.");
+        }
+
+        CurrentDistanceKm = currentDistanceKm;
+    }
+
+    public bool IsLegComplete() => CurrentDistanceKm >= TotalDistanceKm;
+
+    public void StartNewLeg(double totalDistanceKm, int totalTimeTick)
+    {
+        if (totalDistanceKm < 0)
+        {
+            throw new ArgumentOutOfRangeException(nameof(totalDistanceKm), totalDistanceKm, "Total distance cannot be negative.");
+        }
+
+        if (totalTimeTick < 0)
+        {
+            throw new ArgumentOutOfRangeException(nameof(totalTimeTick), totalTimeTick, "Total time tick cannot be negative.");
+        }
+
+        TotalDistanceKm = totalDistanceKm;
+        CurrentDistanceKm = 0;
+        TotalTimeTick = totalTimeTick;
+    }
+
+    public double GetProgressFraction() => TotalDistanceKm == 0 ? 1.0 : CurrentDistanceKm / TotalDistanceKm;
 }

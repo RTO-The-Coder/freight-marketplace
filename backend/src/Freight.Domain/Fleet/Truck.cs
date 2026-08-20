@@ -1,10 +1,13 @@
+using Freight.Domain.Tracking;
 using Freight.Domain.ValueObjects;
 
 namespace Freight.Domain.Fleet;
 
 public sealed class Truck
 {
-    private readonly List<Stop> _routeStops = [];
+    private const int SequenceGap = 10;
+
+    private readonly List<Stop> _stops = [];
 
     public Guid Id { get; private set; }
     public string TruckName { get; private set; } = null!;
@@ -27,7 +30,12 @@ public sealed class Truck
 
     public DriverAssignment? DriverAssignment { get; private set; }
     public bool HazmatCertified { get; private set; }
-    public IReadOnlyList<Stop> RouteStops => _routeStops;
+
+    /// <summary>Ordered by <see cref="Stop.Sequence"/>, not by insertion order.</summary>
+    public IReadOnlyList<Stop> Stops => [.. _stops.OrderBy(stop => stop.Sequence)];
+
+    /// <summary>Progress along the current route leg. Null until the truck starts its first leg.</summary>
+    public RouteProgress? CurrentProgress { get; private set; }
 
     /// <summary>
     /// Operational state, derived from the route and driver assignment - see
@@ -50,7 +58,7 @@ public sealed class Truck
             var assignedWeight = 0.0;
             var assignedVolume = 0.0;
 
-            foreach (var stop in _routeStops)
+            foreach (var stop in _stops)
             {
                 if (stop.Kind == StopKind.Pickup && stop.ShipmentLoad is { } load)
                 {
@@ -178,7 +186,9 @@ public sealed class Truck
             return TruckStatus.Idle;
         }
 
-        if (_routeStops.Count > 0 && _routeStops[0].Kind == StopKind.Office)
+        var orderedStops = Stops;
+
+        if (orderedStops.Count > 0 && orderedStops[0].Kind == StopKind.Office)
         {
             return TruckStatus.AtOffice;
         }
@@ -189,6 +199,8 @@ public sealed class Truck
     public void AssignShipment(
         Guid shipmentId,
         Capacity shipmentSize,
+        GeoLocation pickupLocation,
+        GeoLocation deliveryLocation,
         int pickupInsertIndex,
         int deliveryInsertIndex,
         DateTime pickupExpectedArrivalTime,
@@ -200,14 +212,18 @@ public sealed class Truck
         }
 
         ArgumentNullException.ThrowIfNull(shipmentSize);
+        ArgumentNullException.ThrowIfNull(pickupLocation);
+        ArgumentNullException.ThrowIfNull(deliveryLocation);
 
-        if (pickupInsertIndex < 0 || pickupInsertIndex > _routeStops.Count)
+        var orderedStops = Stops;
+
+        if (pickupInsertIndex < 0 || pickupInsertIndex > orderedStops.Count)
         {
             throw new ArgumentOutOfRangeException(nameof(pickupInsertIndex), pickupInsertIndex,
                 "Pickup insertion index is out of range for the current route.");
         }
 
-        if (deliveryInsertIndex < 0 || deliveryInsertIndex > _routeStops.Count)
+        if (deliveryInsertIndex < 0 || deliveryInsertIndex > orderedStops.Count)
         {
             throw new ArgumentOutOfRangeException(nameof(deliveryInsertIndex), deliveryInsertIndex,
                 "Delivery insertion index is out of range for the current route.");
@@ -224,36 +240,66 @@ public sealed class Truck
             throw new InvalidOperationException("Truck does not have sufficient remaining capacity for this shipment.");
         }
 
-        _routeStops.Insert(pickupInsertIndex, Stop.ForShipment(shipmentId, shipmentSize, StopKind.Pickup, pickupExpectedArrivalTime));
+        var pickupSequence = SequenceForInsertAt(orderedStops, pickupInsertIndex);
+        _stops.Add(Stop.ForShipment(shipmentId, shipmentSize, StopKind.Pickup, pickupLocation, pickupSequence, pickupExpectedArrivalTime));
 
         // deliveryInsertIndex was expressed against the pre-insertion route; the pickup
         // insertion above shifted every original index at/after pickupInsertIndex right
         // by one, so account for that shift before inserting delivery.
-        _routeStops.Insert(deliveryInsertIndex + 1, Stop.ForShipment(shipmentId, shipmentSize, StopKind.Delivery, deliveryExpectedArrivalTime));
+        var deliverySequence = SequenceForInsertAt(Stops, deliveryInsertIndex + 1);
+        _stops.Add(Stop.ForShipment(shipmentId, shipmentSize, StopKind.Delivery, deliveryLocation, deliverySequence, deliveryExpectedArrivalTime));
     }
 
     public void RemoveShipment(Guid shipmentId)
     {
-        _routeStops.RemoveAll(stop => stop.ShipmentId == shipmentId);
+        _stops.RemoveAll(stop => stop.ShipmentId == shipmentId);
     }
 
     /// <summary>
     /// Inserts an Office waypoint into the route - a pure waypoint with no automatic
     /// side effects in this phase.
     /// </summary>
-    public void InsertOfficeStop(int insertIndex, DateTime expectedArrivalTime)
+    public void InsertOfficeStop(GeoLocation officeLocation, int insertIndex, DateTime expectedArrivalTime)
     {
         if (TruckingCompanyId is null)
         {
             throw new InvalidOperationException("A truck without a trucking company has no office to stop at.");
         }
 
-        if (insertIndex < 0 || insertIndex > _routeStops.Count)
+        ArgumentNullException.ThrowIfNull(officeLocation);
+
+        var orderedStops = Stops;
+
+        if (insertIndex < 0 || insertIndex > orderedStops.Count)
         {
             throw new ArgumentOutOfRangeException(nameof(insertIndex), insertIndex,
                 "Office stop insertion index is out of range for the current route.");
         }
 
-        _routeStops.Insert(insertIndex, Stop.ForOffice(TruckingCompanyId.Value, expectedArrivalTime));
+        var sequence = SequenceForInsertAt(orderedStops, insertIndex);
+        _stops.Add(Stop.ForOffice(TruckingCompanyId.Value, officeLocation, sequence, expectedArrivalTime));
+    }
+
+    /// <summary>
+    /// Computes a gap-based <see cref="Stop.Sequence"/> value for inserting a new stop at
+    /// <paramref name="index"/> among <paramref name="orderedStops"/> (already
+    /// Sequence-ordered) - the midpoint between its two neighbors, or
+    /// <see cref="SequenceGap"/> before/after the first/last stop. Falls back to a full
+    /// renumbering (not implemented here - callers are expected to keep gaps from
+    /// exhausting in Phase 1's insertion volumes) is out of scope; a gap of 1 simply
+    /// yields a duplicate/adjacent sequence, acceptable for now.
+    /// </summary>
+    private static int SequenceForInsertAt(IReadOnlyList<Stop> orderedStops, int index)
+    {
+        var before = index > 0 ? orderedStops[index - 1].Sequence : (int?)null;
+        var after = index < orderedStops.Count ? orderedStops[index].Sequence : (int?)null;
+
+        return (before, after) switch
+        {
+            (null, null) => SequenceGap,
+            (null, { } a) => a - SequenceGap,
+            ({ } b, null) => b + SequenceGap,
+            ({ } b, { } a) => b + (a - b) / 2,
+        };
     }
 }

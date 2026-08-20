@@ -1,3 +1,4 @@
+using Freight.Domain.Tracking;
 using Freight.Domain.ValueObjects;
 
 namespace Freight.Domain.Fleet;
@@ -8,6 +9,12 @@ public sealed class Driver
     public string FirstName { get; private set; } = null!;
     public string LastName { get; private set; } = null!;
     public DrivingRules Rules { get; private set; } = null!;
+
+    /// <summary>
+    /// This driver's driving-time compliance ledger. Null until the driver starts
+    /// driving for the first time - see <see cref="StartDriving"/>.
+    /// </summary>
+    public DriverComplianceState? ComplianceState { get; private set; }
 
     // EF Core cannot bind Rules through the constructor below (it is an owned-type
     // navigation, and EF's constructor injection only binds scalar properties) - this
@@ -49,5 +56,15 @@ public sealed class Driver
         ArgumentNullException.ThrowIfNull(rules);
 
         return new Driver(id, firstName, lastName, rules);
+    }
+
+    /// <summary>
+    /// Creates this driver's compliance ledger the first time they start driving. A no-op
+    /// if the ledger already exists - a driver only ever gets one ledger, advanced forward
+    /// by <see cref="Tracking.Abstractions.IDriverRuleEngine"/> from then on.
+    /// </summary>
+    public void StartDriving(DateTime simulatedNow)
+    {
+        ComplianceState ??= new DriverComplianceState(Id, simulatedNow);
     }
 }

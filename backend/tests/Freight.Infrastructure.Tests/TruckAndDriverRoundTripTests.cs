@@ -128,7 +128,15 @@ public class TruckAndDriverRoundTripTests : IAsyncLifetime
         var shipmentId = Guid.NewGuid();
         var pickupTime = new DateTime(2026, 1, 1, 8, 0, 0, DateTimeKind.Utc);
         var deliveryTime = new DateTime(2026, 1, 1, 14, 0, 0, DateTimeKind.Utc);
-        truck.AssignShipment(shipmentId, Capacity.Create(100, 2), pickupInsertIndex: 0, deliveryInsertIndex: 0, pickupTime, deliveryTime);
+        truck.AssignShipment(
+            shipmentId,
+            Capacity.Create(100, 2),
+            GeoLocation.Create(52.5, 13.4),
+            GeoLocation.Create(48.1, 11.6),
+            pickupInsertIndex: 0,
+            deliveryInsertIndex: 0,
+            pickupTime,
+            deliveryTime);
 
         await using (var writeContext = new FreightDbContext(Options()))
         {
@@ -140,9 +148,9 @@ public class TruckAndDriverRoundTripTests : IAsyncLifetime
         await using var readContext = new FreightDbContext(Options());
         var reloaded = await readContext.Set<Truck>().FirstAsync(t => t.Id == truck.Id);
 
-        Assert.Equal(2, reloaded.RouteStops.Count);
-        Assert.All(reloaded.RouteStops, s => Assert.Equal(shipmentId, s.ShipmentId));
-        Assert.Contains(reloaded.RouteStops, s => s.Kind == StopKind.Pickup);
-        Assert.Contains(reloaded.RouteStops, s => s.Kind == StopKind.Delivery);
+        Assert.Equal(2, reloaded.Stops.Count);
+        Assert.All(reloaded.Stops, s => Assert.Equal(shipmentId, s.ShipmentId));
+        Assert.Contains(reloaded.Stops, s => s.Kind == StopKind.Pickup);
+        Assert.Contains(reloaded.Stops, s => s.Kind == StopKind.Delivery);
     }
 }
