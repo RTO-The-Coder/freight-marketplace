@@ -46,6 +46,8 @@ public sealed class DriverConfiguration : IEntityTypeConfiguration<Driver>
         // an optional 1:1 owned type, not required like Rules.
         builder.OwnsOne(driver => driver.ComplianceState, state =>
         {
+            state.ToTable("DriverComplianceStates");
+
             state.WithOwner().HasForeignKey(s => s.DriverId);
             state.HasKey(s => s.DriverId);
 

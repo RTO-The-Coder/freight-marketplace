@@ -118,6 +118,11 @@ public sealed class TruckConfiguration : IEntityTypeConfiguration<Truck>
         // CurrentProgress is null until the truck starts its first leg.
         builder.OwnsOne(truck => truck.CurrentProgress, progress =>
         {
+            progress.ToTable("TruckRouteProgresses");
+
+            progress.WithOwner().HasForeignKey("TruckId");
+            progress.HasKey("TruckId");
+
             progress.Property(p => p.TotalDistanceKm).HasColumnName("CurrentProgress_TotalDistanceKm");
             progress.Property(p => p.CurrentDistanceKm).HasColumnName("CurrentProgress_CurrentDistanceKm");
             progress.Property(p => p.TotalTimeTick).HasColumnName("CurrentProgress_TotalTimeTick");
