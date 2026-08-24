@@ -86,6 +86,14 @@ public sealed class TruckConfiguration : IEntityTypeConfiguration<Truck>
 
             stop.HasKey(s => s.Id);
 
+            // Stop.Id is always client-generated (Guid.NewGuid() in Stop.ForShipment/
+            // ForOffice), never left at the CLR default - without this, EF's default
+            // ValueGeneratedOnAdd convention for Guid keys misreads a freshly-created
+            // Stop's non-default Id as "this looks like an existing row" and emits an
+            // UPDATE instead of an INSERT, which silently fails (0 rows affected) as
+            // DbUpdateConcurrencyException since the row was never there to update.
+            stop.Property(s => s.Id).ValueGeneratedNever();
+
             stop.Property(s => s.Kind)
                 .HasConversion<string>()
                 .IsRequired();
