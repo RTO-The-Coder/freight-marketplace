@@ -19,7 +19,9 @@ public sealed class FleetController(
     GetTruckDetailHandler getTruckDetailHandler,
     GetDriverDetailHandler getDriverDetailHandler,
     AssignTruckToCompanyHandler assignTruckToCompanyHandler,
-    UnassignTruckFromCompanyHandler unassignTruckFromCompanyHandler) : ControllerBase
+    UnassignTruckFromCompanyHandler unassignTruckFromCompanyHandler,
+    AssignShipmentToTruckHandler assignShipmentToTruckHandler,
+    CheckDriverEligibilityHandler checkDriverEligibilityHandler) : ControllerBase
 {
     [HttpPost("trucks")]
     public async Task<ActionResult<AddTruckResponse>> AddTruck(AddTruckBody body, CancellationToken cancellationToken)
@@ -129,6 +131,30 @@ public sealed class FleetController(
         var response = await getDriverDetailHandler.HandleAsync(new GetDriverDetailRequest(driverId), cancellationToken);
         return Ok(response);
     }
+
+    [HttpPost("trucks/{truckId:guid}/assign-shipment")]
+    public async Task<ActionResult<AssignShipmentToTruckResponse>> AssignShipmentToTruck(
+        Guid truckId,
+        AssignShipmentToTruckBody body,
+        CancellationToken cancellationToken)
+    {
+        var response = await assignShipmentToTruckHandler.HandleAsync(
+            new AssignShipmentToTruckRequest(truckId, body.ShipmentId),
+            cancellationToken);
+        return Ok(response);
+    }
+
+    [HttpPost("drivers/{driverId:guid}/eligibility-check")]
+    public async Task<ActionResult<CheckDriverEligibilityResponse>> CheckDriverEligibility(
+        Guid driverId,
+        CheckDriverEligibilityBody body,
+        CancellationToken cancellationToken)
+    {
+        var response = await checkDriverEligibilityHandler.HandleAsync(
+            new CheckDriverEligibilityRequest(driverId, body.AfterMinutes),
+            cancellationToken);
+        return Ok(response);
+    }
 }
 
 public sealed record AssignTruckToCompanyBody(Guid TruckingCompanyId);
@@ -144,3 +170,7 @@ public sealed record AddDriverBody(
     DailyRestRule DailyRestRule,
     WeeklyRestRule WeeklyRestRule,
     bool ExtendDailyDrivingWhenEligible);
+
+public sealed record AssignShipmentToTruckBody(Guid ShipmentId);
+
+public sealed record CheckDriverEligibilityBody(int AfterMinutes);

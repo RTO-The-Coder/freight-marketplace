@@ -1,0 +1,172 @@
+using Freight.Application.Fleet;
+using Freight.Application.Tests.Shipments;
+using Freight.Domain.Common;
+using Freight.Domain.Fleet;
+using Freight.Domain.Shipment;
+using Freight.Domain.ValueObjects;
+using Freight.Domain.ValueObjects.RuleVariants;
+using Moq;
+using ShipmentAggregate = Freight.Domain.Shipment.Shipment;
+
+namespace Freight.Application.Tests.Fleet;
+
+public sealed class AssignShipmentToTruckHandlerTests
+{
+    private static readonly DateTime Now = new(2026, 1, 1, 0, 0, 0, DateTimeKind.Utc);
+
+    private static Driver NewDriver() =>
+        Driver.Create(
+            "Jane",
+            "Doe",
+            DrivingRules.Create(DrivingBreakRule.FullBreak, DailyRestRule.FullRest, WeeklyRestRule.FullWeeklyRest, false));
+
+    private static TruckingCompany NewCompany() =>
+        TruckingCompany.Create(Guid.NewGuid(), "Acme Trucking", GeoLocation.Create(52.52, 13.405));
+
+    private static ShipmentAggregate NewShipment(TruckType requiredType = TruckType.BoxVan, Capacity? load = null) =>
+        ShipmentAggregate.Book(
+            Guid.NewGuid(),
+            GeoLocation.Create(52.5, 13.4),
+            GeoLocation.Create(48.1, 11.6),
+            load ?? Capacity.Create(100, 2),
+            requiredType,
+            TimeWindow.Create(Now, Now.AddHours(2)),
+            TimeWindow.Create(Now.AddHours(4), Now.AddHours(6)),
+            Now);
+
+    private static (
+        Mock<IUnitOfWork> UnitOfWork,
+        Mock<ITruckRepository> Trucks,
+        Mock<IShipmentRepository> Shipments,
+        Mock<ITruckingCompanyRepository> Companies) NewMocks()
+    {
+        var trucks = new Mock<ITruckRepository>();
+        var shipments = new Mock<IShipmentRepository>();
+        var companies = new Mock<ITruckingCompanyRepository>();
+        var unitOfWork = new Mock<IUnitOfWork>();
+        unitOfWork.SetupGet(u => u.Trucks).Returns(trucks.Object);
+        unitOfWork.SetupGet(u => u.Shipments).Returns(shipments.Object);
+        unitOfWork.SetupGet(u => u.TruckingCompanies).Returns(companies.Object);
+        return (unitOfWork, trucks, shipments, companies);
+    }
+
+    private static Truck NewAssignableTruck(TruckingCompany company, out Driver driver, TruckType type = TruckType.BoxVan)
+    {
+        var truck = Truck.Create("Truck 1", type, TruckSize.Medium);
+        truck.AssignToCompany(company.Id);
+        truck.Activate();
+        driver = NewDriver();
+        truck.AssignDrivers(driver);
+        return truck;
+    }
+
+    [Fact]
+    public async Task HandleAsync_ValidRequest_InsertsThreeStopsAndStartsDrivingAndSaves()
+    {
+        var (unitOfWork, trucks, shipments, companies) = NewMocks();
+        var company = NewCompany();
+        var truck = NewAssignableTruck(company, out var driver);
+        var shipment = NewShipment();
+
+        trucks.Setup(t => t.GetByIdAsync(truck.Id, It.IsAny<CancellationToken>())).ReturnsAsync(truck);
+        shipments.Setup(s => s.GetByIdAsync(shipment.Id, It.IsAny<CancellationToken>())).ReturnsAsync(shipment);
+        companies.Setup(c => c.GetByIdAsync(company.Id, It.IsAny<CancellationToken>())).ReturnsAsync(company);
+
+        var handler = new AssignShipmentToTruckHandler(unitOfWork.Object, new FakeTimeProvider(Now));
+
+        var response = await handler.HandleAsync(new AssignShipmentToTruckRequest(truck.Id, shipment.Id));
+
+        Assert.Equal(3, response.StopCount);
+        Assert.Equal(
+            [StopKind.Pickup, StopKind.Delivery, StopKind.Office],
+            truck.Stops.Select(s => s.Kind));
+        Assert.Equal(ShipmentStatus.Booked, shipment.Status);
+        Assert.Equal(company.Id, shipment.TruckingCompanyId);
+        Assert.NotNull(driver.ComplianceState);
+        Assert.NotNull(truck.CurrentProgress);
+        Assert.Equal(650, truck.CurrentProgress!.TotalDistanceKm);
+        Assert.Equal(78, truck.CurrentProgress.TotalTimeTick);
+        unitOfWork.Verify(u => u.SaveChangesAsync(It.IsAny<CancellationToken>()), Times.Once);
+    }
+
+    [Fact]
+    public async Task HandleAsync_TruckTypeMismatch_ThrowsAndDoesNotSave()
+    {
+        var (unitOfWork, trucks, shipments, companies) = NewMocks();
+        var company = NewCompany();
+        var truck = NewAssignableTruck(company, out _, type: TruckType.Flatbed);
+        var shipment = NewShipment(requiredType: TruckType.Refrigerated);
+
+        trucks.Setup(t => t.GetByIdAsync(truck.Id, It.IsAny<CancellationToken>())).ReturnsAsync(truck);
+        shipments.Setup(s => s.GetByIdAsync(shipment.Id, It.IsAny<CancellationToken>())).ReturnsAsync(shipment);
+        companies.Setup(c => c.GetByIdAsync(company.Id, It.IsAny<CancellationToken>())).ReturnsAsync(company);
+
+        var handler = new AssignShipmentToTruckHandler(unitOfWork.Object, new FakeTimeProvider(Now));
+
+        await Assert.ThrowsAsync<InvalidOperationException>(() =>
+            handler.HandleAsync(new AssignShipmentToTruckRequest(truck.Id, shipment.Id)));
+
+        Assert.Empty(truck.Stops);
+        unitOfWork.Verify(u => u.SaveChangesAsync(It.IsAny<CancellationToken>()), Times.Never);
+    }
+
+    [Fact]
+    public async Task HandleAsync_ExceedsCapacity_ThrowsAndDoesNotSave()
+    {
+        var (unitOfWork, trucks, shipments, companies) = NewMocks();
+        var company = NewCompany();
+        var truck = NewAssignableTruck(company, out _);
+        var oversizedShipment = NewShipment(load: Capacity.Create(truck.Capacity.Total.WeightKg + 1, 5));
+
+        trucks.Setup(t => t.GetByIdAsync(truck.Id, It.IsAny<CancellationToken>())).ReturnsAsync(truck);
+        shipments.Setup(s => s.GetByIdAsync(oversizedShipment.Id, It.IsAny<CancellationToken>())).ReturnsAsync(oversizedShipment);
+        companies.Setup(c => c.GetByIdAsync(company.Id, It.IsAny<CancellationToken>())).ReturnsAsync(company);
+
+        var handler = new AssignShipmentToTruckHandler(unitOfWork.Object, new FakeTimeProvider(Now));
+
+        await Assert.ThrowsAsync<InvalidOperationException>(() =>
+            handler.HandleAsync(new AssignShipmentToTruckRequest(truck.Id, oversizedShipment.Id)));
+
+        Assert.Empty(truck.Stops);
+        unitOfWork.Verify(u => u.SaveChangesAsync(It.IsAny<CancellationToken>()), Times.Never);
+    }
+
+    [Fact]
+    public async Task HandleAsync_SecondShipment_InsertsBeforeExistingOfficeStop()
+    {
+        var (unitOfWork, trucks, shipments, companies) = NewMocks();
+        var company = NewCompany();
+        var truck = NewAssignableTruck(company, out _);
+        var firstShipment = NewShipment();
+        var secondShipment = NewShipment();
+
+        trucks.Setup(t => t.GetByIdAsync(truck.Id, It.IsAny<CancellationToken>())).ReturnsAsync(truck);
+        shipments.Setup(s => s.GetByIdAsync(firstShipment.Id, It.IsAny<CancellationToken>())).ReturnsAsync(firstShipment);
+        shipments.Setup(s => s.GetByIdAsync(secondShipment.Id, It.IsAny<CancellationToken>())).ReturnsAsync(secondShipment);
+        companies.Setup(c => c.GetByIdAsync(company.Id, It.IsAny<CancellationToken>())).ReturnsAsync(company);
+
+        var handler = new AssignShipmentToTruckHandler(unitOfWork.Object, new FakeTimeProvider(Now));
+
+        await handler.HandleAsync(new AssignShipmentToTruckRequest(truck.Id, firstShipment.Id));
+        var officeStopId = truck.Stops.Single(s => s.Kind == StopKind.Office).Id;
+
+        await handler.HandleAsync(new AssignShipmentToTruckRequest(truck.Id, secondShipment.Id));
+
+        Assert.Equal(
+            [StopKind.Pickup, StopKind.Delivery, StopKind.Pickup, StopKind.Delivery, StopKind.Office],
+            truck.Stops.Select(s => s.Kind));
+        Assert.Equal(officeStopId, truck.Stops[^1].Id);
+    }
+
+    [Fact]
+    public async Task HandleAsync_UnknownTruckId_Throws()
+    {
+        var (unitOfWork, trucks, _, _) = NewMocks();
+        trucks.Setup(t => t.GetByIdAsync(It.IsAny<Guid>(), It.IsAny<CancellationToken>())).ReturnsAsync((Truck?)null);
+
+        var handler = new AssignShipmentToTruckHandler(unitOfWork.Object, new FakeTimeProvider(Now));
+
+        await Assert.ThrowsAsync<InvalidOperationException>(() =>
+            handler.HandleAsync(new AssignShipmentToTruckRequest(Guid.NewGuid(), Guid.NewGuid())));
+    }
+}

@@ -20,10 +20,10 @@ public class TruckTests
     {
         var truck = Truck.Create(Guid.NewGuid(), "Truck-1", TruckType.BoxVan, size);
 
-        if (company is not null)
-        {
-            truck.AssignToCompany(company.Id);
-        }
+        // AssignShipment ensures a single, always-last Office stop, which requires a
+        // TruckingCompanyId to be set - default to a fresh company here so the many
+        // AssignShipment_* tests below don't each need to opt in individually.
+        truck.AssignToCompany((company ?? NewCompany()).Id);
 
         truck.AssignDrivers(NewDriver());
 
@@ -32,9 +32,10 @@ public class TruckTests
 
     private static readonly GeoLocation PickupLocation = GeoLocation.Create(52.5, 13.4);
     private static readonly GeoLocation DeliveryLocation = GeoLocation.Create(48.1, 11.6);
+    private static readonly GeoLocation OfficeLocation = GeoLocation.Create(52.52, 13.405);
 
     private static void AssignShipment(Truck truck, Guid shipmentId, Capacity size, int pickupInsertIndex, int deliveryInsertIndex) =>
-        truck.AssignShipment(shipmentId, size, PickupLocation, DeliveryLocation, pickupInsertIndex, deliveryInsertIndex, PickupTime, DeliveryTime);
+        truck.AssignShipment(shipmentId, size, PickupLocation, DeliveryLocation, OfficeLocation, pickupInsertIndex, deliveryInsertIndex, PickupTime, DeliveryTime);
 
     [Fact]
     public void Create_StartsUnassignedAndInactive()
@@ -194,7 +195,9 @@ public class TruckTests
                 (shipment5Id, StopKind.Delivery, DeliveryTime),
                 (newShipmentId, StopKind.Delivery, DeliveryTime),
             ],
-            truck.Stops.Select(s => (s.ShipmentId, s.Kind, s.ExpectedArrivalTime)));
+            truck.Stops.Where(s => s.Kind != StopKind.Office).Select(s => (s.ShipmentId, s.Kind, s.ExpectedArrivalTime)));
+
+        Assert.Equal(StopKind.Office, truck.Stops[^1].Kind);
     }
 
     [Theory]
@@ -222,7 +225,7 @@ public class TruckTests
 
         Assert.Equal(
             [(shipmentId, StopKind.Pickup, PickupTime), (shipmentId, StopKind.Delivery, DeliveryTime)],
-            truck.Stops.Select(s => (s.ShipmentId, s.Kind, s.ExpectedArrivalTime)));
+            truck.Stops.Where(s => s.Kind != StopKind.Office).Select(s => (s.ShipmentId, s.Kind, s.ExpectedArrivalTime)));
     }
 
     [Fact]
@@ -266,7 +269,7 @@ public class TruckTests
     }
 
     [Fact]
-    public void RemoveShipment_RemovesPickupAndDeliveryStops()
+    public void RemoveShipment_RemovesPickupAndDeliveryStops_LeavesOfficeStop()
     {
         var truck = NewTruck();
         var shipmentId = Guid.NewGuid();
@@ -274,7 +277,7 @@ public class TruckTests
 
         truck.RemoveShipment(shipmentId);
 
-        Assert.Empty(truck.Stops);
+        Assert.Equal([StopKind.Office], truck.Stops.Select(s => s.Kind));
     }
 
     [Fact]
@@ -290,7 +293,7 @@ public class TruckTests
 
         Assert.Equal(
             [(keepId, StopKind.Pickup, PickupTime), (keepId, StopKind.Delivery, DeliveryTime)],
-            truck.Stops.Select(s => (s.ShipmentId, s.Kind, s.ExpectedArrivalTime)));
+            truck.Stops.Where(s => s.Kind != StopKind.Office).Select(s => (s.ShipmentId, s.Kind, s.ExpectedArrivalTime)));
     }
 
     [Fact]
@@ -319,5 +322,68 @@ public class TruckTests
         var truck = NewTruck();
 
         Assert.Equal(TruckStatus.Running, truck.DetermineStatus());
+    }
+
+    [Fact]
+    public void AssignShipment_FirstAssignmentToEmptyRoute_InsertsThreeStopsWithOfficeLast()
+    {
+        var truck = NewTruck();
+        var shipmentId = Guid.NewGuid();
+
+        AssignShipment(truck, shipmentId, SmallShipment(), pickupInsertIndex: 0, deliveryInsertIndex: 0);
+
+        Assert.Equal(
+            [StopKind.Pickup, StopKind.Delivery, StopKind.Office],
+            truck.Stops.Select(s => s.Kind));
+
+        var officeStop = truck.Stops[^1];
+        Assert.Equal(1000, officeStop.Sequence);
+        Assert.Equal(truck.TruckingCompanyId, officeStop.TruckingCompanyId);
+    }
+
+    [Fact]
+    public void AssignShipment_SecondAssignment_InsertsBeforeExistingOfficeStop_DoesNotDuplicateIt()
+    {
+        var truck = NewTruck();
+        var firstShipmentId = Guid.NewGuid();
+        var secondShipmentId = Guid.NewGuid();
+
+        AssignShipment(truck, firstShipmentId, SmallShipment(), pickupInsertIndex: 0, deliveryInsertIndex: 0);
+        var officeStopAfterFirst = truck.Stops.Single(s => s.Kind == StopKind.Office);
+
+        AssignShipment(truck, secondShipmentId, SmallShipment(), pickupInsertIndex: 2, deliveryInsertIndex: 2);
+
+        Assert.Equal(
+            [StopKind.Pickup, StopKind.Delivery, StopKind.Pickup, StopKind.Delivery, StopKind.Office],
+            truck.Stops.Select(s => s.Kind));
+
+        Assert.Equal(officeStopAfterFirst.Id, truck.Stops[^1].Id);
+    }
+
+    [Fact]
+    public void StartLeg_FirstCall_ConstructsCurrentProgress()
+    {
+        var truck = NewTruck();
+
+        truck.StartLeg(totalDistanceKm: 650, totalTimeTick: 78);
+
+        Assert.NotNull(truck.CurrentProgress);
+        Assert.Equal(650, truck.CurrentProgress!.TotalDistanceKm);
+        Assert.Equal(78, truck.CurrentProgress.TotalTimeTick);
+        Assert.Equal(0, truck.CurrentProgress.CurrentDistanceKm);
+    }
+
+    [Fact]
+    public void StartLeg_SecondCall_ResetsExistingCurrentProgress()
+    {
+        var truck = NewTruck();
+        truck.StartLeg(totalDistanceKm: 650, totalTimeTick: 78);
+        truck.CurrentProgress!.UpdateProgress(300);
+
+        truck.StartLeg(totalDistanceKm: 200, totalTimeTick: 24);
+
+        Assert.Equal(200, truck.CurrentProgress.TotalDistanceKm);
+        Assert.Equal(24, truck.CurrentProgress.TotalTimeTick);
+        Assert.Equal(0, truck.CurrentProgress.CurrentDistanceKm);
     }
 }

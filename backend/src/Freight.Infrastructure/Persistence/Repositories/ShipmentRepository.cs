@@ -10,4 +10,9 @@ public sealed class ShipmentRepository(FreightDbContext dbContext)
         await DbContext.Set<Shipment>()
             .Where(shipment => shipment.ShipperId == shipperId)
             .ToListAsync(cancellationToken);
+
+    public async Task<IReadOnlyList<Shipment>> GetByStatusAsync(ShipmentStatus status, CancellationToken cancellationToken = default) =>
+        await DbContext.Set<Shipment>()
+            .Where(shipment => shipment.Status == status)
+            .ToListAsync(cancellationToken);
 }

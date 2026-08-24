@@ -123,6 +123,8 @@ public class TruckAndDriverRoundTripTests : IAsyncLifetime
     {
         var driver = Driver.Create(Guid.NewGuid(), "Route", "Driver", SampleRules());
         var truck = Truck.Create(Guid.NewGuid(), "Truck-4", TruckType.BoxVan, TruckSize.Small);
+        var company = TruckingCompany.Create(Guid.NewGuid(), "Route Co", GeoLocation.Create(52.52, 13.405));
+        truck.AssignToCompany(company.Id);
         truck.AssignDrivers(driver);
 
         var shipmentId = Guid.NewGuid();
@@ -133,6 +135,7 @@ public class TruckAndDriverRoundTripTests : IAsyncLifetime
             Capacity.Create(100, 2),
             GeoLocation.Create(52.5, 13.4),
             GeoLocation.Create(48.1, 11.6),
+            company.OfficeLocation,
             pickupInsertIndex: 0,
             deliveryInsertIndex: 0,
             pickupTime,
@@ -140,6 +143,7 @@ public class TruckAndDriverRoundTripTests : IAsyncLifetime
 
         await using (var writeContext = new FreightDbContext(Options()))
         {
+            writeContext.Set<TruckingCompany>().Add(company);
             writeContext.Set<Driver>().Add(driver);
             writeContext.Set<Truck>().Add(truck);
             await writeContext.SaveChangesAsync();
@@ -148,9 +152,11 @@ public class TruckAndDriverRoundTripTests : IAsyncLifetime
         await using var readContext = new FreightDbContext(Options());
         var reloaded = await readContext.Set<Truck>().FirstAsync(t => t.Id == truck.Id);
 
-        Assert.Equal(2, reloaded.Stops.Count);
-        Assert.All(reloaded.Stops, s => Assert.Equal(shipmentId, s.ShipmentId));
+        Assert.Equal(3, reloaded.Stops.Count);
+        Assert.All(reloaded.Stops.Where(s => s.Kind != StopKind.Office), s => Assert.Equal(shipmentId, s.ShipmentId));
         Assert.Contains(reloaded.Stops, s => s.Kind == StopKind.Pickup);
         Assert.Contains(reloaded.Stops, s => s.Kind == StopKind.Delivery);
+        Assert.Contains(reloaded.Stops, s => s.Kind == StopKind.Office);
+        Assert.Equal(StopKind.Office, reloaded.Stops[^1].Kind);
     }
 }

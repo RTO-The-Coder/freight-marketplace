@@ -11,6 +11,8 @@ public sealed class RouteProgress
 {
     public double TotalDistanceKm { get; private set; }
     public double CurrentDistanceKm { get; private set; }
+
+    /// <summary>Total time for this leg, expressed in fixed 5-minute ticks (e.g. 6h30m = 390 minutes = 78 ticks).</summary>
     public int TotalTimeTick { get; private set; }
 
     // EF Core materializer only - see the equivalent comment on Truck's parameterless

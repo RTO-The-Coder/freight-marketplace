@@ -9,8 +9,16 @@ namespace Freight.Api.Controllers;
 [Route("shipments")]
 public sealed class ShipmentsController(
     BookShipmentHandler bookShipmentHandler,
-    UpdatePickupWindowHandler updatePickupWindowHandler) : ControllerBase
+    UpdatePickupWindowHandler updatePickupWindowHandler,
+    GetPendingShipmentsHandler getPendingShipmentsHandler) : ControllerBase
 {
+    [HttpGet("pending")]
+    public async Task<ActionResult<GetPendingShipmentsResponse>> GetPendingShipments(CancellationToken cancellationToken)
+    {
+        var response = await getPendingShipmentsHandler.HandleAsync(cancellationToken);
+        return Ok(response);
+    }
+
     [HttpPost]
     public async Task<ActionResult<BookShipmentResponse>> BookShipment(
         BookShipmentBody body,

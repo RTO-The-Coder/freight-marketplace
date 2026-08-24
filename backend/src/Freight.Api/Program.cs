@@ -2,6 +2,8 @@ using System.Text.Json.Serialization;
 using Freight.Application.Fleet;
 using Freight.Application.Shipments;
 using Freight.Domain.Common;
+using Freight.Domain.Tracking;
+using Freight.Domain.Tracking.Abstractions;
 using Freight.Infrastructure.Persistence;
 using Microsoft.EntityFrameworkCore;
 
@@ -19,6 +21,7 @@ builder.Services.AddDbContext<FreightDbContext>(options =>
 
 builder.Services.AddScoped<IUnitOfWork, UnitOfWork>();
 builder.Services.AddSingleton(TimeProvider.System);
+builder.Services.AddScoped<IDriverRuleEngine, DriverRuleEngine>();
 
 const string WebAppCorsPolicy = "WebApp";
 var allowedOrigins = builder.Configuration.GetSection("Cors:AllowedOrigins").Get<string[]>() ?? [];
@@ -46,6 +49,9 @@ builder.Services.AddScoped<BookShipmentHandler>();
 builder.Services.AddScoped<UpdatePickupWindowHandler>();
 builder.Services.AddScoped<GetShippersHandler>();
 builder.Services.AddScoped<GetShipmentsByShipperHandler>();
+builder.Services.AddScoped<GetPendingShipmentsHandler>();
+builder.Services.AddScoped<AssignShipmentToTruckHandler>();
+builder.Services.AddScoped<CheckDriverEligibilityHandler>();
 
 var app = builder.Build();
 
