@@ -19,6 +19,27 @@ optionsBuilder.UseNpgsql(connectionString);
 
 await using var db = new FreightDbContext(optionsBuilder.Options);
 
+// Wipes all seeded data while leaving the schema (tables/migrations) in place -
+// TRUNCATE ... CASCADE handles FK dependency order automatically, so table order
+// here doesn't matter. Safe to call against a DB that already has the current
+// migrations applied; does nothing to the schema itself.
+async Task ClearDatabase()
+{
+    // Fixed literal table names, not user input - table/column identifiers can't be
+    // parameterized anyway (only values can), so the EF1002/EF1003 SQL-injection
+    // analyzer warning doesn't apply here.
+#pragma warning disable EF1002
+    string[] tables = ["Shipments", "TruckRouteStops", "Trucks", "Drivers", "TruckingCompanies", "Shippers"];
+    foreach (var table in tables)
+    {
+        await db.Database.ExecuteSqlRawAsync($"TRUNCATE TABLE \"{table}\" CASCADE;");
+    }
+#pragma warning restore EF1002
+}
+
+await ClearDatabase();
+Console.WriteLine("Cleared existing data.");
+
 // Fixed seed for reproducible runs - re-running the seeder from a clean database
 // always produces the same dataset.
 var random = new Random(20260817);
