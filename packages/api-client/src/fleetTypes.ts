@@ -75,6 +75,18 @@ export interface TruckDetailDriverDto {
   lastName: string
 }
 
+export type StopKind = 'Pickup' | 'Delivery' | 'Office'
+
+export interface TruckDetailStopDto {
+  stopId: string
+  shipmentId: string | null
+  kind: StopKind
+  sequence: number
+  latitude: number
+  longitude: number
+  expectedArrivalTime: string
+}
+
 export interface TruckDetailDto {
   truckId: string
   truckName: string
@@ -86,6 +98,20 @@ export interface TruckDetailDto {
   driverConfigurationType: DriverConfigurationType | null
   primaryDriver: TruckDetailDriverDto | null
   secondaryDriver: TruckDetailDriverDto | null
+  stops: TruckDetailStopDto[]
+}
+
+export type DriverActivity = 'Driving' | 'OnBreak' | 'OnDailyRest' | 'OnWeeklyRest'
+
+export interface DriverComplianceStateDto {
+  currentActivity: DriverActivity
+  minutesRemainingInCurrentActivity: number
+  continuousDrivingMinutesSinceBreak: number
+  dailyDrivingMinutesToday: number
+  isTodayExtended: boolean
+  weeklyDrivingMinutesThisWeek: number
+  weeklyDrivingMinutesPriorWeek: number
+  lastEvaluatedSimulatedTime: string
 }
 
 export interface DriverDetailDto {
@@ -96,4 +122,23 @@ export interface DriverDetailDto {
   dailyRestRule: DailyRestRule
   weeklyRestRule: WeeklyRestRule
   extendDailyDrivingWhenEligible: boolean
+  complianceState: DriverComplianceStateDto | null
+}
+
+export interface AssignShipmentToTruckResponse {
+  stopCount: number
+}
+
+export type IneligibilityReason =
+  | 'OnBreak'
+  | 'OnDailyRest'
+  | 'OnWeeklyRest'
+  | 'DailyCapReached'
+  | 'WeeklyCapReached'
+  | 'TwoWeekCapReached'
+
+export interface CheckDriverEligibilityResponse {
+  isEligible: boolean
+  reason: IneligibilityReason | null
+  minutesUntilEligible: number | null
 }

@@ -33,3 +33,7 @@ export interface ShipmentSummaryDto {
 export interface GetShipmentsByShipperResponse {
   shipments: ShipmentSummaryDto[]
 }
+
+export interface GetPendingShipmentsResponse {
+  shipments: ShipmentSummaryDto[]
+}

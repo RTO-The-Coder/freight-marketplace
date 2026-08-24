@@ -1,6 +1,6 @@
 import type { ApiClient } from './client'
 import type { TruckType } from './fleetTypes'
-import type { GetShipmentsByShipperResponse, GetShippersResponse } from './shipmentTypes'
+import type { GetPendingShipmentsResponse, GetShipmentsByShipperResponse, GetShippersResponse } from './shipmentTypes'
 
 export interface BookShipmentRequest {
   shipperId: string
@@ -32,6 +32,8 @@ export function createShipmentsApi(client: ApiClient) {
 
     getShipmentsByShipper: (shipperId: string) =>
       client.get<GetShipmentsByShipperResponse>(`/shippers/${shipperId}/shipments`),
+
+    getPendingShipments: () => client.get<GetPendingShipmentsResponse>('/shipments/pending'),
 
     bookShipment: (body: BookShipmentRequest) => client.post<BookShipmentResponse>('/shipments', body),
 

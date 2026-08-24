@@ -1,5 +1,7 @@
 import type { ApiClient } from './client'
 import type {
+  AssignShipmentToTruckResponse,
+  CheckDriverEligibilityResponse,
   DailyRestRule,
   DriverDetailDto,
   DrivingBreakRule,
@@ -81,6 +83,12 @@ export function createFleetApi(client: ApiClient) {
       client.post<void>(`/trucks/${truckId}/company`, { truckingCompanyId }),
 
     unassignTruckFromCompany: (truckId: string) => client.delete<void>(`/trucks/${truckId}/company`),
+
+    assignShipmentToTruck: (truckId: string, shipmentId: string) =>
+      client.post<AssignShipmentToTruckResponse>(`/trucks/${truckId}/assign-shipment`, { shipmentId }),
+
+    checkDriverEligibility: (driverId: string, afterMinutes: number) =>
+      client.post<CheckDriverEligibilityResponse>(`/drivers/${driverId}/eligibility-check`, { afterMinutes }),
   }
 }
 

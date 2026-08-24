@@ -10,7 +10,11 @@ export type {
   FleetApi,
 } from './fleetApi'
 export type {
+  AssignShipmentToTruckResponse,
+  CheckDriverEligibilityResponse,
   DailyRestRule,
+  DriverActivity,
+  DriverComplianceStateDto,
   DriverConfigurationType,
   DriverDetailDto,
   DriverSummaryDto,
@@ -22,8 +26,11 @@ export type {
   GetFleetTreeResponse,
   GetTruckForDriverResponse,
   GetTrucksResponse,
+  IneligibilityReason,
+  StopKind,
   TruckDetailDriverDto,
   TruckDetailDto,
+  TruckDetailStopDto,
   TruckSize,
   TruckStatus,
   TruckSummaryDto,
@@ -44,6 +51,7 @@ export type {
   UpdatePickupWindowRequest,
 } from './shipmentsApi'
 export type {
+  GetPendingShipmentsResponse,
   GetShipmentsByShipperResponse,
   GetShippersResponse,
   ShipmentStatus,
