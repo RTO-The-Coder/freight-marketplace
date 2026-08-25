@@ -2,6 +2,8 @@ using System.Text.Json.Serialization;
 using Freight.Application.Fleet;
 using Freight.Application.Shipments;
 using Freight.Domain.Common;
+using Freight.Domain.Fleet;
+using Freight.Domain.Fleet.Abstractions;
 using Freight.Domain.Tracking;
 using Freight.Domain.Tracking.Abstractions;
 using Freight.Infrastructure.Persistence;
@@ -22,6 +24,7 @@ builder.Services.AddDbContext<FreightDbContext>(options =>
 builder.Services.AddScoped<IUnitOfWork, UnitOfWork>();
 builder.Services.AddSingleton(TimeProvider.System);
 builder.Services.AddScoped<IDriverRuleEngine, DriverRuleEngine>();
+builder.Services.AddScoped<IShipmentInsertionEvaluator, ShipmentInsertionEvaluator>();
 
 const string WebAppCorsPolicy = "WebApp";
 var allowedOrigins = builder.Configuration.GetSection("Cors:AllowedOrigins").Get<string[]>() ?? [];

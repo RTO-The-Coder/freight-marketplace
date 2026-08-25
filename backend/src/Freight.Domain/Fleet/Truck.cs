@@ -5,17 +5,6 @@ namespace Freight.Domain.Fleet;
 
 public sealed class Truck
 {
-    private const int SequenceGap = 10;
-
-    /// <summary>
-    /// Fixed sequence for the route's single Office stop - always the last stop on the
-    /// route, comfortably above anything <see cref="SequenceGap"/>-based numbering will
-    /// produce for a Pickup/Delivery stop, so it never needs to be bumped.
-    /// </summary>
-    private const int OfficeStopSequence = 1000;
-
-    private readonly List<Stop> _stops = [];
-
     public Guid Id { get; private set; }
     public string TruckName { get; private set; } = null!;
 
@@ -38,12 +27,9 @@ public sealed class Truck
     public DriverAssignment? DriverAssignment { get; private set; }
     public bool HazmatCertified { get; private set; }
 
-    /// <summary>Ordered by <see cref="Stop.Sequence"/>, not by insertion order.</summary>
-    public IReadOnlyList<Stop> Stops => [.. _stops.OrderBy(stop => stop.Sequence)];
-
     /// <summary>
     /// Progress along the current route leg. Null until the truck starts its first leg
-    /// - see <see cref="StartLeg"/>. <see cref="RouteProgress.TotalTimeTick"/> is
+    /// - see <see cref="AssignShipment"/>. <see cref="RouteProgress.TotalTimeTick"/> is
     /// expressed in fixed 5-minute ticks (e.g. 6h30m = 390 minutes = 78 ticks), not
     /// seconds.
     /// </summary>
@@ -54,36 +40,6 @@ public sealed class Truck
     /// <see cref="DetermineStatus"/>. Never set directly.
     /// </summary>
     public TruckStatus Status => DetermineStatus();
-
-    /// <summary>
-    /// Capacity still available right now, derived from <see cref="Capacity"/>.Total
-    /// minus the sum of <see cref="Stop.ShipmentLoad"/> across Pickup stops still on the
-    /// route (a shipment's load counts against remaining capacity from the moment it's
-    /// assigned until its Delivery stop is reached and <see cref="RemoveShipment"/>
-    /// takes both stops off the route). Deliberately not stored - see
-    /// <see cref="ValueObjects.TruckCapacity"/>.
-    /// </summary>
-    public Capacity RemainingCapacity
-    {
-        get
-        {
-            var assignedWeight = 0.0;
-            var assignedVolume = 0.0;
-
-            foreach (var stop in _stops)
-            {
-                if (stop.Kind == StopKind.Pickup && stop.ShipmentLoad is { } load)
-                {
-                    assignedWeight += load.WeightKg;
-                    assignedVolume += load.VolumeCubicMeters;
-                }
-            }
-
-            // "ValueObjects.Capacity" disambiguates the type from the Truck.Capacity
-            // (TruckCapacity) property of the same simple name, in scope here.
-            return Capacity.Total.Subtract(ValueObjects.Capacity.Create(assignedWeight, assignedVolume));
-        }
-    }
 
     // EF Core cannot bind capacity/driverAssignment through the constructor below
     // (they are owned-type/reference navigations, and EF's constructor injection only
@@ -188,19 +144,21 @@ public sealed class Truck
 
     /// <summary>
     /// Derives the truck's operational status: <see cref="TruckStatus.Idle"/> when no
-    /// assigned driver can currently drive, <see cref="TruckStatus.AtOffice"/> when the
-    /// next stop on the route is an Office stop, otherwise <see cref="TruckStatus.Running"/>.
+    /// assigned driver can currently drive, <see cref="TruckStatus.AtOffice"/> when
+    /// <paramref name="currentTrip"/> says the truck's next stop is Office, otherwise
+    /// <see cref="TruckStatus.Running"/>. Needs the truck's current trip (if any) - a
+    /// Truck no longer owns Stops directly, so this overload takes the trip explicitly;
+    /// Trip itself answers the route-shape question (<see cref="Trip.IsAtOffice"/>)
+    /// since Stops are its data, not Truck's.
     /// </summary>
-    public TruckStatus DetermineStatus()
+    public TruckStatus DetermineStatus(Trip? currentTrip = null)
     {
         if (DriverAssignment is null || !DriverAssignment.HasDriverAbleToDrive)
         {
             return TruckStatus.Idle;
         }
 
-        var orderedStops = Stops;
-
-        if (orderedStops.Count > 0 && orderedStops[0].Kind == StopKind.Office)
+        if (currentTrip?.IsAtOffice == true)
         {
             return TruckStatus.AtOffice;
         }
@@ -209,14 +167,36 @@ public sealed class Truck
     }
 
     /// <summary>
-    /// Inserts a Pickup + Delivery stop pair for a shipment. <paramref name="pickupInsertIndex"/>
-    /// and <paramref name="deliveryInsertIndex"/> are positions among the route's
-    /// non-Office stops only - the route's single Office stop (see
-    /// <see cref="OfficeStopSequence"/>) always stays last regardless of these indices,
-    /// and is created here via <paramref name="officeLocation"/> the first time this
-    /// truck receives a shipment, if it doesn't already have one.
+    /// Capacity still available right now, derived from <see cref="Capacity"/>.Total
+    /// minus <paramref name="currentTrip"/>'s <see cref="Trip.CurrentLoad"/> - Trip
+    /// computes what's currently on board from its own stops; Truck only knows its own
+    /// total capacity, so it does the one subtraction. A truck with no open trip has
+    /// full capacity available.
+    /// </summary>
+    public Capacity RemainingCapacity(Trip? currentTrip)
+    {
+        if (currentTrip is null)
+        {
+            return Capacity.Total;
+        }
+
+        // "ValueObjects.Capacity" disambiguates the type from the Truck.Capacity
+        // (TruckCapacity) property of the same simple name, in scope here.
+        return Capacity.Total.Subtract(currentTrip.CurrentLoad);
+    }
+
+    /// <summary>
+    /// Assigns a shipment onto <paramref name="trip"/> (the truck's current open trip -
+    /// opened fresh by the caller if none exists yet) and starts/updates this truck's
+    /// live <see cref="CurrentProgress"/> to match. If the insertion changes the trip's
+    /// immediate next-Pending-stop while the truck is already mid-leg, the old leg's
+    /// progress is banked onto the trip before CurrentProgress is replaced (see
+    /// RouteProgress's class doc comment) rather than simply left in place; otherwise
+    /// CurrentProgress is left untouched (the insertion landed after the truck's live
+    /// position, not ahead of it).
     /// </summary>
     public void AssignShipment(
+        Trip trip,
         Guid shipmentId,
         Capacity shipmentSize,
         GeoLocation pickupLocation,
@@ -224,125 +204,52 @@ public sealed class Truck
         GeoLocation officeLocation,
         int pickupInsertIndex,
         int deliveryInsertIndex,
-        DateTime pickupExpectedArrivalTime,
-        DateTime deliveryExpectedArrivalTime)
+        double pickupLegDistanceKm,
+        int pickupLegTimeTick,
+        double deliveryLegDistanceKm,
+        int deliveryLegTimeTick,
+        double officeLegDistanceKm,
+        int officeLegTimeTick)
     {
-        if (shipmentId == Guid.Empty)
-        {
-            throw new ArgumentException("Shipment id cannot be empty.", nameof(shipmentId));
-        }
-
+        ArgumentNullException.ThrowIfNull(trip);
         ArgumentNullException.ThrowIfNull(shipmentSize);
-        ArgumentNullException.ThrowIfNull(pickupLocation);
-        ArgumentNullException.ThrowIfNull(deliveryLocation);
-        ArgumentNullException.ThrowIfNull(officeLocation);
 
-        var nonOfficeStops = NonOfficeStops();
-
-        if (pickupInsertIndex < 0 || pickupInsertIndex > nonOfficeStops.Count)
+        if (trip.TruckId != Id)
         {
-            throw new ArgumentOutOfRangeException(nameof(pickupInsertIndex), pickupInsertIndex,
-                "Pickup insertion index is out of range for the current route.");
+            throw new ArgumentException("This trip does not belong to this truck.", nameof(trip));
         }
 
-        if (deliveryInsertIndex < 0 || deliveryInsertIndex > nonOfficeStops.Count)
-        {
-            throw new ArgumentOutOfRangeException(nameof(deliveryInsertIndex), deliveryInsertIndex,
-                "Delivery insertion index is out of range for the current route.");
-        }
+        var remainingCapacity = RemainingCapacity(trip);
 
-        if (deliveryInsertIndex < pickupInsertIndex)
-        {
-            throw new ArgumentException(
-                "Delivery must be inserted at or after pickup in the route.", nameof(deliveryInsertIndex));
-        }
-
-        if (!RemainingCapacity.CanAccommodate(shipmentSize))
+        if (!remainingCapacity.CanAccommodate(shipmentSize))
         {
             throw new InvalidOperationException(
                 $"{TruckName} does not have enough remaining capacity for this shipment " +
-                $"({RemainingCapacity.WeightKg}kg / {RemainingCapacity.VolumeCubicMeters}m³ available).");
+                $"({remainingCapacity.WeightKg}kg / {remainingCapacity.VolumeCubicMeters}m³ available).");
         }
 
-        var pickupSequence = SequenceForInsertAt(nonOfficeStops, pickupInsertIndex);
-        _stops.Add(Stop.ForShipment(shipmentId, shipmentSize, StopKind.Pickup, pickupLocation, pickupSequence, pickupExpectedArrivalTime));
+        var previousNextStopId = trip.NextStop?.Id;
 
-        // deliveryInsertIndex was expressed against the pre-insertion route; the pickup
-        // insertion above shifted every original index at/after pickupInsertIndex right
-        // by one, so account for that shift before inserting delivery.
-        var deliverySequence = SequenceForInsertAt(NonOfficeStops(), deliveryInsertIndex + 1);
-        _stops.Add(Stop.ForShipment(shipmentId, shipmentSize, StopKind.Delivery, deliveryLocation, deliverySequence, deliveryExpectedArrivalTime));
+        trip.AssignShipment(
+            shipmentId, shipmentSize, pickupLocation, deliveryLocation, officeLocation,
+            pickupInsertIndex, deliveryInsertIndex,
+            pickupLegDistanceKm, pickupLegTimeTick,
+            deliveryLegDistanceKm, deliveryLegTimeTick,
+            officeLegDistanceKm, officeLegTimeTick);
 
-        EnsureOfficeStop(officeLocation);
-    }
+        var newNextStop = trip.NextStop!;
 
-    /// <summary>
-    /// Starts (or restarts) progress on the truck's current route leg - constructs
-    /// <see cref="CurrentProgress"/> the first time this is called, or resets it via
-    /// <see cref="RouteProgress.StartNewLeg"/> on every call after. No OSRM/routing
-    /// integration exists yet (Slice 7), so callers currently pass hardcoded
-    /// placeholder values rather than a real computed distance/time.
-    /// </summary>
-    public void StartLeg(double totalDistanceKm, int totalTimeTick)
-    {
         if (CurrentProgress is null)
         {
-            CurrentProgress = new RouteProgress(totalDistanceKm, totalTimeTick);
+            CurrentProgress = new RouteProgress(newNextStop.IncomingLegDistanceKm, newNextStop.IncomingLegTimeTick);
         }
-        else
+        else if (newNextStop.Id != previousNextStopId)
         {
-            CurrentProgress.StartNewLeg(totalDistanceKm, totalTimeTick);
+            // The insertion landed ahead of the truck's live position - the leg it was
+            // mid-way through is abandoned. Bank what's already been covered before
+            // replacing CurrentProgress with a fresh leg toward the new immediate stop.
+            trip.BankPartialLeg(CurrentProgress.CurrentDistanceKm, CurrentProgress.CurrentDrivingTimeTick);
+            CurrentProgress.StartNewLeg(newNextStop.IncomingLegDistanceKm, newNextStop.IncomingLegTimeTick);
         }
-    }
-
-    private List<Stop> NonOfficeStops() =>
-        [.. Stops.Where(stop => stop.Kind != StopKind.Office)];
-
-    /// <summary>
-    /// Ensures this truck's route has its single, always-last Office stop - a no-op if
-    /// one already exists. <see cref="ExpectedArrivalTime"/> is a Phase 1 placeholder
-    /// (no OSRM/ETA engine wired up yet), matching every other stop's expected-arrival
-    /// value.
-    /// </summary>
-    private void EnsureOfficeStop(GeoLocation officeLocation)
-    {
-        if (_stops.Any(stop => stop.Kind == StopKind.Office))
-        {
-            return;
-        }
-
-        if (TruckingCompanyId is null)
-        {
-            throw new InvalidOperationException("A truck without a trucking company has no office to stop at.");
-        }
-
-        _stops.Add(Stop.ForOffice(TruckingCompanyId.Value, officeLocation, OfficeStopSequence, DateTime.UtcNow));
-    }
-
-    public void RemoveShipment(Guid shipmentId)
-    {
-        _stops.RemoveAll(stop => stop.ShipmentId == shipmentId);
-    }
-
-    /// <summary>
-    /// Computes a gap-based <see cref="Stop.Sequence"/> value for inserting a new stop at
-    /// <paramref name="index"/> among <paramref name="orderedStops"/> (already
-    /// Sequence-ordered) - the midpoint between its two neighbors, or
-    /// <see cref="SequenceGap"/> before/after the first/last stop. No renumbering
-    /// fallback: Phase 1's insertion volumes are far too low to exhaust the available
-    /// integer gaps between neighbors.
-    /// </summary>
-    private static int SequenceForInsertAt(IReadOnlyList<Stop> orderedStops, int index)
-    {
-        var before = index > 0 ? orderedStops[index - 1].Sequence : (int?)null;
-        var after = index < orderedStops.Count ? orderedStops[index].Sequence : (int?)null;
-
-        return (before, after) switch
-        {
-            (null, null) => SequenceGap,
-            (null, { } a) => a - SequenceGap,
-            ({ } b, null) => b + SequenceGap,
-            ({ } b, { } a) => b + (a - b) / 2,
-        };
     }
 }

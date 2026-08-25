@@ -12,8 +12,11 @@ public sealed class GetTrucksHandlerTests
     private static (Mock<IUnitOfWork> UnitOfWork, Mock<ITruckRepository> Trucks) NewMocks()
     {
         var trucks = new Mock<ITruckRepository>();
+        var trips = new Mock<ITripRepository>();
+        trips.Setup(t => t.GetOpenTripByTruckIdAsync(It.IsAny<Guid>(), It.IsAny<CancellationToken>())).ReturnsAsync((Trip?)null);
         var unitOfWork = new Mock<IUnitOfWork>();
         unitOfWork.SetupGet(u => u.Trucks).Returns(trucks.Object);
+        unitOfWork.SetupGet(u => u.Trips).Returns(trips.Object);
         return (unitOfWork, trucks);
     }
 

@@ -1,25 +1,37 @@
 using Freight.Domain.Common;
+using Freight.Domain.Fleet;
+using Freight.Domain.Fleet.Abstractions;
+using Freight.Domain.Tracking;
 using Freight.Domain.ValueObjects;
 
 namespace Freight.Application.Fleet;
 
-public sealed record AssignShipmentToTruckRequest(Guid TruckId, Guid ShipmentId);
+public sealed record AssignShipmentToTruckRequest(
+    Guid TruckId,
+    Guid ShipmentId,
+    int PickupInsertIndex,
+    int DeliveryInsertIndex);
 
 public sealed record AssignShipmentToTruckResponse(int StopCount);
 
 /// <summary>
-/// Directly assigns a booked shipment to a specific truck's route - the same workflow
-/// Slice 12's offer-approval will later call as its final step. Inserts a Pickup +
-/// Delivery stop pair (and, the first time this truck receives a shipment, a single
-/// always-last Office stop - see <see cref="Domain.Fleet.Truck.AssignShipment"/>), and
-/// starts the truck's primary driver driving so their compliance ledger begins
-/// accumulating.
+/// Assigns a booked shipment to a specific truck's route at caller-specified insertion
+/// points - the same workflow Slice 12's offer-approval will later call as its final
+/// step. Finds or opens the truck's current <see cref="Trip"/>, previews the insertion
+/// on a clone (<see cref="Trip.Clone"/>) to run the feasibility check
+/// (<see cref="IShipmentInsertionEvaluator"/> - rejects if any downstream stop's
+/// projected arrival would violate its own window or exceed driver-hours), and only if
+/// feasible performs the real insertion (<see cref="Truck.AssignShipment"/>) and starts
+/// the truck's primary driver driving so their compliance ledger begins accumulating.
 /// </summary>
-public sealed class AssignShipmentToTruckHandler(IUnitOfWork unitOfWork, TimeProvider timeProvider)
+public sealed class AssignShipmentToTruckHandler(
+    IUnitOfWork unitOfWork,
+    IShipmentInsertionEvaluator insertionEvaluator,
+    TimeProvider timeProvider)
 {
     // Hardcoded placeholders until OSRM/IRoutingService (Slice 7) computes real
-    // distance/time for the leg to the newly-assigned pickup. 78 ticks = 6h30m at the
-    // fixed 5-minute tick size (see RouteProgress.TotalTimeTick).
+    // distance/time for each leg. 78 ticks = 6h30m at the fixed 5-minute tick size (see
+    // RouteProgress.TotalTimeTick).
     private const double PlaceholderLegDistanceKm = 650;
     private const int PlaceholderLegTimeTicks = 78;
 
@@ -56,7 +68,10 @@ public sealed class AssignShipmentToTruckHandler(IUnitOfWork unitOfWork, TimePro
             ?? throw new InvalidOperationException($"Trucking company '{truck.TruckingCompanyId.Value}' was not found.");
 
         var now = timeProvider.GetUtcNow().UtcDateTime;
-        var nonOfficeStopCount = truck.Stops.Count(stop => stop.Kind != Domain.Fleet.StopKind.Office);
+
+        var trip = await unitOfWork.Trips.GetOpenTripByTruckIdAsync(truck.Id, cancellationToken);
+        var isNewTrip = trip is null;
+        trip ??= Trip.Open(truck.Id, company.Id, now);
 
         // Fresh GeoLocation/Capacity instances, not the tracked ones off Shipment/
         // TruckingCompany - EF Core's change tracker treats owned-type instances by
@@ -65,25 +80,81 @@ public sealed class AssignShipmentToTruckHandler(IUnitOfWork unitOfWork, TimePro
         // navigation of the same CLR type, corrupting insert/update detection for the
         // newly-created Stop rows (they get emitted as UPDATEs instead of INSERTs,
         // affecting 0 rows and throwing DbUpdateConcurrencyException).
+        var pickupLocation = GeoLocation.Create(shipment.PickupLocation.Latitude, shipment.PickupLocation.Longitude);
+        var deliveryLocation = GeoLocation.Create(shipment.DeliveryLocation.Latitude, shipment.DeliveryLocation.Longitude);
+        var officeLocation = GeoLocation.Create(company.OfficeLocation.Latitude, company.OfficeLocation.Longitude);
+        var shipmentSize = Capacity.Create(shipment.Load.WeightKg, shipment.Load.VolumeCubicMeters);
+
+        var preview = trip.Clone();
+        preview.AssignShipment(
+            shipment.Id, shipmentSize, pickupLocation, deliveryLocation, officeLocation,
+            request.PickupInsertIndex, request.DeliveryInsertIndex,
+            PlaceholderLegDistanceKm, PlaceholderLegTimeTicks,
+            PlaceholderLegDistanceKm, PlaceholderLegTimeTicks,
+            PlaceholderLegDistanceKm, PlaceholderLegTimeTicks);
+
+        var shipmentWindows = await BuildShipmentWindowsAsync(preview, shipment, cancellationToken);
+
+        var feasibility = insertionEvaluator.Evaluate(
+            preview.Stops, truck.CurrentProgress, now, shipmentWindows, truck.DriverAssignment, RestRuleLimits.Default);
+
+        if (!feasibility.IsFeasible)
+        {
+            throw new InvalidOperationException(
+                $"Cannot assign shipment '{shipment.Id}' to {truck.TruckName}: {feasibility.ViolationReason}");
+        }
+
+        if (isNewTrip)
+        {
+            unitOfWork.Trips.Add(trip);
+        }
+
         truck.AssignShipment(
-            shipment.Id,
-            Capacity.Create(shipment.Load.WeightKg, shipment.Load.VolumeCubicMeters),
-            GeoLocation.Create(shipment.PickupLocation.Latitude, shipment.PickupLocation.Longitude),
-            GeoLocation.Create(shipment.DeliveryLocation.Latitude, shipment.DeliveryLocation.Longitude),
-            GeoLocation.Create(company.OfficeLocation.Latitude, company.OfficeLocation.Longitude),
-            pickupInsertIndex: nonOfficeStopCount,
-            deliveryInsertIndex: nonOfficeStopCount,
-            pickupExpectedArrivalTime: now,
-            deliveryExpectedArrivalTime: now);
+            trip, shipment.Id, shipmentSize, pickupLocation, deliveryLocation, officeLocation,
+            request.PickupInsertIndex, request.DeliveryInsertIndex,
+            PlaceholderLegDistanceKm, PlaceholderLegTimeTicks,
+            PlaceholderLegDistanceKm, PlaceholderLegTimeTicks,
+            PlaceholderLegDistanceKm, PlaceholderLegTimeTicks);
 
         shipment.AssignToCompany(truck.TruckingCompanyId.Value);
 
         truck.DriverAssignment.PrimaryDriver.StartDriving(now);
 
-        truck.StartLeg(PlaceholderLegDistanceKm, PlaceholderLegTimeTicks);
-
         await unitOfWork.SaveChangesAsync(cancellationToken);
 
-        return new AssignShipmentToTruckResponse(truck.Stops.Count);
+        return new AssignShipmentToTruckResponse(trip.Stops.Count);
+    }
+
+    /// <summary>
+    /// Builds the window lookup <see cref="IShipmentInsertionEvaluator.Evaluate"/> needs
+    /// for every Pending stop in <paramref name="preview"/> - the newly-inserted
+    /// shipment's own windows are already known (<paramref name="newShipment"/>); every
+    /// other Pending Pickup/Delivery stop's window is looked up from its own Shipment.
+    /// </summary>
+    private async Task<Dictionary<Guid, TimeWindow>> BuildShipmentWindowsAsync(
+        Trip preview, Domain.Shipment.Shipment newShipment, CancellationToken cancellationToken)
+    {
+        var windows = new Dictionary<Guid, TimeWindow>();
+
+        foreach (var stop in preview.Stops)
+        {
+            if (stop.Status != StopStatus.Pending || stop.Kind == StopKind.Office || stop.ShipmentId is not { } shipmentId)
+            {
+                continue;
+            }
+
+            if (shipmentId == newShipment.Id)
+            {
+                windows[stop.Id] = stop.Kind == StopKind.Pickup ? newShipment.PickupWindow : newShipment.DeliveryWindow;
+                continue;
+            }
+
+            var existingShipment = await unitOfWork.Shipments.GetByIdAsync(shipmentId, cancellationToken)
+                ?? throw new InvalidOperationException($"Shipment '{shipmentId}' referenced by stop '{stop.Id}' was not found.");
+
+            windows[stop.Id] = stop.Kind == StopKind.Pickup ? existingShipment.PickupWindow : existingShipment.DeliveryWindow;
+        }
+
+        return windows;
     }
 }

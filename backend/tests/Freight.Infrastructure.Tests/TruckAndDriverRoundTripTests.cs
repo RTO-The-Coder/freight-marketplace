@@ -119,7 +119,7 @@ public class TruckAndDriverRoundTripTests : IAsyncLifetime
     }
 
     [Fact]
-    public async Task Truck_WithAssignedShipmentStops_RoundTripsRouteStopsInOrder()
+    public async Task Trip_WithAssignedShipmentStops_RoundTripsRouteStopsInOrder()
     {
         var driver = Driver.Create(Guid.NewGuid(), "Route", "Driver", SampleRules());
         var truck = Truck.Create(Guid.NewGuid(), "Truck-4", TruckType.BoxVan, TruckSize.Small);
@@ -127,10 +127,11 @@ public class TruckAndDriverRoundTripTests : IAsyncLifetime
         truck.AssignToCompany(company.Id);
         truck.AssignDrivers(driver);
 
+        var trip = Trip.Open(truck.Id, company.Id, new DateTime(2026, 1, 1, 6, 0, 0, DateTimeKind.Utc));
+
         var shipmentId = Guid.NewGuid();
-        var pickupTime = new DateTime(2026, 1, 1, 8, 0, 0, DateTimeKind.Utc);
-        var deliveryTime = new DateTime(2026, 1, 1, 14, 0, 0, DateTimeKind.Utc);
         truck.AssignShipment(
+            trip,
             shipmentId,
             Capacity.Create(100, 2),
             GeoLocation.Create(52.5, 13.4),
@@ -138,19 +139,21 @@ public class TruckAndDriverRoundTripTests : IAsyncLifetime
             company.OfficeLocation,
             pickupInsertIndex: 0,
             deliveryInsertIndex: 0,
-            pickupTime,
-            deliveryTime);
+            pickupLegDistanceKm: 650, pickupLegTimeTick: 78,
+            deliveryLegDistanceKm: 650, deliveryLegTimeTick: 78,
+            officeLegDistanceKm: 650, officeLegTimeTick: 78);
 
         await using (var writeContext = new FreightDbContext(Options()))
         {
             writeContext.Set<TruckingCompany>().Add(company);
             writeContext.Set<Driver>().Add(driver);
             writeContext.Set<Truck>().Add(truck);
+            writeContext.Set<Trip>().Add(trip);
             await writeContext.SaveChangesAsync();
         }
 
         await using var readContext = new FreightDbContext(Options());
-        var reloaded = await readContext.Set<Truck>().FirstAsync(t => t.Id == truck.Id);
+        var reloaded = await readContext.Set<Trip>().FirstAsync(t => t.Id == trip.Id);
 
         Assert.Equal(3, reloaded.Stops.Count);
         Assert.All(reloaded.Stops.Where(s => s.Kind != StopKind.Office), s => Assert.Equal(shipmentId, s.ShipmentId));
@@ -158,5 +161,6 @@ public class TruckAndDriverRoundTripTests : IAsyncLifetime
         Assert.Contains(reloaded.Stops, s => s.Kind == StopKind.Delivery);
         Assert.Contains(reloaded.Stops, s => s.Kind == StopKind.Office);
         Assert.Equal(StopKind.Office, reloaded.Stops[^1].Kind);
+        Assert.All(reloaded.Stops, s => Assert.Equal(StopStatus.Pending, s.Status));
     }
 }

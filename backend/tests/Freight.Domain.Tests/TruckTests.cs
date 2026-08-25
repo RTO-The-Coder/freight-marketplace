@@ -6,8 +6,12 @@ namespace Freight.Domain.Tests;
 
 public class TruckTests
 {
-    private static readonly DateTime PickupTime = new(2026, 1, 1, 8, 0, 0, DateTimeKind.Utc);
-    private static readonly DateTime DeliveryTime = new(2026, 1, 1, 14, 0, 0, DateTimeKind.Utc);
+    private static readonly GeoLocation PickupLocation = GeoLocation.Create(52.5, 13.4);
+    private static readonly GeoLocation DeliveryLocation = GeoLocation.Create(48.1, 11.6);
+    private static readonly GeoLocation OfficeLocation = GeoLocation.Create(52.52, 13.405);
+
+    private const double PlaceholderLegDistanceKm = 650;
+    private const int PlaceholderLegTimeTick = 78;
 
     private static TruckingCompany NewCompany() => TruckingCompany.Create(Guid.NewGuid(), "Acme Trucking", GeoLocation.Create(52.5200, 13.4050));
 
@@ -20,22 +24,21 @@ public class TruckTests
     {
         var truck = Truck.Create(Guid.NewGuid(), "Truck-1", TruckType.BoxVan, size);
 
-        // AssignShipment ensures a single, always-last Office stop, which requires a
-        // TruckingCompanyId to be set - default to a fresh company here so the many
-        // AssignShipment_* tests below don't each need to opt in individually.
         truck.AssignToCompany((company ?? NewCompany()).Id);
-
         truck.AssignDrivers(NewDriver());
 
         return truck;
     }
 
-    private static readonly GeoLocation PickupLocation = GeoLocation.Create(52.5, 13.4);
-    private static readonly GeoLocation DeliveryLocation = GeoLocation.Create(48.1, 11.6);
-    private static readonly GeoLocation OfficeLocation = GeoLocation.Create(52.52, 13.405);
+    private static Capacity SmallShipment() => Capacity.Create(100, 2);
 
-    private static void AssignShipment(Truck truck, Guid shipmentId, Capacity size, int pickupInsertIndex, int deliveryInsertIndex) =>
-        truck.AssignShipment(shipmentId, size, PickupLocation, DeliveryLocation, OfficeLocation, pickupInsertIndex, deliveryInsertIndex, PickupTime, DeliveryTime);
+    private static void AssignShipment(Truck truck, Trip trip, Guid shipmentId, Capacity size, int pickupInsertIndex, int deliveryInsertIndex) =>
+        truck.AssignShipment(
+            trip, shipmentId, size, PickupLocation, DeliveryLocation, OfficeLocation,
+            pickupInsertIndex, deliveryInsertIndex,
+            PlaceholderLegDistanceKm, PlaceholderLegTimeTick,
+            PlaceholderLegDistanceKm, PlaceholderLegTimeTick,
+            PlaceholderLegDistanceKm, PlaceholderLegTimeTick);
 
     [Fact]
     public void Create_StartsUnassignedAndInactive()
@@ -118,194 +121,76 @@ public class TruckTests
     }
 
     [Fact]
-    public void NewTruck_RemainingCapacityEqualsTotal()
+    public void RemainingCapacity_NoTrip_EqualsTotal()
     {
         var truck = NewTruck();
 
-        Assert.Equal(truck.Capacity.Total, truck.RemainingCapacity);
+        Assert.Equal(truck.Capacity.Total, truck.RemainingCapacity(null));
     }
 
     [Fact]
-    public void AssignShipment_ReducesRemainingCapacity_KeepsTotalUnchanged()
+    public void RemainingCapacity_AssignedButNotYetReached_IsUnaffected()
     {
+        // Stops are never deleted now, so "does a Pickup stop exist" can no longer mean
+        // "is it loaded" - a shipment only counts against capacity once its Pickup stop
+        // is actually Reached (see Trip.CurrentLoad), not merely assigned to the route.
         var truck = NewTruck();
+        var trip = Trip.Open(truck.Id, truck.TruckingCompanyId!.Value, DateTime.UtcNow);
         var originalTotal = truck.Capacity.Total;
 
-        AssignShipment(truck, Guid.NewGuid(), Capacity.Create(400, 8), pickupInsertIndex: 0, deliveryInsertIndex: 0);
+        AssignShipment(truck, trip, Guid.NewGuid(), Capacity.Create(400, 8), pickupInsertIndex: 0, deliveryInsertIndex: 0);
 
         Assert.Equal(originalTotal, truck.Capacity.Total);
-        Assert.Equal(originalTotal.WeightKg - 400, truck.RemainingCapacity.WeightKg);
-        Assert.Equal(originalTotal.VolumeCubicMeters - 8, truck.RemainingCapacity.VolumeCubicMeters);
+        Assert.Equal(originalTotal, truck.RemainingCapacity(trip));
+    }
+
+    [Fact]
+    public void RemainingCapacity_AfterPickupReached_ReducedByLoadStillOnBoard()
+    {
+        var truck = NewTruck();
+        var trip = Trip.Open(truck.Id, truck.TruckingCompanyId!.Value, DateTime.UtcNow);
+        var originalTotal = truck.Capacity.Total;
+
+        AssignShipment(truck, trip, Guid.NewGuid(), Capacity.Create(400, 8), pickupInsertIndex: 0, deliveryInsertIndex: 0);
+        trip.MarkStopReached(trip.Stops[0].Id, DateTime.UtcNow);
+
+        Assert.Equal(originalTotal.WeightKg - 400, truck.RemainingCapacity(trip).WeightKg);
+        Assert.Equal(originalTotal.VolumeCubicMeters - 8, truck.RemainingCapacity(trip).VolumeCubicMeters);
     }
 
     [Fact]
     public void AssignShipment_ExceedsRemainingCapacity_Throws()
     {
         var truck = NewTruck();
+        var trip = Trip.Open(truck.Id, truck.TruckingCompanyId!.Value, DateTime.UtcNow);
 
         Assert.Throws<InvalidOperationException>(() =>
-            AssignShipment(truck, Guid.NewGuid(), Capacity.Create(truck.Capacity.Total.WeightKg + 1, 5), pickupInsertIndex: 0, deliveryInsertIndex: 0));
-        Assert.Empty(truck.Stops);
+            AssignShipment(truck, trip, Guid.NewGuid(), Capacity.Create(truck.Capacity.Total.WeightKg + 1, 5), pickupInsertIndex: 0, deliveryInsertIndex: 0));
+        Assert.Empty(trip.Stops);
     }
 
     [Fact]
     public void AssignShipment_ExceedsRemainingCapacity_DoesNotReduceCapacity()
     {
         var truck = NewTruck();
-        var originalRemaining = truck.RemainingCapacity;
+        var trip = Trip.Open(truck.Id, truck.TruckingCompanyId!.Value, DateTime.UtcNow);
+        var originalRemaining = truck.RemainingCapacity(trip);
 
         Assert.Throws<InvalidOperationException>(() =>
-            AssignShipment(truck, Guid.NewGuid(), Capacity.Create(5, truck.Capacity.Total.VolumeCubicMeters + 1), pickupInsertIndex: 0, deliveryInsertIndex: 0));
+            AssignShipment(truck, trip, Guid.NewGuid(), Capacity.Create(5, truck.Capacity.Total.VolumeCubicMeters + 1), pickupInsertIndex: 0, deliveryInsertIndex: 0));
 
-        Assert.Equal(originalRemaining, truck.RemainingCapacity);
+        Assert.Equal(originalRemaining, truck.RemainingCapacity(trip));
     }
 
     [Fact]
-    public void NewTruck_StartsWithNoRouteStops()
+    public void AssignShipment_TripBelongsToDifferentTruck_Throws()
     {
         var truck = NewTruck();
-
-        Assert.Empty(truck.Stops);
-    }
-
-    private static Capacity SmallShipment() => Capacity.Create(100, 2);
-
-    [Fact]
-    public void AssignShipment_InterleavedWithExistingStops_InsertsAtCorrectPositions()
-    {
-        var truck = NewTruck();
-        var shipment2Id = Guid.NewGuid();
-        var shipment5Id = Guid.NewGuid();
-        var newShipmentId = Guid.NewGuid();
-
-        // Seed route: [S2-Pickup, S2-Delivery, S5-Pickup, S5-Delivery]
-        AssignShipment(truck, shipment2Id, SmallShipment(), pickupInsertIndex: 0, deliveryInsertIndex: 0);
-        AssignShipment(truck, shipment5Id, SmallShipment(), pickupInsertIndex: 2, deliveryInsertIndex: 2);
-
-        // New shipment: pickup right after S2's stops (index 2), delivery right after
-        // S5's stops (index 4, i.e. the end) — expressed against the pre-insertion route.
-        AssignShipment(truck, newShipmentId, SmallShipment(), pickupInsertIndex: 2, deliveryInsertIndex: 4);
-
-        Assert.Equal(
-            [
-                (shipment2Id, StopKind.Pickup, PickupTime),
-                (shipment2Id, StopKind.Delivery, DeliveryTime),
-                (newShipmentId, StopKind.Pickup, PickupTime),
-                (shipment5Id, StopKind.Pickup, PickupTime),
-                (shipment5Id, StopKind.Delivery, DeliveryTime),
-                (newShipmentId, StopKind.Delivery, DeliveryTime),
-            ],
-            truck.Stops.Where(s => s.Kind != StopKind.Office).Select(s => (s.ShipmentId, s.Kind, s.ExpectedArrivalTime)));
-
-        Assert.Equal(StopKind.Office, truck.Stops[^1].Kind);
-    }
-
-    [Theory]
-    [InlineData(1, 0)]
-    [InlineData(2, 0)]
-    public void AssignShipment_DeliveryBeforePickup_Throws(int pickupIndex, int deliveryIndex)
-    {
-        var truck = NewTruck();
-        AssignShipment(truck, Guid.NewGuid(), SmallShipment(), pickupInsertIndex: 0, deliveryInsertIndex: 0);
-        var routeBefore = truck.Stops.ToList();
+        var otherTruck = NewTruck();
+        var trip = Trip.Open(otherTruck.Id, otherTruck.TruckingCompanyId!.Value, DateTime.UtcNow);
 
         Assert.Throws<ArgumentException>(() =>
-            AssignShipment(truck, Guid.NewGuid(), SmallShipment(), pickupIndex, deliveryIndex));
-
-        Assert.Equal(routeBefore, truck.Stops);
-    }
-
-    [Fact]
-    public void AssignShipment_DeliveryIndexEqualsPickupIndex_InsertsRightAfterPickup()
-    {
-        var truck = NewTruck();
-        var shipmentId = Guid.NewGuid();
-
-        AssignShipment(truck, shipmentId, SmallShipment(), pickupInsertIndex: 0, deliveryInsertIndex: 0);
-
-        Assert.Equal(
-            [(shipmentId, StopKind.Pickup, PickupTime), (shipmentId, StopKind.Delivery, DeliveryTime)],
-            truck.Stops.Where(s => s.Kind != StopKind.Office).Select(s => (s.ShipmentId, s.Kind, s.ExpectedArrivalTime)));
-    }
-
-    [Fact]
-    public void AssignShipment_EmptyShipmentId_Throws()
-    {
-        var truck = NewTruck();
-
-        Assert.Throws<ArgumentException>(() =>
-            AssignShipment(truck, Guid.Empty, SmallShipment(), pickupInsertIndex: 0, deliveryInsertIndex: 0));
-    }
-
-    [Fact]
-    public void AssignShipment_NullShipmentSize_Throws()
-    {
-        var truck = NewTruck();
-
-        Assert.Throws<ArgumentNullException>(() =>
-            AssignShipment(truck, Guid.NewGuid(), null!, pickupInsertIndex: 0, deliveryInsertIndex: 0));
-    }
-
-    [Fact]
-    public void AssignShipment_PickupIndexOutOfRange_Throws()
-    {
-        var truck = NewTruck();
-
-        Assert.Throws<ArgumentOutOfRangeException>(() =>
-            AssignShipment(truck, Guid.NewGuid(), SmallShipment(), pickupInsertIndex: -1, deliveryInsertIndex: 0));
-        Assert.Throws<ArgumentOutOfRangeException>(() =>
-            AssignShipment(truck, Guid.NewGuid(), SmallShipment(), pickupInsertIndex: 1, deliveryInsertIndex: 1));
-    }
-
-    [Fact]
-    public void AssignShipment_DeliveryIndexOutOfRange_Throws()
-    {
-        var truck = NewTruck();
-
-        Assert.Throws<ArgumentOutOfRangeException>(() =>
-            AssignShipment(truck, Guid.NewGuid(), SmallShipment(), pickupInsertIndex: 0, deliveryInsertIndex: -1));
-        Assert.Throws<ArgumentOutOfRangeException>(() =>
-            AssignShipment(truck, Guid.NewGuid(), SmallShipment(), pickupInsertIndex: 0, deliveryInsertIndex: 1));
-    }
-
-    [Fact]
-    public void RemoveShipment_RemovesPickupAndDeliveryStops_LeavesOfficeStop()
-    {
-        var truck = NewTruck();
-        var shipmentId = Guid.NewGuid();
-        AssignShipment(truck, shipmentId, SmallShipment(), pickupInsertIndex: 0, deliveryInsertIndex: 0);
-
-        truck.RemoveShipment(shipmentId);
-
-        Assert.Equal([StopKind.Office], truck.Stops.Select(s => s.Kind));
-    }
-
-    [Fact]
-    public void RemoveShipment_OnlyRemovesMatchingShipment()
-    {
-        var truck = NewTruck();
-        var keepId = Guid.NewGuid();
-        var removeId = Guid.NewGuid();
-        AssignShipment(truck, keepId, SmallShipment(), pickupInsertIndex: 0, deliveryInsertIndex: 0);
-        AssignShipment(truck, removeId, SmallShipment(), pickupInsertIndex: 2, deliveryInsertIndex: 2);
-
-        truck.RemoveShipment(removeId);
-
-        Assert.Equal(
-            [(keepId, StopKind.Pickup, PickupTime), (keepId, StopKind.Delivery, DeliveryTime)],
-            truck.Stops.Where(s => s.Kind != StopKind.Office).Select(s => (s.ShipmentId, s.Kind, s.ExpectedArrivalTime)));
-    }
-
-    [Fact]
-    public void RemoveShipment_UnknownShipmentId_DoesNotThrowOrChangeRoute()
-    {
-        var truck = NewTruck();
-        AssignShipment(truck, Guid.NewGuid(), SmallShipment(), pickupInsertIndex: 0, deliveryInsertIndex: 0);
-        var routeBefore = truck.Stops.ToList();
-
-        truck.RemoveShipment(Guid.NewGuid());
-
-        Assert.Equal(routeBefore, truck.Stops);
+            AssignShipment(truck, trip, Guid.NewGuid(), SmallShipment(), pickupInsertIndex: 0, deliveryInsertIndex: 0));
     }
 
     [Fact]
@@ -317,73 +202,70 @@ public class TruckTests
     }
 
     [Fact]
-    public void DetermineStatus_WithDriverAndNoOfficeStopNext_IsRunning()
+    public void DetermineStatus_NoTrip_IsRunning()
     {
         var truck = NewTruck();
 
-        Assert.Equal(TruckStatus.Running, truck.DetermineStatus());
+        Assert.Equal(TruckStatus.Running, truck.DetermineStatus(null));
     }
 
     [Fact]
-    public void AssignShipment_FirstAssignmentToEmptyRoute_InsertsThreeStopsWithOfficeLast()
+    public void DetermineStatus_TripNextStopIsOffice_IsAtOffice()
     {
         var truck = NewTruck();
-        var shipmentId = Guid.NewGuid();
+        var trip = Trip.Open(truck.Id, truck.TruckingCompanyId!.Value, DateTime.UtcNow);
+        AssignShipment(truck, trip, Guid.NewGuid(), SmallShipment(), pickupInsertIndex: 0, deliveryInsertIndex: 0);
+        trip.MarkStopReached(trip.Stops[0].Id, DateTime.UtcNow);
+        trip.MarkStopReached(trip.Stops[1].Id, DateTime.UtcNow);
 
-        AssignShipment(truck, shipmentId, SmallShipment(), pickupInsertIndex: 0, deliveryInsertIndex: 0);
-
-        Assert.Equal(
-            [StopKind.Pickup, StopKind.Delivery, StopKind.Office],
-            truck.Stops.Select(s => s.Kind));
-
-        var officeStop = truck.Stops[^1];
-        Assert.Equal(1000, officeStop.Sequence);
-        Assert.Equal(truck.TruckingCompanyId, officeStop.TruckingCompanyId);
+        Assert.Equal(TruckStatus.AtOffice, truck.DetermineStatus(trip));
     }
 
     [Fact]
-    public void AssignShipment_SecondAssignment_InsertsBeforeExistingOfficeStop_DoesNotDuplicateIt()
+    public void AssignShipment_FirstAssignment_StartsCurrentProgressTowardFirstStop()
     {
         var truck = NewTruck();
-        var firstShipmentId = Guid.NewGuid();
-        var secondShipmentId = Guid.NewGuid();
+        var trip = Trip.Open(truck.Id, truck.TruckingCompanyId!.Value, DateTime.UtcNow);
 
-        AssignShipment(truck, firstShipmentId, SmallShipment(), pickupInsertIndex: 0, deliveryInsertIndex: 0);
-        var officeStopAfterFirst = truck.Stops.Single(s => s.Kind == StopKind.Office);
-
-        AssignShipment(truck, secondShipmentId, SmallShipment(), pickupInsertIndex: 2, deliveryInsertIndex: 2);
-
-        Assert.Equal(
-            [StopKind.Pickup, StopKind.Delivery, StopKind.Pickup, StopKind.Delivery, StopKind.Office],
-            truck.Stops.Select(s => s.Kind));
-
-        Assert.Equal(officeStopAfterFirst.Id, truck.Stops[^1].Id);
-    }
-
-    [Fact]
-    public void StartLeg_FirstCall_ConstructsCurrentProgress()
-    {
-        var truck = NewTruck();
-
-        truck.StartLeg(totalDistanceKm: 650, totalTimeTick: 78);
+        AssignShipment(truck, trip, Guid.NewGuid(), SmallShipment(), pickupInsertIndex: 0, deliveryInsertIndex: 0);
 
         Assert.NotNull(truck.CurrentProgress);
-        Assert.Equal(650, truck.CurrentProgress!.TotalDistanceKm);
-        Assert.Equal(78, truck.CurrentProgress.TotalTimeTick);
+        Assert.Equal(PlaceholderLegDistanceKm, truck.CurrentProgress!.TotalDistanceKm);
+        Assert.Equal(PlaceholderLegTimeTick, truck.CurrentProgress.TotalTimeTick);
         Assert.Equal(0, truck.CurrentProgress.CurrentDistanceKm);
     }
 
     [Fact]
-    public void StartLeg_SecondCall_ResetsExistingCurrentProgress()
+    public void AssignShipment_InsertedAheadOfLiveLeg_BanksPartialProgressAndReplacesCurrentProgress()
     {
         var truck = NewTruck();
-        truck.StartLeg(totalDistanceKm: 650, totalTimeTick: 78);
-        truck.CurrentProgress!.UpdateProgress(300);
+        var trip = Trip.Open(truck.Id, truck.TruckingCompanyId!.Value, DateTime.UtcNow);
+        AssignShipment(truck, trip, Guid.NewGuid(), SmallShipment(), pickupInsertIndex: 0, deliveryInsertIndex: 0);
 
-        truck.StartLeg(totalDistanceKm: 200, totalTimeTick: 24);
+        truck.CurrentProgress!.AdvanceByTicks(39);
+        var distanceCoveredBeforeInsert = truck.CurrentProgress.CurrentDistanceKm;
 
-        Assert.Equal(200, truck.CurrentProgress.TotalDistanceKm);
-        Assert.Equal(24, truck.CurrentProgress.TotalTimeTick);
-        Assert.Equal(0, truck.CurrentProgress.CurrentDistanceKm);
+        AssignShipment(truck, trip, Guid.NewGuid(), SmallShipment(), pickupInsertIndex: 0, deliveryInsertIndex: 0);
+
+        Assert.Equal(0, truck.CurrentProgress.CurrentDrivingTimeTick);
+        Assert.Equal(distanceCoveredBeforeInsert, trip.DistanceTravelledSoFar);
+        Assert.Equal(39, trip.TimeElapsedSoFar);
+    }
+
+    [Fact]
+    public void AssignShipment_InsertedAfterLiveLeg_LeavesCurrentProgressUntouched()
+    {
+        var truck = NewTruck();
+        var trip = Trip.Open(truck.Id, truck.TruckingCompanyId!.Value, DateTime.UtcNow);
+        AssignShipment(truck, trip, Guid.NewGuid(), SmallShipment(), pickupInsertIndex: 0, deliveryInsertIndex: 0);
+
+        truck.CurrentProgress!.AdvanceByTicks(39);
+
+        // Second shipment inserted after the first pickup/delivery pair (indices 2/2) -
+        // does not change the trip's nearest Pending stop, so the live leg is untouched.
+        AssignShipment(truck, trip, Guid.NewGuid(), SmallShipment(), pickupInsertIndex: 2, deliveryInsertIndex: 2);
+
+        Assert.Equal(39, truck.CurrentProgress.CurrentDrivingTimeTick);
+        Assert.Equal(0, trip.DistanceTravelledSoFar);
     }
 }

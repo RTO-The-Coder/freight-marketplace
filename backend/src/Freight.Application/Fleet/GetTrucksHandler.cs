@@ -33,17 +33,22 @@ public sealed class GetTrucksHandler(IUnitOfWork unitOfWork)
             filtered = filtered.Where(truck => truck.TruckingCompanyId is null);
         }
 
-        var dtos = filtered
-            .Select(truck => new TruckSummaryDto(
+        var dtos = new List<TruckSummaryDto>();
+
+        foreach (var truck in filtered)
+        {
+            var trip = await unitOfWork.Trips.GetOpenTripByTruckIdAsync(truck.Id, cancellationToken);
+
+            dtos.Add(new TruckSummaryDto(
                 truck.Id,
                 truck.TruckName,
                 truck.TruckType,
                 truck.TruckSize,
                 truck.IsActive,
-                truck.Status,
+                truck.DetermineStatus(trip),
                 truck.TruckingCompanyId,
-                truck.DriverAssignment is not null))
-            .ToList();
+                truck.DriverAssignment is not null));
+        }
 
         return new GetTrucksResponse(dtos);
     }

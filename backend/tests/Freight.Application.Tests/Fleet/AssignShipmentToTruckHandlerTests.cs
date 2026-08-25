@@ -2,7 +2,9 @@ using Freight.Application.Fleet;
 using Freight.Application.Tests.Shipments;
 using Freight.Domain.Common;
 using Freight.Domain.Fleet;
+using Freight.Domain.Fleet.Abstractions;
 using Freight.Domain.Shipment;
+using Freight.Domain.Tracking;
 using Freight.Domain.ValueObjects;
 using Freight.Domain.ValueObjects.RuleVariants;
 using Moq;
@@ -14,15 +16,23 @@ public sealed class AssignShipmentToTruckHandlerTests
 {
     private static readonly DateTime Now = new(2026, 1, 1, 0, 0, 0, DateTimeKind.Utc);
 
-    private static Driver NewDriver() =>
-        Driver.Create(
+    private static Driver NewDriver()
+    {
+        var driver = Driver.Create(
             "Jane",
             "Doe",
             DrivingRules.Create(DrivingBreakRule.FullBreak, DailyRestRule.FullRest, WeeklyRestRule.FullWeeklyRest, false));
+        driver.StartDriving(Now);
+        return driver;
+    }
 
     private static TruckingCompany NewCompany() =>
         TruckingCompany.Create(Guid.NewGuid(), "Acme Trucking", GeoLocation.Create(52.52, 13.405));
 
+    // Each placeholder leg is 78 ticks = 6.5h, so a single stop's projected arrival
+    // lands ~6.5h after its predecessor. Windows are wide (0h-48h / 6h-48h) so they
+    // comfortably bracket the real projected arrival regardless of how many legs
+    // precede a given stop (e.g. a second shipment inserted after an existing pair).
     private static ShipmentAggregate NewShipment(TruckType requiredType = TruckType.BoxVan, Capacity? load = null) =>
         ShipmentAggregate.Book(
             Guid.NewGuid(),
@@ -30,24 +40,27 @@ public sealed class AssignShipmentToTruckHandlerTests
             GeoLocation.Create(48.1, 11.6),
             load ?? Capacity.Create(100, 2),
             requiredType,
-            TimeWindow.Create(Now, Now.AddHours(2)),
-            TimeWindow.Create(Now.AddHours(4), Now.AddHours(6)),
+            TimeWindow.Create(Now, Now.AddHours(48)),
+            TimeWindow.Create(Now.AddHours(6), Now.AddHours(48)),
             Now);
 
     private static (
         Mock<IUnitOfWork> UnitOfWork,
         Mock<ITruckRepository> Trucks,
+        Mock<ITripRepository> Trips,
         Mock<IShipmentRepository> Shipments,
         Mock<ITruckingCompanyRepository> Companies) NewMocks()
     {
         var trucks = new Mock<ITruckRepository>();
+        var trips = new Mock<ITripRepository>();
         var shipments = new Mock<IShipmentRepository>();
         var companies = new Mock<ITruckingCompanyRepository>();
         var unitOfWork = new Mock<IUnitOfWork>();
         unitOfWork.SetupGet(u => u.Trucks).Returns(trucks.Object);
+        unitOfWork.SetupGet(u => u.Trips).Returns(trips.Object);
         unitOfWork.SetupGet(u => u.Shipments).Returns(shipments.Object);
         unitOfWork.SetupGet(u => u.TruckingCompanies).Returns(companies.Object);
-        return (unitOfWork, trucks, shipments, companies);
+        return (unitOfWork, trucks, trips, shipments, companies);
     }
 
     private static Truck NewAssignableTruck(TruckingCompany company, out Driver driver, TruckType type = TruckType.BoxVan)
@@ -60,10 +73,13 @@ public sealed class AssignShipmentToTruckHandlerTests
         return truck;
     }
 
+    private static AssignShipmentToTruckHandler NewHandler(IUnitOfWork unitOfWork) =>
+        new(unitOfWork, new ShipmentInsertionEvaluator(new DriverRuleEngine()), new FakeTimeProvider(Now));
+
     [Fact]
-    public async Task HandleAsync_ValidRequest_InsertsThreeStopsAndStartsDrivingAndSaves()
+    public async Task HandleAsync_ValidRequest_OpensTripInsertsThreeStopsAndStartsDrivingAndSaves()
     {
-        var (unitOfWork, trucks, shipments, companies) = NewMocks();
+        var (unitOfWork, trucks, trips, shipments, companies) = NewMocks();
         var company = NewCompany();
         var truck = NewAssignableTruck(company, out var driver);
         var shipment = NewShipment();
@@ -71,28 +87,27 @@ public sealed class AssignShipmentToTruckHandlerTests
         trucks.Setup(t => t.GetByIdAsync(truck.Id, It.IsAny<CancellationToken>())).ReturnsAsync(truck);
         shipments.Setup(s => s.GetByIdAsync(shipment.Id, It.IsAny<CancellationToken>())).ReturnsAsync(shipment);
         companies.Setup(c => c.GetByIdAsync(company.Id, It.IsAny<CancellationToken>())).ReturnsAsync(company);
+        trips.Setup(t => t.GetOpenTripByTruckIdAsync(truck.Id, It.IsAny<CancellationToken>())).ReturnsAsync((Trip?)null);
 
-        var handler = new AssignShipmentToTruckHandler(unitOfWork.Object, new FakeTimeProvider(Now));
+        var handler = NewHandler(unitOfWork.Object);
 
-        var response = await handler.HandleAsync(new AssignShipmentToTruckRequest(truck.Id, shipment.Id));
+        var response = await handler.HandleAsync(new AssignShipmentToTruckRequest(truck.Id, shipment.Id, 0, 0));
 
         Assert.Equal(3, response.StopCount);
-        Assert.Equal(
-            [StopKind.Pickup, StopKind.Delivery, StopKind.Office],
-            truck.Stops.Select(s => s.Kind));
         Assert.Equal(ShipmentStatus.Booked, shipment.Status);
         Assert.Equal(company.Id, shipment.TruckingCompanyId);
         Assert.NotNull(driver.ComplianceState);
         Assert.NotNull(truck.CurrentProgress);
         Assert.Equal(650, truck.CurrentProgress!.TotalDistanceKm);
         Assert.Equal(78, truck.CurrentProgress.TotalTimeTick);
+        trips.Verify(t => t.Add(It.Is<Trip>(trip => trip.TruckId == truck.Id)), Times.Once);
         unitOfWork.Verify(u => u.SaveChangesAsync(It.IsAny<CancellationToken>()), Times.Once);
     }
 
     [Fact]
     public async Task HandleAsync_TruckTypeMismatch_ThrowsAndDoesNotSave()
     {
-        var (unitOfWork, trucks, shipments, companies) = NewMocks();
+        var (unitOfWork, trucks, trips, shipments, companies) = NewMocks();
         var company = NewCompany();
         var truck = NewAssignableTruck(company, out _, type: TruckType.Flatbed);
         var shipment = NewShipment(requiredType: TruckType.Refrigerated);
@@ -101,19 +116,19 @@ public sealed class AssignShipmentToTruckHandlerTests
         shipments.Setup(s => s.GetByIdAsync(shipment.Id, It.IsAny<CancellationToken>())).ReturnsAsync(shipment);
         companies.Setup(c => c.GetByIdAsync(company.Id, It.IsAny<CancellationToken>())).ReturnsAsync(company);
 
-        var handler = new AssignShipmentToTruckHandler(unitOfWork.Object, new FakeTimeProvider(Now));
+        var handler = NewHandler(unitOfWork.Object);
 
         await Assert.ThrowsAsync<InvalidOperationException>(() =>
-            handler.HandleAsync(new AssignShipmentToTruckRequest(truck.Id, shipment.Id)));
+            handler.HandleAsync(new AssignShipmentToTruckRequest(truck.Id, shipment.Id, 0, 0)));
 
-        Assert.Empty(truck.Stops);
+        trips.Verify(t => t.Add(It.IsAny<Trip>()), Times.Never);
         unitOfWork.Verify(u => u.SaveChangesAsync(It.IsAny<CancellationToken>()), Times.Never);
     }
 
     [Fact]
     public async Task HandleAsync_ExceedsCapacity_ThrowsAndDoesNotSave()
     {
-        var (unitOfWork, trucks, shipments, companies) = NewMocks();
+        var (unitOfWork, trucks, trips, shipments, companies) = NewMocks();
         var company = NewCompany();
         var truck = NewAssignableTruck(company, out _);
         var oversizedShipment = NewShipment(load: Capacity.Create(truck.Capacity.Total.WeightKg + 1, 5));
@@ -121,20 +136,21 @@ public sealed class AssignShipmentToTruckHandlerTests
         trucks.Setup(t => t.GetByIdAsync(truck.Id, It.IsAny<CancellationToken>())).ReturnsAsync(truck);
         shipments.Setup(s => s.GetByIdAsync(oversizedShipment.Id, It.IsAny<CancellationToken>())).ReturnsAsync(oversizedShipment);
         companies.Setup(c => c.GetByIdAsync(company.Id, It.IsAny<CancellationToken>())).ReturnsAsync(company);
+        trips.Setup(t => t.GetOpenTripByTruckIdAsync(truck.Id, It.IsAny<CancellationToken>())).ReturnsAsync((Trip?)null);
 
-        var handler = new AssignShipmentToTruckHandler(unitOfWork.Object, new FakeTimeProvider(Now));
+        var handler = NewHandler(unitOfWork.Object);
 
         await Assert.ThrowsAsync<InvalidOperationException>(() =>
-            handler.HandleAsync(new AssignShipmentToTruckRequest(truck.Id, oversizedShipment.Id)));
+            handler.HandleAsync(new AssignShipmentToTruckRequest(truck.Id, oversizedShipment.Id, 0, 0)));
 
-        Assert.Empty(truck.Stops);
+        trips.Verify(t => t.Add(It.IsAny<Trip>()), Times.Never);
         unitOfWork.Verify(u => u.SaveChangesAsync(It.IsAny<CancellationToken>()), Times.Never);
     }
 
     [Fact]
     public async Task HandleAsync_SecondShipment_InsertsBeforeExistingOfficeStop()
     {
-        var (unitOfWork, trucks, shipments, companies) = NewMocks();
+        var (unitOfWork, trucks, trips, shipments, companies) = NewMocks();
         var company = NewCompany();
         var truck = NewAssignableTruck(company, out _);
         var firstShipment = NewShipment();
@@ -145,28 +161,64 @@ public sealed class AssignShipmentToTruckHandlerTests
         shipments.Setup(s => s.GetByIdAsync(secondShipment.Id, It.IsAny<CancellationToken>())).ReturnsAsync(secondShipment);
         companies.Setup(c => c.GetByIdAsync(company.Id, It.IsAny<CancellationToken>())).ReturnsAsync(company);
 
-        var handler = new AssignShipmentToTruckHandler(unitOfWork.Object, new FakeTimeProvider(Now));
+        Trip? openTrip = null;
+        trips.Setup(t => t.GetOpenTripByTruckIdAsync(truck.Id, It.IsAny<CancellationToken>())).ReturnsAsync(() => openTrip);
+        trips.Setup(t => t.Add(It.IsAny<Trip>())).Callback<Trip>(trip => openTrip = trip);
 
-        await handler.HandleAsync(new AssignShipmentToTruckRequest(truck.Id, firstShipment.Id));
-        var officeStopId = truck.Stops.Single(s => s.Kind == StopKind.Office).Id;
+        var handler = NewHandler(unitOfWork.Object);
 
-        await handler.HandleAsync(new AssignShipmentToTruckRequest(truck.Id, secondShipment.Id));
+        await handler.HandleAsync(new AssignShipmentToTruckRequest(truck.Id, firstShipment.Id, 0, 0));
+        var officeStopId = openTrip!.Stops.Single(s => s.Kind == StopKind.Office).Id;
+
+        await handler.HandleAsync(new AssignShipmentToTruckRequest(truck.Id, secondShipment.Id, 2, 2));
 
         Assert.Equal(
             [StopKind.Pickup, StopKind.Delivery, StopKind.Pickup, StopKind.Delivery, StopKind.Office],
-            truck.Stops.Select(s => s.Kind));
-        Assert.Equal(officeStopId, truck.Stops[^1].Id);
+            openTrip.Stops.Select(s => s.Kind));
+        Assert.Equal(officeStopId, openTrip.Stops[^1].Id);
+    }
+
+    [Fact]
+    public async Task HandleAsync_PickupWindowAlreadyPassedByProjectedArrival_ThrowsAndDoesNotSave()
+    {
+        var (unitOfWork, trucks, trips, shipments, companies) = NewMocks();
+        var company = NewCompany();
+        var truck = NewAssignableTruck(company, out _);
+
+        // Window closes before the placeholder 78-tick (6.5h) leg could possibly arrive.
+        var infeasibleShipment = ShipmentAggregate.Book(
+            Guid.NewGuid(),
+            GeoLocation.Create(52.5, 13.4),
+            GeoLocation.Create(48.1, 11.6),
+            Capacity.Create(100, 2),
+            TruckType.BoxVan,
+            TimeWindow.Create(Now, Now.AddHours(1)),
+            TimeWindow.Create(Now.AddHours(2), Now.AddHours(3)),
+            Now);
+
+        trucks.Setup(t => t.GetByIdAsync(truck.Id, It.IsAny<CancellationToken>())).ReturnsAsync(truck);
+        shipments.Setup(s => s.GetByIdAsync(infeasibleShipment.Id, It.IsAny<CancellationToken>())).ReturnsAsync(infeasibleShipment);
+        companies.Setup(c => c.GetByIdAsync(company.Id, It.IsAny<CancellationToken>())).ReturnsAsync(company);
+        trips.Setup(t => t.GetOpenTripByTruckIdAsync(truck.Id, It.IsAny<CancellationToken>())).ReturnsAsync((Trip?)null);
+
+        var handler = NewHandler(unitOfWork.Object);
+
+        await Assert.ThrowsAsync<InvalidOperationException>(() =>
+            handler.HandleAsync(new AssignShipmentToTruckRequest(truck.Id, infeasibleShipment.Id, 0, 0)));
+
+        trips.Verify(t => t.Add(It.IsAny<Trip>()), Times.Never);
+        unitOfWork.Verify(u => u.SaveChangesAsync(It.IsAny<CancellationToken>()), Times.Never);
     }
 
     [Fact]
     public async Task HandleAsync_UnknownTruckId_Throws()
     {
-        var (unitOfWork, trucks, _, _) = NewMocks();
+        var (unitOfWork, trucks, _, _, _) = NewMocks();
         trucks.Setup(t => t.GetByIdAsync(It.IsAny<Guid>(), It.IsAny<CancellationToken>())).ReturnsAsync((Truck?)null);
 
-        var handler = new AssignShipmentToTruckHandler(unitOfWork.Object, new FakeTimeProvider(Now));
+        var handler = NewHandler(unitOfWork.Object);
 
         await Assert.ThrowsAsync<InvalidOperationException>(() =>
-            handler.HandleAsync(new AssignShipmentToTruckRequest(Guid.NewGuid(), Guid.NewGuid())));
+            handler.HandleAsync(new AssignShipmentToTruckRequest(Guid.NewGuid(), Guid.NewGuid(), 0, 0)));
     }
 }

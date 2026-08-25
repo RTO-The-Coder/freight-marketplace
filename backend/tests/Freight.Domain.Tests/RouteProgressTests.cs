@@ -7,11 +7,12 @@ public class RouteProgressTests
     [Fact]
     public void Constructor_ValidArguments_ExposesAllProperties()
     {
-        var progress = new RouteProgress(totalDistanceKm: 100, totalTimeTick: 3600);
+        var progress = new RouteProgress(totalDistanceKm: 100, totalTimeTick: 78);
 
         Assert.Equal(100, progress.TotalDistanceKm);
         Assert.Equal(0, progress.CurrentDistanceKm);
-        Assert.Equal(3600, progress.TotalTimeTick);
+        Assert.Equal(0, progress.CurrentDrivingTimeTick);
+        Assert.Equal(78, progress.TotalTimeTick);
     }
 
     [Fact]
@@ -27,59 +28,83 @@ public class RouteProgressTests
     }
 
     [Fact]
-    public void UpdateProgress_SetsCurrentDistanceKm()
+    public void AdvanceByTicks_SetsCurrentDrivingTimeTickAndDerivesDistance()
     {
-        var progress = new RouteProgress(totalDistanceKm: 100, totalTimeTick: 3600);
+        var progress = new RouteProgress(totalDistanceKm: 100, totalTimeTick: 78);
 
-        progress.UpdateProgress(40);
+        progress.AdvanceByTicks(39);
 
-        Assert.Equal(40, progress.CurrentDistanceKm);
+        Assert.Equal(39, progress.CurrentDrivingTimeTick);
+        Assert.Equal(50, progress.CurrentDistanceKm);
     }
 
     [Fact]
-    public void UpdateProgress_NegativeDistance_Throws()
+    public void AdvanceByTicks_Accumulates()
     {
-        var progress = new RouteProgress(totalDistanceKm: 100, totalTimeTick: 3600);
+        var progress = new RouteProgress(totalDistanceKm: 100, totalTimeTick: 78);
 
-        Assert.Throws<ArgumentOutOfRangeException>(() => progress.UpdateProgress(-1));
+        progress.AdvanceByTicks(20);
+        progress.AdvanceByTicks(19);
+
+        Assert.Equal(39, progress.CurrentDrivingTimeTick);
     }
 
     [Fact]
-    public void IsLegComplete_BelowTotalDistance_ReturnsFalse()
+    public void AdvanceByTicks_NegativeTicks_Throws()
     {
-        var progress = new RouteProgress(totalDistanceKm: 100, totalTimeTick: 3600);
-        progress.UpdateProgress(50);
+        var progress = new RouteProgress(totalDistanceKm: 100, totalTimeTick: 78);
+
+        Assert.Throws<ArgumentOutOfRangeException>(() => progress.AdvanceByTicks(-1));
+    }
+
+    [Fact]
+    public void AdvanceByTicks_BeyondTotalTimeTick_ClampsAtTotal()
+    {
+        var progress = new RouteProgress(totalDistanceKm: 100, totalTimeTick: 78);
+
+        progress.AdvanceByTicks(200);
+
+        Assert.Equal(78, progress.CurrentDrivingTimeTick);
+        Assert.Equal(100, progress.CurrentDistanceKm);
+    }
+
+    [Fact]
+    public void IsLegComplete_BelowTotalTimeTick_ReturnsFalse()
+    {
+        var progress = new RouteProgress(totalDistanceKm: 100, totalTimeTick: 78);
+        progress.AdvanceByTicks(39);
 
         Assert.False(progress.IsLegComplete());
     }
 
     [Fact]
-    public void IsLegComplete_AtOrAboveTotalDistance_ReturnsTrue()
+    public void IsLegComplete_AtOrAboveTotalTimeTick_ReturnsTrue()
     {
-        var progress = new RouteProgress(totalDistanceKm: 100, totalTimeTick: 3600);
-        progress.UpdateProgress(100);
+        var progress = new RouteProgress(totalDistanceKm: 100, totalTimeTick: 78);
+        progress.AdvanceByTicks(78);
 
         Assert.True(progress.IsLegComplete());
     }
 
     [Fact]
-    public void StartNewLeg_ResetsCurrentDistanceAndSetsNewTotals()
+    public void StartNewLeg_ResetsCurrentDrivingTimeTickAndSetsNewTotals()
     {
-        var progress = new RouteProgress(totalDistanceKm: 100, totalTimeTick: 3600);
-        progress.UpdateProgress(100);
+        var progress = new RouteProgress(totalDistanceKm: 100, totalTimeTick: 78);
+        progress.AdvanceByTicks(78);
 
-        progress.StartNewLeg(totalDistanceKm: 50, totalTimeTick: 1800);
+        progress.StartNewLeg(totalDistanceKm: 50, totalTimeTick: 40);
 
         Assert.Equal(50, progress.TotalDistanceKm);
+        Assert.Equal(0, progress.CurrentDrivingTimeTick);
         Assert.Equal(0, progress.CurrentDistanceKm);
-        Assert.Equal(1800, progress.TotalTimeTick);
+        Assert.Equal(40, progress.TotalTimeTick);
     }
 
     [Fact]
     public void GetProgressFraction_HalfwayThroughLeg_ReturnsOneHalf()
     {
-        var progress = new RouteProgress(totalDistanceKm: 100, totalTimeTick: 3600);
-        progress.UpdateProgress(50);
+        var progress = new RouteProgress(totalDistanceKm: 100, totalTimeTick: 78);
+        progress.AdvanceByTicks(39);
 
         Assert.Equal(0.5, progress.GetProgressFraction());
     }

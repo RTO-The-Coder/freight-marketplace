@@ -139,7 +139,7 @@ public sealed class FleetController(
         CancellationToken cancellationToken)
     {
         var response = await assignShipmentToTruckHandler.HandleAsync(
-            new AssignShipmentToTruckRequest(truckId, body.ShipmentId),
+            new AssignShipmentToTruckRequest(truckId, body.ShipmentId, body.PickupInsertIndex, body.DeliveryInsertIndex),
             cancellationToken);
         return Ok(response);
     }
@@ -171,6 +171,6 @@ public sealed record AddDriverBody(
     WeeklyRestRule WeeklyRestRule,
     bool ExtendDailyDrivingWhenEligible);
 
-public sealed record AssignShipmentToTruckBody(Guid ShipmentId);
+public sealed record AssignShipmentToTruckBody(Guid ShipmentId, int PickupInsertIndex, int DeliveryInsertIndex);
 
 public sealed record CheckDriverEligibilityBody(int AfterMinutes);

@@ -11,10 +11,13 @@ public sealed record TruckDetailStopDto(
     Guid StopId,
     Guid? ShipmentId,
     StopKind Kind,
+    StopStatus Status,
     int Sequence,
     double Latitude,
     double Longitude,
-    DateTime ExpectedArrivalTime);
+    double IncomingLegDistanceKm,
+    int IncomingLegTimeTick,
+    DateTime? ReachedAt);
 
 public sealed record TruckDetailDto(
     Guid TruckId,
@@ -36,6 +39,8 @@ public sealed class GetTruckDetailHandler(IUnitOfWork unitOfWork)
         var truck = await unitOfWork.Trucks.GetByIdAsync(request.TruckId, cancellationToken)
             ?? throw new InvalidOperationException($"Truck '{request.TruckId}' was not found.");
 
+        var trip = await unitOfWork.Trips.GetOpenTripByTruckIdAsync(truck.Id, cancellationToken);
+
         var assignment = truck.DriverAssignment;
 
         return new TruckDetailDto(
@@ -44,21 +49,26 @@ public sealed class GetTruckDetailHandler(IUnitOfWork unitOfWork)
             truck.TruckType,
             truck.TruckSize,
             truck.IsActive,
-            truck.Status,
+            truck.DetermineStatus(trip),
             truck.TruckingCompanyId,
             assignment?.ConfigurationType,
             assignment is null ? null : ToDto(assignment.PrimaryDriver),
             assignment?.SecondaryDriver is null ? null : ToDto(assignment.SecondaryDriver),
-            truck.Stops
-                .Select(stop => new TruckDetailStopDto(
-                    stop.Id,
-                    stop.ShipmentId,
-                    stop.Kind,
-                    stop.Sequence,
-                    stop.Location.Latitude,
-                    stop.Location.Longitude,
-                    stop.ExpectedArrivalTime))
-                .ToList());
+            trip is null
+                ? []
+                : trip.Stops
+                    .Select(stop => new TruckDetailStopDto(
+                        stop.Id,
+                        stop.ShipmentId,
+                        stop.Kind,
+                        stop.Status,
+                        stop.Sequence,
+                        stop.Location.Latitude,
+                        stop.Location.Longitude,
+                        stop.IncomingLegDistanceKm,
+                        stop.IncomingLegTimeTick,
+                        stop.ReachedAt))
+                    .ToList());
     }
 
     private static TruckDetailDriverDto ToDto(Driver driver) => new(driver.Id, driver.FirstName, driver.LastName);

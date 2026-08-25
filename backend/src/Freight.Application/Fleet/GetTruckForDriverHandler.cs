@@ -22,13 +22,15 @@ public sealed class GetTruckForDriverHandler(IUnitOfWork unitOfWork)
             return new GetTruckForDriverResponse(null);
         }
 
+        var trip = await unitOfWork.Trips.GetOpenTripByTruckIdAsync(truck.Id, cancellationToken);
+
         var dto = new TruckSummaryDto(
             truck.Id,
             truck.TruckName,
             truck.TruckType,
             truck.TruckSize,
             truck.IsActive,
-            truck.Status,
+            truck.DetermineStatus(trip),
             truck.TruckingCompanyId,
             HasDriverAssignment: true);
 

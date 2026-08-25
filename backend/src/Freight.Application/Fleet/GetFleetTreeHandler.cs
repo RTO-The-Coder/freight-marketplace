@@ -40,22 +40,27 @@ public sealed class GetFleetTreeHandler(IUnitOfWork unitOfWork)
                 : (IEnumerable<Guid>)[truck.DriverAssignment.PrimaryDriver.Id, truck.DriverAssignment.SecondaryDriver.Id])
             .ToHashSet();
 
-        var truckDtos = trucks
-            .Select(truck => new FleetTruckDto(
+        var truckDtos = new List<FleetTruckDto>();
+
+        foreach (var truck in trucks)
+        {
+            var trip = await unitOfWork.Trips.GetOpenTripByTruckIdAsync(truck.Id, cancellationToken);
+
+            truckDtos.Add(new FleetTruckDto(
                 truck.Id,
                 truck.TruckName,
                 truck.TruckType,
                 truck.TruckSize,
                 truck.IsActive,
-                truck.Status,
+                truck.DetermineStatus(trip),
                 truck.DriverAssignment is null
                     ? null
                     : new FleetDriverAssignmentDto(
                         truck.DriverAssignment.ConfigurationType,
                         ToDto(truck.DriverAssignment.PrimaryDriver),
                         truck.DriverAssignment.SecondaryDriver is null ? null : ToDto(truck.DriverAssignment.SecondaryDriver),
-                        truck.DriverAssignment.ActiveDriverId)))
-            .ToList();
+                        truck.DriverAssignment.ActiveDriverId)));
+        }
 
         var unassignedDrivers = allDrivers
             .Where(driver => !assignedDriverIds.Contains(driver.Id))

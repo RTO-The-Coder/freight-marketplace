@@ -30,10 +30,11 @@ public sealed class TruckConfiguration : IEntityTypeConfiguration<Truck>
         builder.Property(truck => truck.HazmatCertified)
             .IsRequired();
 
-        // Status and RemainingCapacity are both derived, never stored - see their
-        // doc comments on Truck for what they're computed from.
+        // Status is derived, never stored - see its doc comment on Truck for what it's
+        // computed from. RemainingCapacity is now a method (it needs the truck's current
+        // Trip, which Truck no longer owns directly), not a property EF could try to map
+        // anyway.
         builder.Ignore(truck => truck.Status);
-        builder.Ignore(truck => truck.RemainingCapacity);
 
         builder.OwnsOne(truck => truck.Capacity, capacity =>
         {
@@ -76,54 +77,13 @@ public sealed class TruckConfiguration : IEntityTypeConfiguration<Truck>
             assignment.Ignore(a => a.HasDriverAbleToDrive);
         });
 
-        // Stops are owned by the Truck and only ever reached through it - the domain
-        // model deliberately gives Stop no repository of its own.
-        builder.OwnsMany(truck => truck.Stops, stop =>
-        {
-            stop.ToTable("TruckRouteStops");
+        // Stops now belong to Trip, not Truck directly - see TripConfiguration. A
+        // truck's route is reached through its currently-open Trip (queried by TruckId +
+        // CompletedAt IS NULL), not through a collection owned here.
 
-            stop.WithOwner().HasForeignKey("TruckId");
-
-            stop.HasKey(s => s.Id);
-
-            // Stop.Id is always client-generated (Guid.NewGuid() in Stop.ForShipment/
-            // ForOffice), never left at the CLR default - without this, EF's default
-            // ValueGeneratedOnAdd convention for Guid keys misreads a freshly-created
-            // Stop's non-default Id as "this looks like an existing row" and emits an
-            // UPDATE instead of an INSERT, which silently fails (0 rows affected) as
-            // DbUpdateConcurrencyException since the row was never there to update.
-            stop.Property(s => s.Id).ValueGeneratedNever();
-
-            stop.Property(s => s.Kind)
-                .HasConversion<string>()
-                .IsRequired();
-
-            stop.Property(s => s.Sequence).IsRequired();
-
-            stop.Property(s => s.ExpectedArrivalTime).IsRequired();
-
-            stop.OwnsOne(s => s.Location, location =>
-            {
-                location.Property(l => l.Latitude).HasColumnName("LocationLatitude");
-                location.Property(l => l.Longitude).HasColumnName("LocationLongitude");
-            });
-
-            stop.Navigation(s => s.Location).IsRequired();
-
-            stop.OwnsOne(s => s.ShipmentLoad, load =>
-            {
-                load.Property(l => l.WeightKg).HasColumnName("ShipmentLoadWeightKg");
-                load.Property(l => l.VolumeCubicMeters).HasColumnName("ShipmentLoadVolumeCubicMeters");
-            });
-
-            stop.HasIndex("TruckId");
-        });
-
-        builder.Metadata
-            .FindNavigation(nameof(Truck.Stops))!
-            .SetPropertyAccessMode(PropertyAccessMode.Field);
-
-        // CurrentProgress is null until the truck starts its first leg.
+        // CurrentProgress is null until the truck starts its first leg. Stays directly on
+        // Truck (not moved under Trip alongside Stop) - it's genuinely truck-level live
+        // state, not trip history.
         builder.OwnsOne(truck => truck.CurrentProgress, progress =>
         {
             progress.ToTable("TruckRouteProgresses");
@@ -132,8 +92,12 @@ public sealed class TruckConfiguration : IEntityTypeConfiguration<Truck>
             progress.HasKey("TruckId");
 
             progress.Property(p => p.TotalDistanceKm).HasColumnName("CurrentProgress_TotalDistanceKm");
-            progress.Property(p => p.CurrentDistanceKm).HasColumnName("CurrentProgress_CurrentDistanceKm");
             progress.Property(p => p.TotalTimeTick).HasColumnName("CurrentProgress_TotalTimeTick");
+
+            // CurrentDistanceKm is derived (TotalDistanceKm * GetProgressFraction()), not
+            // stored - CurrentDrivingTimeTick is the one real, persisted counter.
+            progress.Ignore(p => p.CurrentDistanceKm);
+            progress.Property(p => p.CurrentDrivingTimeTick).HasColumnName("CurrentProgress_CurrentDrivingTimeTick");
         });
     }
 }
