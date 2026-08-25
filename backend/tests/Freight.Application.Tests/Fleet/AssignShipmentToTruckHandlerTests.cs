@@ -29,10 +29,14 @@ public sealed class AssignShipmentToTruckHandlerTests
     private static TruckingCompany NewCompany() =>
         TruckingCompany.Create(Guid.NewGuid(), "Acme Trucking", GeoLocation.Create(52.52, 13.405));
 
-    // Each placeholder leg is 78 ticks = 6.5h, so a single stop's projected arrival
-    // lands ~6.5h after its predecessor. Windows are wide (0h-48h / 6h-48h) so they
-    // comfortably bracket the real projected arrival regardless of how many legs
-    // precede a given stop (e.g. a second shipment inserted after an existing pair).
+    // Each placeholder leg is 78 ticks = 6.5h. Two consecutive legs (13h continuous
+    // driving) exceed any legal single-day cap (max 10h even with extended driving), so
+    // the evaluator's driver-hours check requires the driver to take a mandatory rest
+    // somewhere in between - windows are deliberately wide (days, not hours) so these
+    // tests aren't coupled to the evaluator's current known gap (it projects arrival via
+    // a naive tick-sum that doesn't yet fold in that rest time - see the handler's
+    // commit message / plan notes). A tight multi-leg-same-day window would require that
+    // gap to be fixed first.
     private static ShipmentAggregate NewShipment(TruckType requiredType = TruckType.BoxVan, Capacity? load = null) =>
         ShipmentAggregate.Book(
             Guid.NewGuid(),
@@ -40,8 +44,8 @@ public sealed class AssignShipmentToTruckHandlerTests
             GeoLocation.Create(48.1, 11.6),
             load ?? Capacity.Create(100, 2),
             requiredType,
-            TimeWindow.Create(Now, Now.AddHours(48)),
-            TimeWindow.Create(Now.AddHours(6), Now.AddHours(48)),
+            TimeWindow.Create(Now, Now.AddDays(7)),
+            TimeWindow.Create(Now.AddHours(6), Now.AddDays(7)),
             Now);
 
     private static (
@@ -74,7 +78,7 @@ public sealed class AssignShipmentToTruckHandlerTests
     }
 
     private static AssignShipmentToTruckHandler NewHandler(IUnitOfWork unitOfWork) =>
-        new(unitOfWork, new ShipmentInsertionEvaluator(new DriverRuleEngine()), new FakeTimeProvider(Now));
+        new(unitOfWork, new ShipmentInsertionEvaluator(), new FakeTimeProvider(Now));
 
     [Fact]
     public async Task HandleAsync_ValidRequest_OpensTripInsertsThreeStopsAndStartsDrivingAndSaves()

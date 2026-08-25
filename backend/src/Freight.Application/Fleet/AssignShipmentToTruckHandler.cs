@@ -18,11 +18,11 @@ public sealed record AssignShipmentToTruckResponse(int StopCount);
 /// Assigns a booked shipment to a specific truck's route at caller-specified insertion
 /// points - the same workflow Slice 12's offer-approval will later call as its final
 /// step. Finds or opens the truck's current <see cref="Trip"/>, previews the insertion
-/// on a clone (<see cref="Trip.Clone"/>) to run the feasibility check
+/// on a clone (<see cref="Trip.Clone"/>) to run the route/window feasibility check
 /// (<see cref="IShipmentInsertionEvaluator"/> - rejects if any downstream stop's
-/// projected arrival would violate its own window or exceed driver-hours), and only if
-/// feasible performs the real insertion (<see cref="Truck.AssignShipment"/>) and starts
-/// the truck's primary driver driving so their compliance ledger begins accumulating.
+/// projected arrival would violate its own requested window), and only if feasible
+/// performs the real insertion (<see cref="Truck.AssignShipment"/>) and starts the
+/// truck's primary driver driving so their compliance ledger begins accumulating.
 /// </summary>
 public sealed class AssignShipmentToTruckHandler(
     IUnitOfWork unitOfWork,
@@ -95,8 +95,7 @@ public sealed class AssignShipmentToTruckHandler(
 
         var shipmentWindows = await BuildShipmentWindowsAsync(preview, shipment, cancellationToken);
 
-        var feasibility = insertionEvaluator.Evaluate(
-            preview.Stops, truck.CurrentProgress, now, shipmentWindows, truck.DriverAssignment, RestRuleLimits.Default);
+        var feasibility = insertionEvaluator.Evaluate(preview.Stops, truck.CurrentProgress, now, shipmentWindows);
 
         if (!feasibility.IsFeasible)
         {
