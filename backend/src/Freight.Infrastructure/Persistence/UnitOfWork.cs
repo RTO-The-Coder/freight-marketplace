@@ -1,6 +1,6 @@
 using Freight.Domain.Common;
 using Freight.Domain.Fleet;
-using Freight.Domain.Shipment;
+using Freight.Domain.Client;
 using Freight.Domain.Simulation;
 using Freight.Infrastructure.Persistence.Repositories;
 

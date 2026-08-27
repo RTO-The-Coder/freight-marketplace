@@ -1,4 +1,4 @@
-using Freight.Domain.Shipment;
+using Freight.Domain.Client;
 using Microsoft.EntityFrameworkCore;
 
 namespace Freight.Infrastructure.Persistence.Repositories;
