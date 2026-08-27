@@ -1,10 +1,10 @@
 using Freight.Application.Shipments;
 using Freight.Domain.Common;
 using Freight.Domain.Fleet;
-using Freight.Domain.Shipment;
+using Freight.Domain.Client;
 using Freight.Domain.ValueObjects;
 using Moq;
-using ShipmentAggregate = Freight.Domain.Shipment.Shipment;
+using ShipmentAggregate = Freight.Domain.Client.Shipment;
 
 namespace Freight.Application.Tests.Shipments;
 

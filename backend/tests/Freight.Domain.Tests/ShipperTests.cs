@@ -1,4 +1,4 @@
-using Freight.Domain.Shipment;
+using Freight.Domain.Client;
 
 namespace Freight.Domain.Tests;
 

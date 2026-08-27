@@ -1,8 +1,8 @@
 using Freight.Application.Shipments;
 using Freight.Domain.Common;
-using Freight.Domain.Shipment;
+using Freight.Domain.Client;
 using Moq;
-using ShipperAggregate = Freight.Domain.Shipment.Shipper;
+using ShipperAggregate = Freight.Domain.Client.Shipper;
 
 namespace Freight.Application.Tests.Shipments;
 
