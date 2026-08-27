@@ -46,8 +46,8 @@ public sealed class GetTruckDetailHandler(IUnitOfWork unitOfWork)
         return new TruckDetailDto(
             truck.Id,
             truck.TruckName,
-            truck.TruckType,
-            truck.TruckSize,
+            truck.Type,
+            truck.Size,
             truck.IsActive,
             truck.DetermineStatus(trip),
             truck.TruckingCompanyId,

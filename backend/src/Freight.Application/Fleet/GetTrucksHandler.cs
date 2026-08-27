@@ -42,8 +42,8 @@ public sealed class GetTrucksHandler(IUnitOfWork unitOfWork)
             dtos.Add(new TruckSummaryDto(
                 truck.Id,
                 truck.TruckName,
-                truck.TruckType,
-                truck.TruckSize,
+                truck.Type,
+                truck.Size,
                 truck.IsActive,
                 truck.DetermineStatus(trip),
                 truck.TruckingCompanyId,

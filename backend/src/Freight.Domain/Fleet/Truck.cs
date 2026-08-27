@@ -18,11 +18,11 @@ public sealed class Truck
     /// </summary>
     public bool IsActive { get; private set; }
 
-    public TruckType TruckType { get; private set; }
-    public TruckSize TruckSize { get; private set; }
+    public TruckType Type { get; private set; }
+    public TruckSize Size { get; private set; }
 
     /// <summary>Derived from <see cref="TruckSize"/> at creation - never entered independently.</summary>
-    public TruckCapacity Capacity { get; private set; } = null!;
+    public Capacity Capacity { get; private set; } = null!;
 
     public DriverAssignment? DriverAssignment { get; private set; }
     public bool HazmatCertified { get; private set; }
@@ -51,12 +51,12 @@ public sealed class Truck
     {
     }
 
-    private Truck(Guid id, string truckName, TruckType truckType, TruckSize truckSize, TruckCapacity capacity)
+    private Truck(Guid id, string truckName, TruckType type, TruckSize size, Capacity capacity)
     {
         Id = id;
         TruckName = truckName;
-        TruckType = truckType;
-        TruckSize = truckSize;
+        Type = type;
+        Size = size;
         Capacity = capacity;
         TruckingCompanyId = null;
         IsActive = false;
@@ -79,7 +79,7 @@ public sealed class Truck
             throw new ArgumentException("Truck name is required.", nameof(truckName));
         }
 
-        return new Truck(id, truckName, type, size, new TruckCapacity(ValueObjects.Capacity.ForTruckSize(size)));
+        return new Truck(id, truckName, type, size, Capacity.ForTruckSize(size));
     }
 
     public void CertifyForHazmat() => HazmatCertified = true;
@@ -125,7 +125,7 @@ public sealed class Truck
 
         DriverAssignment = secondaryDriver is null
             ? DriverAssignment.Single(primaryDriver)
-            : DriverAssignment.Team(primaryDriver, secondaryDriver, TruckSize);
+            : DriverAssignment.Team(primaryDriver, secondaryDriver, Size);
     }
 
     /// <summary>
@@ -167,25 +167,6 @@ public sealed class Truck
     }
 
     /// <summary>
-    /// Capacity still available right now, derived from <see cref="Capacity"/>.Total
-    /// minus <paramref name="currentTrip"/>'s <see cref="Trip.CurrentLoad"/> - Trip
-    /// computes what's currently on board from its own stops; Truck only knows its own
-    /// total capacity, so it does the one subtraction. A truck with no open trip has
-    /// full capacity available.
-    /// </summary>
-    public Capacity RemainingCapacity(Trip? currentTrip)
-    {
-        if (currentTrip is null)
-        {
-            return Capacity.Total;
-        }
-
-        // "ValueObjects.Capacity" disambiguates the type from the Truck.Capacity
-        // (TruckCapacity) property of the same simple name, in scope here.
-        return Capacity.Total.Subtract(currentTrip.CurrentLoad);
-    }
-
-    /// <summary>
     /// Assigns a shipment onto <paramref name="trip"/> (the truck's current open trip -
     /// opened fresh by the caller if none exists yet) and starts/updates this truck's
     /// live <see cref="CurrentProgress"/> to match. If the insertion changes the trip's
@@ -217,15 +198,6 @@ public sealed class Truck
         if (trip.TruckId != Id)
         {
             throw new ArgumentException("This trip does not belong to this truck.", nameof(trip));
-        }
-
-        var remainingCapacity = RemainingCapacity(trip);
-
-        if (!remainingCapacity.CanAccommodate(shipmentSize))
-        {
-            throw new InvalidOperationException(
-                $"{TruckName} does not have enough remaining capacity for this shipment " +
-                $"({remainingCapacity.WeightKg}kg / {remainingCapacity.VolumeCubicMeters}m³ available).");
         }
 
         var previousNextStopId = trip.NextStop?.Id;

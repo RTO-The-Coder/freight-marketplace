@@ -10,27 +10,54 @@ public sealed class FleetController(
     AddTruckHandler addTruckHandler,
     AddDriverHandler addDriverHandler,
     AssignDriversHandler assignDriversHandler,
-    ActivateTruckHandler activateTruckHandler,
-    DeactivateTruckHandler deactivateTruckHandler,
+    SetTruckActivationHandler truckActivationHandler,
     GetFleetTreeHandler getFleetTreeHandler,
     GetTrucksHandler getTrucksHandler,
     GetDriversHandler getDriversHandler,
     GetTruckForDriverHandler getTruckForDriverHandler,
     GetTruckDetailHandler getTruckDetailHandler,
     GetDriverDetailHandler getDriverDetailHandler,
-    AssignTruckToCompanyHandler assignTruckToCompanyHandler,
-    UnassignTruckFromCompanyHandler unassignTruckFromCompanyHandler,
+    SetTruckCompanyHandler assignTruckToCompanyHandler,
     AssignShipmentToTruckHandler assignShipmentToTruckHandler,
     CheckDriverEligibilityHandler checkDriverEligibilityHandler) : ControllerBase
 {
     [HttpPost("trucks")]
     public async Task<ActionResult<AddTruckResponse>> AddTruck(AddTruckBody body, CancellationToken cancellationToken)
     {
-        var response = await addTruckHandler.HandleAsync(
+        var response = await addTruckHandler.AddTruckAsync(
             new AddTruckRequest(body.TruckName, body.TruckType, body.TruckSize),
             cancellationToken);
-        return Ok(response);
+        return CreatedAtAction(nameof(GetTruckDetail), new { truckId = response.TruckId }, response);
     }
+
+    [HttpPost("trucks/{truckId:guid}/company")]
+    public async Task<IActionResult> AssignTruckToCompany(Guid truckId, AssignTruckToCompanyBody body, CancellationToken cancellationToken)
+    {
+        await assignTruckToCompanyHandler.AssignmentTruckingCompany(new SetTruckCompanyRequest(truckId, body.TruckingCompanyId), cancellationToken);
+        return NoContent();
+    }
+
+    [HttpDelete("trucks/{truckId:guid}/company")]
+    public async Task<IActionResult> UnassignTruckFromCompany(Guid truckId, CancellationToken cancellationToken)
+    {
+        await assignTruckToCompanyHandler.AssignmentTruckingCompany(new SetTruckCompanyRequest(truckId, null), cancellationToken);
+        return NoContent();
+    }
+
+    [HttpPost("trucks/{truckId:guid}/activate")]
+    public async Task<IActionResult> ActivateTruck(Guid truckId, CancellationToken cancellationToken)
+    {
+        await truckActivationHandler.HandleActivation(new SetTruckActivationRequest(truckId, true), cancellationToken);
+        return NoContent();
+    }
+
+    [HttpPost("trucks/{truckId:guid}/deactivate")]
+    public async Task<IActionResult> DeactivateTruck(Guid truckId, CancellationToken cancellationToken)
+    {
+        await truckActivationHandler.HandleActivation(new SetTruckActivationRequest(truckId, false), cancellationToken);
+        return NoContent();
+    }
+
 
     [HttpPost("drivers")]
     public async Task<ActionResult<AddDriverResponse>> AddDriver(AddDriverBody body, CancellationToken cancellationToken)
@@ -56,34 +83,6 @@ public sealed class FleetController(
         await assignDriversHandler.HandleAsync(
             new AssignDriversRequest(truckId, body.PrimaryDriverId, body.SecondaryDriverId),
             cancellationToken);
-        return NoContent();
-    }
-
-    [HttpPost("trucks/{truckId:guid}/activate")]
-    public async Task<IActionResult> ActivateTruck(Guid truckId, CancellationToken cancellationToken)
-    {
-        await activateTruckHandler.HandleAsync(new ActivateTruckRequest(truckId), cancellationToken);
-        return NoContent();
-    }
-
-    [HttpPost("trucks/{truckId:guid}/deactivate")]
-    public async Task<IActionResult> DeactivateTruck(Guid truckId, CancellationToken cancellationToken)
-    {
-        await deactivateTruckHandler.HandleAsync(new DeactivateTruckRequest(truckId), cancellationToken);
-        return NoContent();
-    }
-
-    [HttpPost("trucks/{truckId:guid}/company")]
-    public async Task<IActionResult> AssignTruckToCompany(Guid truckId, AssignTruckToCompanyBody body, CancellationToken cancellationToken)
-    {
-        await assignTruckToCompanyHandler.HandleAsync(new AssignTruckToCompanyRequest(truckId, body.TruckingCompanyId), cancellationToken);
-        return NoContent();
-    }
-
-    [HttpDelete("trucks/{truckId:guid}/company")]
-    public async Task<IActionResult> UnassignTruckFromCompany(Guid truckId, CancellationToken cancellationToken)
-    {
-        await unassignTruckFromCompanyHandler.HandleAsync(new UnassignTruckFromCompanyRequest(truckId), cancellationToken);
         return NoContent();
     }
 
