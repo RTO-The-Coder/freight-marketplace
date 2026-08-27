@@ -14,7 +14,7 @@ public sealed class TruckingCompaniesController(GetTruckingCompaniesHandler getT
         return Ok(response);
     }
 
-    [HttpGet("companies/{companyId:guid}/fleet")]
+    [HttpGet("{companyId:guid}/fleet")]
     public async Task<ActionResult<GetFleetTreeResponse>> GetFleetTree(Guid companyId, CancellationToken cancellationToken)
     {
         var response = await getFleetTreeHandler.HandleAsync(new GetFleetTreeRequest(companyId), cancellationToken);

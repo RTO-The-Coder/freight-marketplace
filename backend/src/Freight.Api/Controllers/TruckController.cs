@@ -11,6 +11,7 @@ public sealed class TruckController(
     GetTrucksHandler getTrucksHandler,
     GetTruckDetailHandler getTruckDetailHandler,
     SetTruckCompanyHandler assignTruckToCompanyHandler,
+    AssignDriversHandler assignDriversHandler,
     AssignShipmentToTruckHandler assignShipmentToTruckHandler) : ControllerBase
 {
     [HttpPost("trucks")]
@@ -77,6 +78,15 @@ public sealed class TruckController(
             new AssignShipmentToTruckRequest(truckId, body.ShipmentId, body.PickupInsertIndex, body.DeliveryInsertIndex),
             cancellationToken);
         return Ok(response);
+    }
+
+    [HttpPatch("trucks/{truckId:guid}/drivers")]
+    public async Task<IActionResult> AssignDrivers(Guid truckId, AssignDriversBody body, CancellationToken cancellationToken)
+    {
+        await assignDriversHandler.HandleAsync(
+            new AssignDriversRequest(truckId, body.PrimaryDriverId, body.SecondaryDriverId),
+            cancellationToken);
+        return NoContent();
     }
 }
 
