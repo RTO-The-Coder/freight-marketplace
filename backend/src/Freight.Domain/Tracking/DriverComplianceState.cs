@@ -2,7 +2,7 @@ using Freight.Domain.Common;
 
 namespace Freight.Domain.Tracking;
 
-public sealed class DriverComplianceState : Entity
+public sealed class DriverComplianceState : HasDomainEvents
 {
     public Guid DriverId { get; }
     public DriverActivity CurrentActivity { get; internal set; }
