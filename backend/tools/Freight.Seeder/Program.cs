@@ -1,12 +1,12 @@
 using Freight.Domain.Fleet;
-using Freight.Domain.Shipment;
+using Freight.Domain.Client;
 using Freight.Domain.Tracking;
 using Freight.Domain.ValueObjects;
 using Freight.Domain.ValueObjects.RuleVariants;
 using Freight.Infrastructure.Persistence;
 using Microsoft.EntityFrameworkCore;
-using ShipmentAggregate = Freight.Domain.Shipment.Shipment;
-using ShipperAggregate = Freight.Domain.Shipment.Shipper;
+using ShipmentAggregate = Freight.Domain.Client.Shipment;
+using ShipperAggregate = Freight.Domain.Client.Shipper;
 
 // Allow overriding the target DB via CLI arg so the seeder can be pointed at
 // non-local environments without editing source.
