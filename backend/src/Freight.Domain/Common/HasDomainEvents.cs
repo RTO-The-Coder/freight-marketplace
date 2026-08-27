@@ -1,6 +1,6 @@
 namespace Freight.Domain.Common;
 
-public abstract class Entity
+public abstract class HasDomainEvents
 {
     private readonly List<IDomainEvent> _domainEvents = [];
 
