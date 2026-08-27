@@ -1,12 +1,12 @@
 using System.Net;
 using System.Net.Http.Json;
 using Freight.Domain.Fleet;
-using Freight.Domain.Shipment;
+using Freight.Domain.Client;
 using Freight.Infrastructure.Persistence;
 using Microsoft.AspNetCore.Mvc.Testing;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
-using ShipmentAggregate = Freight.Domain.Shipment.Shipment;
+using ShipmentAggregate = Freight.Domain.Client.Shipment;
 
 namespace Freight.Api.Tests;
 

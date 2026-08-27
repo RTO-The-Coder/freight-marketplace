@@ -20,7 +20,7 @@ public sealed class AddDriverHandlerTests
 
         var handler = new AddDriverHandler(unitOfWork.Object);
 
-        var response = await handler.HandleAsync(new AddDriverRequest(
+        var response = await handler.AddDriver(new AddDriverRequest(
             "Jane",
             "Doe",
             DrivingBreakRule.FullBreak,

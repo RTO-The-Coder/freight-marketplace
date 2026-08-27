@@ -37,7 +37,7 @@ public sealed class AssignDriversHandlerTests
 
         var handler = new AssignDriversHandler(unitOfWork.Object);
 
-        await handler.HandleAsync(new AssignDriversRequest(truck.Id, primary.Id, SecondaryDriverId: null));
+        await handler.AssignDrivers(new AssignDriversRequest(truck.Id, primary.Id, SecondaryDriverId: null));
 
         Assert.Equal(primary.Id, truck.DriverAssignment!.PrimaryDriver.Id);
         unitOfWork.Verify(u => u.SaveChangesAsync(It.IsAny<CancellationToken>()), Times.Once);
@@ -58,7 +58,7 @@ public sealed class AssignDriversHandlerTests
         var handler = new AssignDriversHandler(unitOfWork.Object);
 
         await Assert.ThrowsAsync<InvalidOperationException>(() =>
-            handler.HandleAsync(new AssignDriversRequest(truck.Id, primary.Id, secondary.Id)));
+            handler.AssignDrivers(new AssignDriversRequest(truck.Id, primary.Id, secondary.Id)));
 
         unitOfWork.Verify(u => u.SaveChangesAsync(It.IsAny<CancellationToken>()), Times.Never);
     }
@@ -72,6 +72,6 @@ public sealed class AssignDriversHandlerTests
         var handler = new AssignDriversHandler(unitOfWork.Object);
 
         await Assert.ThrowsAsync<InvalidOperationException>(() =>
-            handler.HandleAsync(new AssignDriversRequest(Guid.NewGuid(), Guid.NewGuid(), null)));
+            handler.AssignDrivers(new AssignDriversRequest(Guid.NewGuid(), Guid.NewGuid(), null)));
     }
 }

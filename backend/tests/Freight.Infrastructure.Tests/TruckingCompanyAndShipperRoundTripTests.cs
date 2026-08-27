@@ -1,5 +1,5 @@
 using Freight.Domain.Fleet;
-using Freight.Domain.Shipment;
+using Freight.Domain.Client;
 using Freight.Domain.ValueObjects;
 using Freight.Infrastructure.Persistence;
 using Microsoft.EntityFrameworkCore;

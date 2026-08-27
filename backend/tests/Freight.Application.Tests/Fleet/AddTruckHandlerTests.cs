@@ -20,7 +20,7 @@ public sealed class AddTruckHandlerTests
         var handler = new AddTruckHandler(unitOfWork.Object);
         var companyId = Guid.NewGuid();
 
-        var response = await handler.HandleAsync(
+        var response = await handler.AddTruckAsync(
             new AddTruckRequest("Truck 1", TruckType.BoxVan, TruckSize.Medium, companyId));
 
         Assert.NotNull(addedTruck);
@@ -41,7 +41,7 @@ public sealed class AddTruckHandlerTests
 
         var handler = new AddTruckHandler(unitOfWork.Object);
 
-        var response = await handler.HandleAsync(new AddTruckRequest("Truck 1", TruckType.BoxVan, TruckSize.Medium));
+        var response = await handler.AddTruckAsync(new AddTruckRequest("Truck 1", TruckType.BoxVan, TruckSize.Medium));
 
         Assert.NotNull(addedTruck);
         Assert.Null(addedTruck!.TruckingCompanyId);

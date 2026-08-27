@@ -62,10 +62,10 @@ public class TruckAndDriverRoundTripTests : IAsyncLifetime
         var reloaded = await readContext.Set<Truck>().FirstAsync(t => t.Id == truck.Id);
 
         Assert.Equal(truck.TruckName, reloaded.TruckName);
-        Assert.Equal(truck.TruckType, reloaded.TruckType);
-        Assert.Equal(truck.TruckSize, reloaded.TruckSize);
-        Assert.Equal(truck.Capacity.Total.WeightKg, reloaded.Capacity.Total.WeightKg);
-        Assert.Equal(truck.Capacity.Total.VolumeCubicMeters, reloaded.Capacity.Total.VolumeCubicMeters);
+        Assert.Equal(truck.Type, reloaded.Type);
+        Assert.Equal(truck.Size, reloaded.Size);
+        Assert.Equal(truck.Capacity.WeightKg, reloaded.Capacity.WeightKg);
+        Assert.Equal(truck.Capacity.VolumeCubicMeters, reloaded.Capacity.VolumeCubicMeters);
         Assert.False(reloaded.IsActive);
         Assert.Null(reloaded.TruckingCompanyId);
     }
@@ -130,8 +130,8 @@ public class TruckAndDriverRoundTripTests : IAsyncLifetime
         var trip = Trip.Open(truck.Id, company.Id, new DateTime(2026, 1, 1, 6, 0, 0, DateTimeKind.Utc));
 
         var shipmentId = Guid.NewGuid();
-        truck.AssignShipment(
-            trip,
+        var previousNextStopId = trip.NextStop?.Id;
+        trip.AssignShipment(
             shipmentId,
             Capacity.Create(100, 2),
             GeoLocation.Create(52.5, 13.4),
@@ -142,6 +142,7 @@ public class TruckAndDriverRoundTripTests : IAsyncLifetime
             pickupLegDistanceKm: 650, pickupLegTimeTick: 78,
             deliveryLegDistanceKm: 650, deliveryLegTimeTick: 78,
             officeLegDistanceKm: 650, officeLegTimeTick: 78);
+        truck.SyncProgressToNextStop(trip, previousNextStopId);
 
         await using (var writeContext = new FreightDbContext(Options()))
         {

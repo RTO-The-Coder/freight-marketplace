@@ -1,14 +1,14 @@
 using System.Net;
 using System.Net.Http.Json;
 using Freight.Domain.Fleet;
-using Freight.Domain.Shipment;
+using Freight.Domain.Client;
 using Freight.Domain.ValueObjects;
 using Freight.Domain.ValueObjects.RuleVariants;
 using Freight.Infrastructure.Persistence;
 using Microsoft.AspNetCore.Mvc.Testing;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
-using ShipmentAggregate = Freight.Domain.Shipment.Shipment;
+using ShipmentAggregate = Freight.Domain.Client.Shipment;
 
 namespace Freight.Api.Tests;
 
@@ -127,7 +127,7 @@ public sealed class AssignShipmentToTruckEndpointTests : IClassFixture<WebApplic
     public async Task AssignShipment_ExceedsCapacity_Returns400WithMessage()
     {
         var (truck, _) = await SeedAssignableTruckAsync();
-        var shipment = NewShipment(TruckType.BoxVan, Capacity.Create(truck.Capacity.Total.WeightKg + 1, 5));
+        var shipment = NewShipment(TruckType.BoxVan, Capacity.Create(truck.Capacity.WeightKg + 1, 5));
 
         using (var scope = _factory.Services.CreateScope())
         {

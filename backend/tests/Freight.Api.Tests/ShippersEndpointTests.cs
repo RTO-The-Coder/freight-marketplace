@@ -7,8 +7,8 @@ using Freight.Infrastructure.Persistence;
 using Microsoft.AspNetCore.Mvc.Testing;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
-using ShipmentAggregate = Freight.Domain.Shipment.Shipment;
-using ShipperAggregate = Freight.Domain.Shipment.Shipper;
+using ShipmentAggregate = Freight.Domain.Client.Shipment;
+using ShipperAggregate = Freight.Domain.Client.Shipper;
 
 namespace Freight.Api.Tests;
 

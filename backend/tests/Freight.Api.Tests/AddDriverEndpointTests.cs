@@ -35,7 +35,7 @@ public sealed class AddDriverEndpointTests : IClassFixture<WebApplicationFactory
     private sealed record AddDriverResponse(Guid DriverId);
 
     [Fact]
-    public async Task PostDriver_ValidRequest_Returns200WithPersistedDriver()
+    public async Task PostDriver_ValidRequest_Returns201WithPersistedDriver()
     {
         using var client = _factory.CreateClient();
 
@@ -43,7 +43,8 @@ public sealed class AddDriverEndpointTests : IClassFixture<WebApplicationFactory
             "/drivers",
             new AddDriverBody("Integration", "Driver", DrivingBreakRule.FullBreak, DailyRestRule.FullRest, WeeklyRestRule.FullWeeklyRest, true));
 
-        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+        Assert.Equal(HttpStatusCode.Created, response.StatusCode);
+        Assert.NotNull(response.Headers.Location);
         var body = await response.Content.ReadFromJsonAsync<AddDriverResponse>();
         Assert.NotNull(body);
         Assert.NotEqual(Guid.Empty, body!.DriverId);
