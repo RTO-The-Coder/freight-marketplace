@@ -1,4 +1,4 @@
-using Freight.Domain.Shipment;
+using Freight.Domain.Client;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Metadata.Builders;
 
@@ -24,7 +24,7 @@ public sealed class ShipmentConfiguration : IEntityTypeConfiguration<Shipment>
         builder.Property(shipment => shipment.OfferDeadline)
             .IsRequired();
 
-        builder.Property(shipment => shipment.ActualPickupAt);
+        builder.Property(shipment => shipment.EstimatedPickup);
 
         builder.Property(shipment => shipment.Status)
             .HasConversion<string>()

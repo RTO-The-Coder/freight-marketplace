@@ -176,40 +176,17 @@ public sealed class Truck
     /// CurrentProgress is left untouched (the insertion landed after the truck's live
     /// position, not ahead of it).
     /// </summary>
-    public void AssignShipment(
-        Trip trip,
-        Guid shipmentId,
-        Capacity shipmentSize,
-        GeoLocation pickupLocation,
-        GeoLocation deliveryLocation,
-        GeoLocation officeLocation,
-        int pickupInsertIndex,
-        int deliveryInsertIndex,
-        double pickupLegDistanceKm,
-        int pickupLegTimeTick,
-        double deliveryLegDistanceKm,
-        int deliveryLegTimeTick,
-        double officeLegDistanceKm,
-        int officeLegTimeTick)
+    public void SyncProgressToNextStop(Trip trip, Guid? previousNextStopId)
     {
         ArgumentNullException.ThrowIfNull(trip);
-        ArgumentNullException.ThrowIfNull(shipmentSize);
 
         if (trip.TruckId != Id)
         {
             throw new ArgumentException("This trip does not belong to this truck.", nameof(trip));
         }
 
-        var previousNextStopId = trip.NextStop?.Id;
-
-        trip.AssignShipment(
-            shipmentId, shipmentSize, pickupLocation, deliveryLocation, officeLocation,
-            pickupInsertIndex, deliveryInsertIndex,
-            pickupLegDistanceKm, pickupLegTimeTick,
-            deliveryLegDistanceKm, deliveryLegTimeTick,
-            officeLegDistanceKm, officeLegTimeTick);
-
-        var newNextStop = trip.NextStop!;
+        var newNextStop = trip.NextStop
+            ?? throw new InvalidOperationException("Trip has no pending stop to sync progress to.");
 
         if (CurrentProgress is null)
         {

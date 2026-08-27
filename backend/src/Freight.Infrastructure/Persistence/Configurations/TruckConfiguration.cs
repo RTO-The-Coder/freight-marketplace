@@ -16,11 +16,11 @@ public sealed class TruckConfiguration : IEntityTypeConfiguration<Truck>
         builder.Property(truck => truck.TruckName)
             .IsRequired();
 
-        builder.Property(truck => truck.TruckType)
+        builder.Property(truck => truck.Type)
             .HasConversion<string>()
             .IsRequired();
 
-        builder.Property(truck => truck.TruckSize)
+        builder.Property(truck => truck.Size)
             .HasConversion<string>()
             .IsRequired();
 
@@ -38,13 +38,8 @@ public sealed class TruckConfiguration : IEntityTypeConfiguration<Truck>
 
         builder.OwnsOne(truck => truck.Capacity, capacity =>
         {
-            capacity.OwnsOne(c => c.Total, total =>
-            {
-                total.Property(t => t.WeightKg).HasColumnName("TotalCapacityWeightKg");
-                total.Property(t => t.VolumeCubicMeters).HasColumnName("TotalCapacityVolumeCubicMeters");
-            });
-
-            capacity.Navigation(c => c.Total).IsRequired();
+            capacity.Property(c => c.WeightKg).HasColumnName("TotalCapacityWeightKg");
+            capacity.Property(c => c.VolumeCubicMeters).HasColumnName("TotalCapacityVolumeCubicMeters");
         });
 
         builder.Navigation(truck => truck.Capacity).IsRequired();

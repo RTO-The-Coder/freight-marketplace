@@ -1,5 +1,5 @@
 using Freight.Domain.Common;
-using Freight.Domain.Shipment;
+using Freight.Domain.Client;
 
 namespace Freight.Application.Shipments;
 

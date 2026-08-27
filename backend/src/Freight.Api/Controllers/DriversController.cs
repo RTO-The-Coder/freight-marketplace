@@ -16,7 +16,7 @@ public sealed class DriversController(
     [HttpPost("drivers")]
     public async Task<ActionResult<AddDriverResponse>> AddDriver(AddDriverBody body, CancellationToken cancellationToken)
     {
-        var response = await addDriverHandler.HandleAsync(
+        var response = await addDriverHandler.AddDriver(
             new AddDriverRequest(
                 body.FirstName,
                 body.LastName,
@@ -25,7 +25,7 @@ public sealed class DriversController(
                 body.WeeklyRestRule,
                 body.ExtendDailyDrivingWhenEligible),
             cancellationToken);
-        return Ok(response);
+        return CreatedAtAction(nameof(GetDriverDetail), new { driverId = response.DriverId }, response);
     }
 
     [HttpGet("drivers")]

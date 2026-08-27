@@ -6,7 +6,7 @@ public sealed record AssignDriversRequest(Guid TruckId, Guid PrimaryDriverId, Gu
 
 public sealed class AssignDriversHandler(IUnitOfWork unitOfWork)
 {
-    public async Task HandleAsync(AssignDriversRequest request, CancellationToken cancellationToken = default)
+    public async Task AssignDrivers(AssignDriversRequest request, CancellationToken cancellationToken = default)
     {
         var truck = await unitOfWork.Trucks.GetByIdAsync(request.TruckId, cancellationToken)
             ?? throw new InvalidOperationException($"Truck '{request.TruckId}' was not found.");

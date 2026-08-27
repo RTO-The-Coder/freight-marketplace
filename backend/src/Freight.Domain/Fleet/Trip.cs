@@ -1,3 +1,4 @@
+using System.Runtime.CompilerServices;
 using Freight.Domain.ValueObjects;
 
 namespace Freight.Domain.Fleet;
@@ -80,34 +81,23 @@ public sealed class Trip
     {
         get
         {
-            var reachedPickupShipmentIds = Stops
-                .Where(stop => stop.Kind == StopKind.Pickup && stop.Status == StopStatus.Reached)
-                .Select(stop => stop.ShipmentId)
-                .ToHashSet();
-
-            var pendingDeliveryShipmentIds = Stops
-                .Where(stop => stop.Kind == StopKind.Delivery && stop.Status == StopStatus.Pending)
-                .Select(stop => stop.ShipmentId)
-                .ToHashSet();
-
-            var weight = 0.0;
-            var volume = 0.0;
-
-            foreach (var stop in Stops)
+            var reachedStops = Stops.Where(x => x.Status == StopStatus.Reached);
+            double weight = 0;
+            double volumn = 0;
+            foreach (var stop in reachedStops)
             {
-                if (stop.Kind != StopKind.Pickup || stop.ShipmentLoad is not { } load)
+                if (stop.Kind == StopKind.Pickup)
                 {
-                    continue;
+                    weight += stop.ShipmentLoad.WeightKg;
+                    volumn += stop.ShipmentLoad.VolumeCubicMeters;
                 }
-
-                if (reachedPickupShipmentIds.Contains(stop.ShipmentId) && pendingDeliveryShipmentIds.Contains(stop.ShipmentId))
+                else
                 {
-                    weight += load.WeightKg;
-                    volume += load.VolumeCubicMeters;
+                    weight -= stop.ShipmentLoad.WeightKg;
+                    volumn -= stop.ShipmentLoad.VolumeCubicMeters;
                 }
             }
-
-            return Capacity.Create(weight, volume);
+            return Capacity.Create(weight, volumn);
         }
     }
 
@@ -266,6 +256,11 @@ public sealed class Trip
                 "Pickup insertion index is out of range for the current route.");
         }
 
+        // deliveryInsertIndex, like pickupInsertIndex, is a position among the
+        // PRE-insertion pending stops (not the post-pickup-insertion list) - the +1
+        // shift applied below is what accounts for pickup's insertion, so this bound
+        // must match pendingStops.Count, the same list pickupInsertIndex is bounded
+        // against.
         if (deliveryInsertIndex < 0 || deliveryInsertIndex > pendingStops.Count)
         {
             throw new ArgumentOutOfRangeException(nameof(deliveryInsertIndex), deliveryInsertIndex,
@@ -278,8 +273,15 @@ public sealed class Trip
                 "Delivery must be inserted at or after pickup in the route.", nameof(deliveryInsertIndex));
         }
 
+        // Each stop gets its OWN Capacity instance, never the same shipmentSize reference
+        // shared between them - EF Core's change tracker follows owned-type navigations
+        // by reference identity, and reusing one Capacity instance as the ShipmentLoad
+        // of two different Stop rows makes it treat the second row as "already tracked,
+        // nothing changed", silently dropping ShipmentLoad from that row's INSERT (the
+        // same class of bug the handler already guards against for GeoLocation/Capacity
+        // at its own layer - see AssignShipmentToTruckHandler's fresh-instance comment).
         var pickupStop = Stop.ForShipment(
-            shipmentId, shipmentSize, StopKind.Pickup, pickupLocation,
+            shipmentId, Capacity.Create(shipmentSize.WeightKg, shipmentSize.VolumeCubicMeters), StopKind.Pickup, pickupLocation,
             SequenceForInsertAt(pendingStops, pickupInsertIndex), pickupLegDistanceKm, pickupLegTimeTick);
         InsertStop(pickupStop, pendingStops, pickupInsertIndex);
 
@@ -288,7 +290,7 @@ public sealed class Trip
         // by one, so account for that shift before inserting delivery.
         var pendingStopsAfterPickup = PendingNonOfficeStops();
         var deliveryStop = Stop.ForShipment(
-            shipmentId, shipmentSize, StopKind.Delivery, deliveryLocation,
+            shipmentId, Capacity.Create(shipmentSize.WeightKg, shipmentSize.VolumeCubicMeters), StopKind.Delivery, deliveryLocation,
             SequenceForInsertAt(pendingStopsAfterPickup, deliveryInsertIndex + 1), deliveryLegDistanceKm, deliveryLegTimeTick);
         InsertStop(deliveryStop, pendingStopsAfterPickup, deliveryInsertIndex + 1);
 

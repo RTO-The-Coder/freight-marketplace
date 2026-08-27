@@ -74,7 +74,7 @@ public sealed class TruckController(
         AssignShipmentToTruckBody body,
         CancellationToken cancellationToken)
     {
-        var response = await assignShipmentToTruckHandler.HandleAsync(
+        var response = await assignShipmentToTruckHandler.AssignShipment(
             new AssignShipmentToTruckRequest(truckId, body.ShipmentId, body.PickupInsertIndex, body.DeliveryInsertIndex),
             cancellationToken);
         return Ok(response);
@@ -83,7 +83,7 @@ public sealed class TruckController(
     [HttpPatch("trucks/{truckId:guid}/drivers")]
     public async Task<IActionResult> AssignDrivers(Guid truckId, AssignDriversBody body, CancellationToken cancellationToken)
     {
-        await assignDriversHandler.HandleAsync(
+        await assignDriversHandler.AssignDrivers(
             new AssignDriversRequest(truckId, body.PrimaryDriverId, body.SecondaryDriverId),
             cancellationToken);
         return NoContent();

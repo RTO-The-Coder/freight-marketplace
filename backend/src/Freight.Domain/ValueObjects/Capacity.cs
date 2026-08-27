@@ -40,23 +40,4 @@ public sealed record Capacity
         TruckSize.Large => Create(24_000, 90),
         _ => throw new ArgumentOutOfRangeException(nameof(size), size, "Unknown truck size."),
     };
-
-    public bool CanAccommodate(Capacity required)
-    {
-        ArgumentNullException.ThrowIfNull(required);
-
-        return WeightKg >= required.WeightKg && VolumeCubicMeters >= required.VolumeCubicMeters;
-    }
-
-    public Capacity Subtract(Capacity used)
-    {
-        ArgumentNullException.ThrowIfNull(used);
-
-        if (!CanAccommodate(used))
-        {
-            throw new InvalidOperationException("Cannot subtract a capacity greater than what is available.");
-        }
-
-        return new Capacity(WeightKg - used.WeightKg, VolumeCubicMeters - used.VolumeCubicMeters);
-    }
 }

@@ -34,7 +34,9 @@ public sealed class DriverAssignment
     {
         ArgumentNullException.ThrowIfNull(driver);
 
-        return new DriverAssignment(DriverConfigurationType.Single, driver, secondaryDriver: null);
+        var assignment = new DriverAssignment(DriverConfigurationType.Single, driver, secondaryDriver: null);
+        assignment.ActiveDriverId = driver.Id;
+        return assignment;
     }
 
     /// <summary>
@@ -56,7 +58,9 @@ public sealed class DriverAssignment
             throw new InvalidOperationException("Only Large trucks may be assigned a second driver.");
         }
 
-        return new DriverAssignment(DriverConfigurationType.Team, first, second);
+        var assignment = new DriverAssignment(DriverConfigurationType.Team, first, second);
+        assignment.ActiveDriverId = first.Id;
+        return assignment;
     }
 
     /// <summary>

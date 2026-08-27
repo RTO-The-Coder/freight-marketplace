@@ -1,3 +1,5 @@
+using Freight.Application.Shipments;
+using Freight.Domain.Client;
 using Freight.Domain.Common;
 using Freight.Domain.Fleet;
 using Freight.Domain.Fleet.Abstractions;
@@ -6,11 +8,7 @@ using Freight.Domain.ValueObjects;
 
 namespace Freight.Application.Fleet;
 
-public sealed record AssignShipmentToTruckRequest(
-    Guid TruckId,
-    Guid ShipmentId,
-    int PickupInsertIndex,
-    int DeliveryInsertIndex);
+public sealed record AssignShipmentToTruckRequest(Guid TruckId, Guid ShipmentId, int PickupInsertIndex, int DeliveryInsertIndex);
 
 public sealed record AssignShipmentToTruckResponse(int StopCount);
 
@@ -35,7 +33,7 @@ public sealed class AssignShipmentToTruckHandler(
     private const double PlaceholderLegDistanceKm = 650;
     private const int PlaceholderLegTimeTicks = 78;
 
-    public async Task<AssignShipmentToTruckResponse> HandleAsync(AssignShipmentToTruckRequest request, CancellationToken cancellationToken = default)
+    public async Task<AssignShipmentToTruckResponse> AssignShipment(AssignShipmentToTruckRequest request, CancellationToken cancellationToken = default)
     {
         var truck = await unitOfWork.Trucks.GetByIdAsync(request.TruckId, cancellationToken)
             ?? throw new InvalidOperationException($"Truck '{request.TruckId}' was not found.");
@@ -53,10 +51,10 @@ public sealed class AssignShipmentToTruckHandler(
             throw new InvalidOperationException("Truck must be active to accept a shipment.");
         }
 
-        if (truck.TruckType != shipment.RequiredTruckType)
+        if (truck.Type != shipment.RequiredTruckType)
         {
             throw new InvalidOperationException(
-                $"This shipment requires a {shipment.RequiredTruckType} truck, but {truck.TruckName} is a {truck.TruckType}.");
+                $"Truck type mismatch: this shipment requires a {shipment.RequiredTruckType} truck, but {truck.TruckName} is a {truck.Type}.");
         }
 
         if (truck.DriverAssignment is null)
@@ -73,6 +71,19 @@ public sealed class AssignShipmentToTruckHandler(
         var isNewTrip = trip is null;
         trip ??= Trip.Open(truck.Id, company.Id, now);
 
+        var pendingStops = trip.Stops.Count(x => x.Status == StopStatus.Reached);
+        if (request.PickupInsertIndex < 0 || request.PickupInsertIndex > pendingStops)
+        {
+            throw new ArgumentOutOfRangeException(nameof(request.PickupInsertIndex), request.PickupInsertIndex,
+                "Pickup insertion index is out of range for the current route.");
+        }
+
+        if (request.DeliveryInsertIndex < 0 || request.DeliveryInsertIndex > pendingStops)
+        {
+            throw new ArgumentOutOfRangeException(nameof(request.DeliveryInsertIndex), request.DeliveryInsertIndex,
+                "Delivery insertion index is out of range for the current route.");
+        }
+
         // Fresh GeoLocation/Capacity instances, not the tracked ones off Shipment/
         // TruckingCompany - EF Core's change tracker treats owned-type instances by
         // reference identity, so reusing shipment.PickupLocation etc. directly here
@@ -83,8 +94,11 @@ public sealed class AssignShipmentToTruckHandler(
         var pickupLocation = GeoLocation.Create(shipment.PickupLocation.Latitude, shipment.PickupLocation.Longitude);
         var deliveryLocation = GeoLocation.Create(shipment.DeliveryLocation.Latitude, shipment.DeliveryLocation.Longitude);
         var officeLocation = GeoLocation.Create(company.OfficeLocation.Latitude, company.OfficeLocation.Longitude);
+
         var shipmentSize = Capacity.Create(shipment.Load.WeightKg, shipment.Load.VolumeCubicMeters);
 
+        // Preview the insertion on a throwaway clone so feasibility runs against the
+        // route as it WOULD look, without mutating the real trip.
         var preview = trip.Clone();
         preview.AssignShipment(
             shipment.Id, shipmentSize, pickupLocation, deliveryLocation, officeLocation,
@@ -93,9 +107,7 @@ public sealed class AssignShipmentToTruckHandler(
             PlaceholderLegDistanceKm, PlaceholderLegTimeTicks,
             PlaceholderLegDistanceKm, PlaceholderLegTimeTicks);
 
-        var shipmentWindows = await BuildShipmentWindowsAsync(preview, shipment, cancellationToken);
-
-        var feasibility = insertionEvaluator.Evaluate(preview.Stops, truck.CurrentProgress, now, shipmentWindows);
+        var feasibility = insertionEvaluator.Evaluate(preview.Stops, truck.Capacity);
 
         if (!feasibility.IsFeasible)
         {
@@ -103,17 +115,22 @@ public sealed class AssignShipmentToTruckHandler(
                 $"Cannot assign shipment '{shipment.Id}' to {truck.TruckName}: {feasibility.ViolationReason}");
         }
 
+        // Feasible - apply the same insertion to the real trip.
         if (isNewTrip)
         {
             unitOfWork.Trips.Add(trip);
         }
 
-        truck.AssignShipment(
-            trip, shipment.Id, shipmentSize, pickupLocation, deliveryLocation, officeLocation,
+        var previousNextStopId = trip.NextStop?.Id;
+
+        trip.AssignShipment(
+            shipment.Id, shipmentSize, pickupLocation, deliveryLocation, officeLocation,
             request.PickupInsertIndex, request.DeliveryInsertIndex,
             PlaceholderLegDistanceKm, PlaceholderLegTimeTicks,
             PlaceholderLegDistanceKm, PlaceholderLegTimeTicks,
             PlaceholderLegDistanceKm, PlaceholderLegTimeTicks);
+
+        truck.SyncProgressToNextStop(trip, previousNextStopId);
 
         shipment.AssignToCompany(truck.TruckingCompanyId.Value);
 
@@ -131,7 +148,7 @@ public sealed class AssignShipmentToTruckHandler(
     /// other Pending Pickup/Delivery stop's window is looked up from its own Shipment.
     /// </summary>
     private async Task<Dictionary<Guid, TimeWindow>> BuildShipmentWindowsAsync(
-        Trip preview, Domain.Shipment.Shipment newShipment, CancellationToken cancellationToken)
+        Trip preview, Shipment newShipment, CancellationToken cancellationToken)
     {
         var windows = new Dictionary<Guid, TimeWindow>();
 
