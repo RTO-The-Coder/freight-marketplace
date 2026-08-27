@@ -1,7 +1,7 @@
 using Freight.Domain.Fleet;
 using Freight.Domain.ValueObjects;
 
-namespace Freight.Domain.Shipment;
+namespace Freight.Domain.Client;
 
 public sealed class Shipment
 {
@@ -30,7 +30,7 @@ public sealed class Shipment
     /// <summary>Committed delivery window, calculated later (offer approval / route assignment).</summary>
     public TimeWindow? ScheduledDeliveryWindow { get; private set; }
 
-    public DateTime? ActualPickupAt { get; private set; }
+    public DateTime? EstimatedPickup { get; private set; }
     public ShipmentStatus Status { get; private set; }
 
     // EF Core cannot bind pickupLocation/deliveryLocation/load/pickupWindow/deliveryWindow
@@ -66,7 +66,7 @@ public sealed class Shipment
         OfferDeadline = bookedAt.Add(OfferSubmissionWindow);
         ScheduledPickupWindow = null;
         ScheduledDeliveryWindow = null;
-        ActualPickupAt = null;
+        EstimatedPickup = null;
         Status = ShipmentStatus.Pending;
     }
 
@@ -153,7 +153,7 @@ public sealed class Shipment
             throw new InvalidOperationException("Only a Booked shipment can be marked as picked up.");
         }
 
-        ActualPickupAt = actualPickupAt;
+        EstimatedPickup = actualPickupAt;
         Status = ShipmentStatus.InTransit;
     }
 
