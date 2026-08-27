@@ -1,4 +1,4 @@
-namespace Freight.Domain.Shipment;
+namespace Freight.Domain.Client;
 
 public enum ShipmentStatus
 {

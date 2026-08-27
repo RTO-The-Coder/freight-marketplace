@@ -1,6 +1,6 @@
 using Freight.Domain.Common;
 
-namespace Freight.Domain.Shipment;
+namespace Freight.Domain.Client;
 
 public interface IShipperRepository : IRepository<Shipper>
 {
