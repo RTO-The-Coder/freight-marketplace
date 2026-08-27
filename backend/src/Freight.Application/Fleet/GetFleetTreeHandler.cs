@@ -49,8 +49,8 @@ public sealed class GetFleetTreeHandler(IUnitOfWork unitOfWork)
             truckDtos.Add(new FleetTruckDto(
                 truck.Id,
                 truck.TruckName,
-                truck.TruckType,
-                truck.TruckSize,
+                truck.Type,
+                truck.Size,
                 truck.IsActive,
                 truck.DetermineStatus(trip),
                 truck.DriverAssignment is null

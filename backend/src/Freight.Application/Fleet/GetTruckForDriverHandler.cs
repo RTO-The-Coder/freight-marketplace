@@ -27,8 +27,8 @@ public sealed class GetTruckForDriverHandler(IUnitOfWork unitOfWork)
         var dto = new TruckSummaryDto(
             truck.Id,
             truck.TruckName,
-            truck.TruckType,
-            truck.TruckSize,
+            truck.Type,
+            truck.Size,
             truck.IsActive,
             truck.DetermineStatus(trip),
             truck.TruckingCompanyId,

@@ -22,6 +22,60 @@ namespace Freight.Infrastructure.Persistence.Migrations
 
             NpgsqlModelBuilderExtensions.UseIdentityByDefaultColumns(modelBuilder);
 
+            modelBuilder.Entity("Freight.Domain.Client.Shipment", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid");
+
+                    b.Property<DateTime?>("EstimatedPickup")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<DateTime>("OfferDeadline")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<string>("RequiredTruckType")
+                        .IsRequired()
+                        .HasColumnType("text");
+
+                    b.Property<Guid>("ShipperId")
+                        .HasColumnType("uuid");
+
+                    b.Property<string>("Status")
+                        .IsRequired()
+                        .HasColumnType("text");
+
+                    b.Property<Guid?>("TruckingCompanyId")
+                        .HasColumnType("uuid");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("ShipperId");
+
+                    b.HasIndex("TruckingCompanyId");
+
+                    b.ToTable("Shipments", (string)null);
+                });
+
+            modelBuilder.Entity("Freight.Domain.Client.Shipper", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid");
+
+                    b.Property<string>("ContactEmail")
+                        .IsRequired()
+                        .HasColumnType("text");
+
+                    b.Property<string>("Name")
+                        .IsRequired()
+                        .HasColumnType("text");
+
+                    b.HasKey("Id");
+
+                    b.ToTable("Shippers", (string)null);
+                });
+
             modelBuilder.Entity("Freight.Domain.Fleet.Driver", b =>
                 {
                     b.Property<Guid>("Id")
@@ -84,20 +138,20 @@ namespace Freight.Infrastructure.Persistence.Migrations
                     b.Property<bool>("IsActive")
                         .HasColumnType("boolean");
 
+                    b.Property<string>("Size")
+                        .IsRequired()
+                        .HasColumnType("text");
+
                     b.Property<string>("TruckName")
-                        .IsRequired()
-                        .HasColumnType("text");
-
-                    b.Property<string>("TruckSize")
-                        .IsRequired()
-                        .HasColumnType("text");
-
-                    b.Property<string>("TruckType")
                         .IsRequired()
                         .HasColumnType("text");
 
                     b.Property<Guid?>("TruckingCompanyId")
                         .HasColumnType("uuid");
+
+                    b.Property<string>("Type")
+                        .IsRequired()
+                        .HasColumnType("text");
 
                     b.HasKey("Id");
 
@@ -119,60 +173,6 @@ namespace Freight.Infrastructure.Persistence.Migrations
                     b.ToTable("TruckingCompanies", (string)null);
                 });
 
-            modelBuilder.Entity("Freight.Domain.Shipment.Shipment", b =>
-                {
-                    b.Property<Guid>("Id")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("uuid");
-
-                    b.Property<DateTime?>("ActualPickupAt")
-                        .HasColumnType("timestamp with time zone");
-
-                    b.Property<DateTime>("OfferDeadline")
-                        .HasColumnType("timestamp with time zone");
-
-                    b.Property<string>("RequiredTruckType")
-                        .IsRequired()
-                        .HasColumnType("text");
-
-                    b.Property<Guid>("ShipperId")
-                        .HasColumnType("uuid");
-
-                    b.Property<string>("Status")
-                        .IsRequired()
-                        .HasColumnType("text");
-
-                    b.Property<Guid?>("TruckingCompanyId")
-                        .HasColumnType("uuid");
-
-                    b.HasKey("Id");
-
-                    b.HasIndex("ShipperId");
-
-                    b.HasIndex("TruckingCompanyId");
-
-                    b.ToTable("Shipments", (string)null);
-                });
-
-            modelBuilder.Entity("Freight.Domain.Shipment.Shipper", b =>
-                {
-                    b.Property<Guid>("Id")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("uuid");
-
-                    b.Property<string>("ContactEmail")
-                        .IsRequired()
-                        .HasColumnType("text");
-
-                    b.Property<string>("Name")
-                        .IsRequired()
-                        .HasColumnType("text");
-
-                    b.HasKey("Id");
-
-                    b.ToTable("Shippers", (string)null);
-                });
-
             modelBuilder.Entity("Freight.Domain.Simulation.SimulationClock", b =>
                 {
                     b.Property<Guid>("Id")
@@ -185,6 +185,175 @@ namespace Freight.Infrastructure.Persistence.Migrations
                     b.HasKey("Id");
 
                     b.ToTable("SimulationClock", (string)null);
+                });
+
+            modelBuilder.Entity("Freight.Domain.Client.Shipment", b =>
+                {
+                    b.OwnsOne("Freight.Domain.ValueObjects.GeoLocation", "DeliveryLocation", b1 =>
+                        {
+                            b1.Property<Guid>("ShipmentId")
+                                .HasColumnType("uuid");
+
+                            b1.Property<double>("Latitude")
+                                .HasColumnType("double precision")
+                                .HasColumnName("DeliveryLatitude");
+
+                            b1.Property<double>("Longitude")
+                                .HasColumnType("double precision")
+                                .HasColumnName("DeliveryLongitude");
+
+                            b1.HasKey("ShipmentId");
+
+                            b1.ToTable("Shipments");
+
+                            b1.WithOwner()
+                                .HasForeignKey("ShipmentId");
+                        });
+
+                    b.OwnsOne("Freight.Domain.ValueObjects.TimeWindow", "DeliveryWindow", b1 =>
+                        {
+                            b1.Property<Guid>("ShipmentId")
+                                .HasColumnType("uuid");
+
+                            b1.Property<DateTime>("Earliest")
+                                .HasColumnType("timestamp with time zone")
+                                .HasColumnName("DeliveryWindowEarliest");
+
+                            b1.Property<DateTime>("Latest")
+                                .HasColumnType("timestamp with time zone")
+                                .HasColumnName("DeliveryWindowLatest");
+
+                            b1.HasKey("ShipmentId");
+
+                            b1.ToTable("Shipments");
+
+                            b1.WithOwner()
+                                .HasForeignKey("ShipmentId");
+                        });
+
+                    b.OwnsOne("Freight.Domain.ValueObjects.Capacity", "Load", b1 =>
+                        {
+                            b1.Property<Guid>("ShipmentId")
+                                .HasColumnType("uuid");
+
+                            b1.Property<double>("VolumeCubicMeters")
+                                .HasColumnType("double precision")
+                                .HasColumnName("LoadVolumeCubicMeters");
+
+                            b1.Property<double>("WeightKg")
+                                .HasColumnType("double precision")
+                                .HasColumnName("LoadWeightKg");
+
+                            b1.HasKey("ShipmentId");
+
+                            b1.ToTable("Shipments");
+
+                            b1.WithOwner()
+                                .HasForeignKey("ShipmentId");
+                        });
+
+                    b.OwnsOne("Freight.Domain.ValueObjects.GeoLocation", "PickupLocation", b1 =>
+                        {
+                            b1.Property<Guid>("ShipmentId")
+                                .HasColumnType("uuid");
+
+                            b1.Property<double>("Latitude")
+                                .HasColumnType("double precision")
+                                .HasColumnName("PickupLatitude");
+
+                            b1.Property<double>("Longitude")
+                                .HasColumnType("double precision")
+                                .HasColumnName("PickupLongitude");
+
+                            b1.HasKey("ShipmentId");
+
+                            b1.ToTable("Shipments");
+
+                            b1.WithOwner()
+                                .HasForeignKey("ShipmentId");
+                        });
+
+                    b.OwnsOne("Freight.Domain.ValueObjects.TimeWindow", "PickupWindow", b1 =>
+                        {
+                            b1.Property<Guid>("ShipmentId")
+                                .HasColumnType("uuid");
+
+                            b1.Property<DateTime>("Earliest")
+                                .HasColumnType("timestamp with time zone")
+                                .HasColumnName("PickupWindowEarliest");
+
+                            b1.Property<DateTime>("Latest")
+                                .HasColumnType("timestamp with time zone")
+                                .HasColumnName("PickupWindowLatest");
+
+                            b1.HasKey("ShipmentId");
+
+                            b1.ToTable("Shipments");
+
+                            b1.WithOwner()
+                                .HasForeignKey("ShipmentId");
+                        });
+
+                    b.OwnsOne("Freight.Domain.ValueObjects.TimeWindow", "ScheduledDeliveryWindow", b1 =>
+                        {
+                            b1.Property<Guid>("ShipmentId")
+                                .HasColumnType("uuid");
+
+                            b1.Property<DateTime>("Earliest")
+                                .HasColumnType("timestamp with time zone")
+                                .HasColumnName("ScheduledDeliveryWindowEarliest");
+
+                            b1.Property<DateTime>("Latest")
+                                .HasColumnType("timestamp with time zone")
+                                .HasColumnName("ScheduledDeliveryWindowLatest");
+
+                            b1.HasKey("ShipmentId");
+
+                            b1.ToTable("Shipments");
+
+                            b1.WithOwner()
+                                .HasForeignKey("ShipmentId");
+                        });
+
+                    b.OwnsOne("Freight.Domain.ValueObjects.TimeWindow", "ScheduledPickupWindow", b1 =>
+                        {
+                            b1.Property<Guid>("ShipmentId")
+                                .HasColumnType("uuid");
+
+                            b1.Property<DateTime>("Earliest")
+                                .HasColumnType("timestamp with time zone")
+                                .HasColumnName("ScheduledPickupWindowEarliest");
+
+                            b1.Property<DateTime>("Latest")
+                                .HasColumnType("timestamp with time zone")
+                                .HasColumnName("ScheduledPickupWindowLatest");
+
+                            b1.HasKey("ShipmentId");
+
+                            b1.ToTable("Shipments");
+
+                            b1.WithOwner()
+                                .HasForeignKey("ShipmentId");
+                        });
+
+                    b.Navigation("DeliveryLocation")
+                        .IsRequired();
+
+                    b.Navigation("DeliveryWindow")
+                        .IsRequired();
+
+                    b.Navigation("Load")
+                        .IsRequired();
+
+                    b.Navigation("PickupLocation")
+                        .IsRequired();
+
+                    b.Navigation("PickupWindow")
+                        .IsRequired();
+
+                    b.Navigation("ScheduledDeliveryWindow");
+
+                    b.Navigation("ScheduledPickupWindow");
                 });
 
             modelBuilder.Entity("Freight.Domain.Fleet.Driver", b =>
@@ -434,6 +603,27 @@ namespace Freight.Infrastructure.Persistence.Migrations
                             b1.Navigation("SecondaryDriver");
                         });
 
+                    b.OwnsOne("Freight.Domain.ValueObjects.Capacity", "Capacity", b1 =>
+                        {
+                            b1.Property<Guid>("TruckId")
+                                .HasColumnType("uuid");
+
+                            b1.Property<double>("VolumeCubicMeters")
+                                .HasColumnType("double precision")
+                                .HasColumnName("TotalCapacityVolumeCubicMeters");
+
+                            b1.Property<double>("WeightKg")
+                                .HasColumnType("double precision")
+                                .HasColumnName("TotalCapacityWeightKg");
+
+                            b1.HasKey("TruckId");
+
+                            b1.ToTable("Trucks");
+
+                            b1.WithOwner()
+                                .HasForeignKey("TruckId");
+                        });
+
                     b.OwnsOne("Freight.Domain.Tracking.RouteProgress", "CurrentProgress", b1 =>
                         {
                             b1.Property<Guid>("TruckId")
@@ -457,43 +647,6 @@ namespace Freight.Infrastructure.Persistence.Migrations
 
                             b1.WithOwner()
                                 .HasForeignKey("TruckId");
-                        });
-
-                    b.OwnsOne("Freight.Domain.ValueObjects.TruckCapacity", "Capacity", b1 =>
-                        {
-                            b1.Property<Guid>("TruckId")
-                                .HasColumnType("uuid");
-
-                            b1.HasKey("TruckId");
-
-                            b1.ToTable("Trucks");
-
-                            b1.WithOwner()
-                                .HasForeignKey("TruckId");
-
-                            b1.OwnsOne("Freight.Domain.ValueObjects.Capacity", "Total", b2 =>
-                                {
-                                    b2.Property<Guid>("TruckCapacityTruckId")
-                                        .HasColumnType("uuid");
-
-                                    b2.Property<double>("VolumeCubicMeters")
-                                        .HasColumnType("double precision")
-                                        .HasColumnName("TotalCapacityVolumeCubicMeters");
-
-                                    b2.Property<double>("WeightKg")
-                                        .HasColumnType("double precision")
-                                        .HasColumnName("TotalCapacityWeightKg");
-
-                                    b2.HasKey("TruckCapacityTruckId");
-
-                                    b2.ToTable("Trucks");
-
-                                    b2.WithOwner()
-                                        .HasForeignKey("TruckCapacityTruckId");
-                                });
-
-                            b1.Navigation("Total")
-                                .IsRequired();
                         });
 
                     b.Navigation("Capacity")
@@ -529,175 +682,6 @@ namespace Freight.Infrastructure.Persistence.Migrations
 
                     b.Navigation("OfficeLocation")
                         .IsRequired();
-                });
-
-            modelBuilder.Entity("Freight.Domain.Shipment.Shipment", b =>
-                {
-                    b.OwnsOne("Freight.Domain.ValueObjects.GeoLocation", "DeliveryLocation", b1 =>
-                        {
-                            b1.Property<Guid>("ShipmentId")
-                                .HasColumnType("uuid");
-
-                            b1.Property<double>("Latitude")
-                                .HasColumnType("double precision")
-                                .HasColumnName("DeliveryLatitude");
-
-                            b1.Property<double>("Longitude")
-                                .HasColumnType("double precision")
-                                .HasColumnName("DeliveryLongitude");
-
-                            b1.HasKey("ShipmentId");
-
-                            b1.ToTable("Shipments");
-
-                            b1.WithOwner()
-                                .HasForeignKey("ShipmentId");
-                        });
-
-                    b.OwnsOne("Freight.Domain.ValueObjects.TimeWindow", "DeliveryWindow", b1 =>
-                        {
-                            b1.Property<Guid>("ShipmentId")
-                                .HasColumnType("uuid");
-
-                            b1.Property<DateTime>("Earliest")
-                                .HasColumnType("timestamp with time zone")
-                                .HasColumnName("DeliveryWindowEarliest");
-
-                            b1.Property<DateTime>("Latest")
-                                .HasColumnType("timestamp with time zone")
-                                .HasColumnName("DeliveryWindowLatest");
-
-                            b1.HasKey("ShipmentId");
-
-                            b1.ToTable("Shipments");
-
-                            b1.WithOwner()
-                                .HasForeignKey("ShipmentId");
-                        });
-
-                    b.OwnsOne("Freight.Domain.ValueObjects.Capacity", "Load", b1 =>
-                        {
-                            b1.Property<Guid>("ShipmentId")
-                                .HasColumnType("uuid");
-
-                            b1.Property<double>("VolumeCubicMeters")
-                                .HasColumnType("double precision")
-                                .HasColumnName("LoadVolumeCubicMeters");
-
-                            b1.Property<double>("WeightKg")
-                                .HasColumnType("double precision")
-                                .HasColumnName("LoadWeightKg");
-
-                            b1.HasKey("ShipmentId");
-
-                            b1.ToTable("Shipments");
-
-                            b1.WithOwner()
-                                .HasForeignKey("ShipmentId");
-                        });
-
-                    b.OwnsOne("Freight.Domain.ValueObjects.GeoLocation", "PickupLocation", b1 =>
-                        {
-                            b1.Property<Guid>("ShipmentId")
-                                .HasColumnType("uuid");
-
-                            b1.Property<double>("Latitude")
-                                .HasColumnType("double precision")
-                                .HasColumnName("PickupLatitude");
-
-                            b1.Property<double>("Longitude")
-                                .HasColumnType("double precision")
-                                .HasColumnName("PickupLongitude");
-
-                            b1.HasKey("ShipmentId");
-
-                            b1.ToTable("Shipments");
-
-                            b1.WithOwner()
-                                .HasForeignKey("ShipmentId");
-                        });
-
-                    b.OwnsOne("Freight.Domain.ValueObjects.TimeWindow", "PickupWindow", b1 =>
-                        {
-                            b1.Property<Guid>("ShipmentId")
-                                .HasColumnType("uuid");
-
-                            b1.Property<DateTime>("Earliest")
-                                .HasColumnType("timestamp with time zone")
-                                .HasColumnName("PickupWindowEarliest");
-
-                            b1.Property<DateTime>("Latest")
-                                .HasColumnType("timestamp with time zone")
-                                .HasColumnName("PickupWindowLatest");
-
-                            b1.HasKey("ShipmentId");
-
-                            b1.ToTable("Shipments");
-
-                            b1.WithOwner()
-                                .HasForeignKey("ShipmentId");
-                        });
-
-                    b.OwnsOne("Freight.Domain.ValueObjects.TimeWindow", "ScheduledDeliveryWindow", b1 =>
-                        {
-                            b1.Property<Guid>("ShipmentId")
-                                .HasColumnType("uuid");
-
-                            b1.Property<DateTime>("Earliest")
-                                .HasColumnType("timestamp with time zone")
-                                .HasColumnName("ScheduledDeliveryWindowEarliest");
-
-                            b1.Property<DateTime>("Latest")
-                                .HasColumnType("timestamp with time zone")
-                                .HasColumnName("ScheduledDeliveryWindowLatest");
-
-                            b1.HasKey("ShipmentId");
-
-                            b1.ToTable("Shipments");
-
-                            b1.WithOwner()
-                                .HasForeignKey("ShipmentId");
-                        });
-
-                    b.OwnsOne("Freight.Domain.ValueObjects.TimeWindow", "ScheduledPickupWindow", b1 =>
-                        {
-                            b1.Property<Guid>("ShipmentId")
-                                .HasColumnType("uuid");
-
-                            b1.Property<DateTime>("Earliest")
-                                .HasColumnType("timestamp with time zone")
-                                .HasColumnName("ScheduledPickupWindowEarliest");
-
-                            b1.Property<DateTime>("Latest")
-                                .HasColumnType("timestamp with time zone")
-                                .HasColumnName("ScheduledPickupWindowLatest");
-
-                            b1.HasKey("ShipmentId");
-
-                            b1.ToTable("Shipments");
-
-                            b1.WithOwner()
-                                .HasForeignKey("ShipmentId");
-                        });
-
-                    b.Navigation("DeliveryLocation")
-                        .IsRequired();
-
-                    b.Navigation("DeliveryWindow")
-                        .IsRequired();
-
-                    b.Navigation("Load")
-                        .IsRequired();
-
-                    b.Navigation("PickupLocation")
-                        .IsRequired();
-
-                    b.Navigation("PickupWindow")
-                        .IsRequired();
-
-                    b.Navigation("ScheduledDeliveryWindow");
-
-                    b.Navigation("ScheduledPickupWindow");
                 });
 #pragma warning restore 612, 618
         }

@@ -1,7 +1,7 @@
 using Freight.Domain.Common;
 using Freight.Domain.Fleet;
 using Freight.Domain.ValueObjects;
-using ShipmentAggregate = Freight.Domain.Shipment.Shipment;
+using ShipmentAggregate = Freight.Domain.Client.Shipment;
 
 namespace Freight.Application.Shipments;
 
