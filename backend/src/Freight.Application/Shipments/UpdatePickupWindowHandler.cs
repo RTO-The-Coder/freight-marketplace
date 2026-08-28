@@ -12,7 +12,10 @@ public sealed class UpdatePickupWindowHandler(IUnitOfWork unitOfWork, TimeProvid
         var shipment = await unitOfWork.Shipments.GetByIdAsync(request.ShipmentId, cancellationToken)
             ?? throw new InvalidOperationException($"Shipment '{request.ShipmentId}' was not found.");
 
-        shipment.UpdatePickupWindow(request.NewPickupWindow, timeProvider.GetUtcNow().UtcDateTime);
+        var clock = await unitOfWork.SimulationClock.GetOrCreateAsync(
+            () => timeProvider.GetUtcNow().UtcDateTime, cancellationToken);
+
+        shipment.UpdatePickupWindow(request.NewPickupWindow, clock.CurrentTime);
 
         await unitOfWork.SaveChangesAsync(cancellationToken);
     }

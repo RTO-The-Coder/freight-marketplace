@@ -1,6 +1,7 @@
 using System.Text.Json.Serialization;
 using Freight.Application.Fleet;
 using Freight.Application.Shipments;
+using Freight.Application.Simulation;
 using Freight.Domain.Common;
 using Freight.Domain.Fleet;
 using Freight.Domain.Fleet.Abstractions;
@@ -53,6 +54,7 @@ builder.Services.AddScoped<GetShipmentsByShipperHandler>();
 builder.Services.AddScoped<GetPendingShipmentsHandler>();
 builder.Services.AddScoped<AssignShipmentToTruckHandler>();
 builder.Services.AddScoped<CheckDriverEligibilityHandler>();
+builder.Services.AddScoped<SimulationClockHandler>();
 
 var app = builder.Build();
 

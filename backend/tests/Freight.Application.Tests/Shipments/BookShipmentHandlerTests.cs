@@ -1,4 +1,5 @@
 using Freight.Application.Shipments;
+using Freight.Application.Tests;
 using Freight.Domain.Common;
 using Freight.Domain.Fleet;
 using Freight.Domain.Client;
@@ -31,6 +32,7 @@ public sealed class BookShipmentHandlerTests
         shipments.Setup(s => s.Add(It.IsAny<ShipmentAggregate>())).Callback<ShipmentAggregate>(s => added = s);
 
         var now = new DateTime(2026, 1, 1, 0, 0, 0, DateTimeKind.Utc);
+        FakeSimulationClock.SetUp(unitOfWork, now);
         var timeProvider = new FakeTimeProvider(now);
         var handler = new BookShipmentHandler(unitOfWork.Object, timeProvider);
         var shipperId = Guid.NewGuid();

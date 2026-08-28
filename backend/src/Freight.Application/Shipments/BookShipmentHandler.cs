@@ -20,6 +20,9 @@ public sealed class BookShipmentHandler(IUnitOfWork unitOfWork, TimeProvider tim
 {
     public async Task<BookShipmentResponse> HandleAsync(BookShipmentRequest request, CancellationToken cancellationToken = default)
     {
+        var clock = await unitOfWork.SimulationClock.GetOrCreateAsync(
+            () => timeProvider.GetUtcNow().UtcDateTime, cancellationToken);
+
         var shipment = ShipmentAggregate.Book(
             request.ShipperId,
             request.PickupLocation,
@@ -28,7 +31,7 @@ public sealed class BookShipmentHandler(IUnitOfWork unitOfWork, TimeProvider tim
             request.RequiredTruckType,
             request.PickupWindow,
             request.DeliveryWindow,
-            timeProvider.GetUtcNow().UtcDateTime);
+            clock.CurrentTime);
 
         unitOfWork.Shipments.Add(shipment);
         await unitOfWork.SaveChangesAsync(cancellationToken);

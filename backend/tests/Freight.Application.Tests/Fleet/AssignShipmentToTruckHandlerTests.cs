@@ -1,4 +1,5 @@
 using Freight.Application.Fleet;
+using Freight.Application.Tests;
 using Freight.Application.Tests.Shipments;
 using Freight.Domain.Common;
 using Freight.Domain.Fleet;
@@ -64,6 +65,7 @@ public sealed class AssignShipmentToTruckHandlerTests
         unitOfWork.SetupGet(u => u.Trips).Returns(trips.Object);
         unitOfWork.SetupGet(u => u.Shipments).Returns(shipments.Object);
         unitOfWork.SetupGet(u => u.TruckingCompanies).Returns(companies.Object);
+        FakeSimulationClock.SetUp(unitOfWork, Now);
         return (unitOfWork, trucks, trips, shipments, companies);
     }
 

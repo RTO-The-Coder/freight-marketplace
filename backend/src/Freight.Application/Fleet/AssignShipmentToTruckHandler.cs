@@ -65,7 +65,9 @@ public sealed class AssignShipmentToTruckHandler(
         var company = await unitOfWork.TruckingCompanies.GetByIdAsync(truck.TruckingCompanyId.Value, cancellationToken)
             ?? throw new InvalidOperationException($"Trucking company '{truck.TruckingCompanyId.Value}' was not found.");
 
-        var now = timeProvider.GetUtcNow().UtcDateTime;
+        var clock = await unitOfWork.SimulationClock.GetOrCreateAsync(
+            () => timeProvider.GetUtcNow().UtcDateTime, cancellationToken);
+        var now = clock.CurrentTime;
 
         var trip = await unitOfWork.Trips.GetOpenTripByTruckIdAsync(truck.Id, cancellationToken);
         var isNewTrip = trip is null;

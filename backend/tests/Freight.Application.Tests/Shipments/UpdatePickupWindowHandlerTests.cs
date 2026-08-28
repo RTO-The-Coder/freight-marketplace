@@ -1,4 +1,5 @@
 using Freight.Application.Shipments;
+using Freight.Application.Tests;
 using Freight.Domain.Common;
 using Freight.Domain.Fleet;
 using Freight.Domain.Client;
@@ -35,6 +36,7 @@ public sealed class UpdatePickupWindowHandlerTests
         shipments.Setup(s => s.GetByIdAsync(shipment.Id, It.IsAny<CancellationToken>())).ReturnsAsync(shipment);
 
         var updatedAt = new DateTime(2026, 1, 1, 6, 0, 0, DateTimeKind.Utc);
+        FakeSimulationClock.SetUp(unitOfWork, updatedAt);
         var timeProvider = new FakeTimeProvider(updatedAt);
         var handler = new UpdatePickupWindowHandler(unitOfWork.Object, timeProvider);
         var newWindow = TimeWindow.Create(
@@ -73,6 +75,7 @@ public sealed class UpdatePickupWindowHandlerTests
         shipment.AssignToCompany(Guid.NewGuid());
         shipments.Setup(s => s.GetByIdAsync(shipment.Id, It.IsAny<CancellationToken>())).ReturnsAsync(shipment);
 
+        FakeSimulationClock.SetUp(unitOfWork, DateTime.UtcNow);
         var handler = new UpdatePickupWindowHandler(unitOfWork.Object, new FakeTimeProvider(DateTime.UtcNow));
 
         await Assert.ThrowsAsync<InvalidOperationException>(() =>
