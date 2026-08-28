@@ -59,12 +59,14 @@ public sealed class Driver
     }
 
     /// <summary>
-    /// Creates this driver's compliance ledger the first time they start driving. A no-op
-    /// if the ledger already exists - a driver only ever gets one ledger, advanced forward
-    /// by <see cref="Tracking.Abstractions.IDriverRuleEngine"/> from then on.
+    /// (Re)seeds this driver's compliance ledger for a trip that is opening now, anchored
+    /// at <paramref name="tripStartedAt"/> and fully rested. Always replaces any existing
+    /// ledger - Phase 1 treats every trip as starting from a clean, rested state (see the
+    /// build plan's "per-driver, reset-on-trip-open" decision). Advanced forward from here
+    /// by <see cref="Tracking.Abstractions.IDriverRuleEngine"/>.
     /// </summary>
-    public void StartDriving(DateTime simulatedNow)
+    public void ResetComplianceForNewTrip(DateTime tripStartedAt)
     {
-        ComplianceState ??= new DriverComplianceState(Id, simulatedNow);
+        ComplianceState = new DriverComplianceState(Id, tripStartedAt);
     }
 }

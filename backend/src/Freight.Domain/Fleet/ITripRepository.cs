@@ -10,4 +10,11 @@ public interface ITripRepository : IRepository<Trip>
     /// application logic, not a stored reference on Truck (see Trip's class doc comment).
     /// </summary>
     Task<Trip?> GetOpenTripByTruckIdAsync(Guid truckId, CancellationToken cancellationToken = default);
+
+    /// <summary>
+    /// Every trip that has not yet completed (its truck is still mid-journey). Used by
+    /// the simulation-advance handler to move all in-flight trucks forward together when
+    /// simulated time jumps.
+    /// </summary>
+    Task<IReadOnlyList<Trip>> GetOpenTripsAsync(CancellationToken cancellationToken = default);
 }

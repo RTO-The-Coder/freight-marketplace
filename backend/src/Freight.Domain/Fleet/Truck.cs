@@ -129,6 +129,24 @@ public sealed class Truck
     }
 
     /// <summary>
+    /// Seeds the compliance ledger of every driver assigned to this truck for a trip
+    /// opening at <paramref name="tripStartedAt"/> - each driver starts the trip fully
+    /// rested (see <see cref="Driver.ResetComplianceForNewTrip"/>). Called when the truck
+    /// opens a fresh trip; a no-op is not possible here, a truck must have at least a
+    /// primary driver before it can take a shipment.
+    /// </summary>
+    public void BeginTripCompliance(DateTime tripStartedAt)
+    {
+        if (DriverAssignment is null)
+        {
+            throw new InvalidOperationException("Cannot begin trip compliance before drivers are assigned to this truck.");
+        }
+
+        DriverAssignment.PrimaryDriver.ResetComplianceForNewTrip(tripStartedAt);
+        DriverAssignment.SecondaryDriver?.ResetComplianceForNewTrip(tripStartedAt);
+    }
+
+    /// <summary>
     /// Sets which assigned driver is currently at the wheel. Delegates the
     /// one-directional stickiness invariant to <see cref="Fleet.DriverAssignment"/>.
     /// </summary>

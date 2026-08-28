@@ -81,23 +81,35 @@ public sealed class Trip
     {
         get
         {
-            var reachedStops = Stops.Where(x => x.Status == StopStatus.Reached);
             double weight = 0;
-            double volumn = 0;
-            foreach (var stop in reachedStops)
+            double volume = 0;
+
+            foreach (var stop in Stops.Where(stop => stop.Status == StopStatus.Reached))
             {
+                // Only Pickup/Delivery stops carry a shipment load - Office stops have none.
+                if (stop.Kind is not (StopKind.Pickup or StopKind.Delivery))
+                {
+                    continue;
+                }
+
+                // A Pickup/Delivery stop with a null load is corrupt data (see
+                // Stop.ForShipment) - fail loudly rather than silently under-counting.
+                var load = stop.ShipmentLoad
+                    ?? throw new InvalidOperationException($"{stop.Kind} stop '{stop.Id}' has no ShipmentLoad.");
+
                 if (stop.Kind == StopKind.Pickup)
                 {
-                    weight += stop.ShipmentLoad.WeightKg;
-                    volumn += stop.ShipmentLoad.VolumeCubicMeters;
+                    weight += load.WeightKg;
+                    volume += load.VolumeCubicMeters;
                 }
                 else
                 {
-                    weight -= stop.ShipmentLoad.WeightKg;
-                    volumn -= stop.ShipmentLoad.VolumeCubicMeters;
+                    weight -= load.WeightKg;
+                    volume -= load.VolumeCubicMeters;
                 }
             }
-            return Capacity.Create(weight, volumn);
+
+            return Capacity.Create(weight, volume);
         }
     }
 
