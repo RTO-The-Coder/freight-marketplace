@@ -75,7 +75,8 @@ public sealed class TruckController(
         CancellationToken cancellationToken)
     {
         var response = await assignShipmentToTruckHandler.AssignShipment(
-            new AssignShipmentToTruckRequest(truckId, body.ShipmentId, body.PickupInsertIndex, body.DeliveryInsertIndex),
+            new AssignShipmentToTruckRequest(
+                truckId, body.ShipmentId, body.PickupInsertIndex, body.DeliveryInsertIndex, body.TripStartTime),
             cancellationToken);
         return Ok(response);
     }
@@ -94,4 +95,8 @@ public sealed record AssignTruckToCompanyBody(Guid TruckingCompanyId);
 
 public sealed record AddTruckBody(string TruckName, TruckType TruckType, TruckSize TruckSize);
 
-public sealed record AssignShipmentToTruckBody(Guid ShipmentId, int PickupInsertIndex, int DeliveryInsertIndex);
+public sealed record AssignShipmentToTruckBody(
+    Guid ShipmentId,
+    int PickupInsertIndex,
+    int DeliveryInsertIndex,
+    DateTime? TripStartTime = null);

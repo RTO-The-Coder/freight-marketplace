@@ -5,7 +5,9 @@ namespace Freight.Api.Controllers;
 
 [ApiController]
 [Route("simulation")]
-public sealed class SimulationController(SimulationClockHandler simulationClockHandler) : ControllerBase
+public sealed class SimulationController(
+    SimulationClockHandler simulationClockHandler,
+    SimulationAdvanceHandler simulationAdvanceHandler) : ControllerBase
 {
     [HttpGet("time")]
     public async Task<ActionResult<SimulationTimeResponse>> GetTime(CancellationToken cancellationToken)
@@ -22,13 +24,13 @@ public sealed class SimulationController(SimulationClockHandler simulationClockH
     }
 
     [HttpPost("advance")]
-    public async Task<ActionResult<SimulationTimeResponse>> Advance(AdvanceSimulationTimeBody body, CancellationToken cancellationToken)
+    public async Task<ActionResult<AdvanceSimulationResponse>> Advance(AdvanceSimulationBody body, CancellationToken cancellationToken)
     {
-        var response = await simulationClockHandler.AdvanceAsync(new AdvanceSimulationTimeRequest(body.Minutes), cancellationToken);
+        var response = await simulationAdvanceHandler.HandleAsync(new AdvanceSimulationRequest(body.Ticks), cancellationToken);
         return Ok(response);
     }
 }
 
 public sealed record SetSimulationTimeBody(DateTime NewCurrentTime);
 
-public sealed record AdvanceSimulationTimeBody(int Minutes);
+public sealed record AdvanceSimulationBody(int Ticks);

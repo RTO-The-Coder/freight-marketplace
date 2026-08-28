@@ -55,6 +55,7 @@ builder.Services.AddScoped<GetPendingShipmentsHandler>();
 builder.Services.AddScoped<AssignShipmentToTruckHandler>();
 builder.Services.AddScoped<CheckDriverEligibilityHandler>();
 builder.Services.AddScoped<SimulationClockHandler>();
+builder.Services.AddScoped<SimulationAdvanceHandler>();
 
 var app = builder.Build();
 
