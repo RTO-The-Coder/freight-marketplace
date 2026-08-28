@@ -23,7 +23,7 @@ public sealed class AssignShipmentToTruckHandlerTests
             "Jane",
             "Doe",
             DrivingRules.Create(DrivingBreakRule.FullBreak, DailyRestRule.FullRest, WeeklyRestRule.FullWeeklyRest, false));
-        driver.StartDriving(Now);
+        driver.ResetComplianceForNewTrip(Now);
         return driver;
     }
 

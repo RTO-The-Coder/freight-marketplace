@@ -31,7 +31,7 @@ public sealed class CheckDriverEligibilityHandlerTests
     {
         var (unitOfWork, drivers, ruleEngine) = NewMocks();
         var driver = NewDriver();
-        driver.StartDriving(new DateTime(2026, 1, 1, 8, 0, 0, DateTimeKind.Utc));
+        driver.ResetComplianceForNewTrip(new DateTime(2026, 1, 1, 8, 0, 0, DateTimeKind.Utc));
 
         drivers.Setup(d => d.GetByIdAsync(driver.Id, It.IsAny<CancellationToken>())).ReturnsAsync(driver);
         ruleEngine
@@ -65,7 +65,7 @@ public sealed class CheckDriverEligibilityHandlerTests
     {
         var (unitOfWork, drivers, ruleEngine) = NewMocks();
         var driver = NewDriver();
-        driver.StartDriving(DateTime.UtcNow);
+        driver.ResetComplianceForNewTrip(DateTime.UtcNow);
 
         drivers.Setup(d => d.GetByIdAsync(driver.Id, It.IsAny<CancellationToken>())).ReturnsAsync(driver);
 

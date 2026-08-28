@@ -8,7 +8,12 @@ using Freight.Domain.ValueObjects;
 
 namespace Freight.Application.Fleet;
 
-public sealed record AssignShipmentToTruckRequest(Guid TruckId, Guid ShipmentId, int PickupInsertIndex, int DeliveryInsertIndex);
+public sealed record AssignShipmentToTruckRequest(
+    Guid TruckId,
+    Guid ShipmentId,
+    int PickupInsertIndex,
+    int DeliveryInsertIndex,
+    DateTime? TripStartTime = null);
 
 public sealed record AssignShipmentToTruckResponse(int StopCount);
 
@@ -71,20 +76,15 @@ public sealed class AssignShipmentToTruckHandler(
 
         var trip = await unitOfWork.Trips.GetOpenTripByTruckIdAsync(truck.Id, cancellationToken);
         var isNewTrip = trip is null;
-        trip ??= Trip.Open(truck.Id, company.Id, now);
 
-        var pendingStops = trip.Stops.Count(x => x.Status == StopStatus.Reached);
-        if (request.PickupInsertIndex < 0 || request.PickupInsertIndex > pendingStops)
-        {
-            throw new ArgumentOutOfRangeException(nameof(request.PickupInsertIndex), request.PickupInsertIndex,
-                "Pickup insertion index is out of range for the current route.");
-        }
+        // TripStartTime only applies when a fresh trip is opened - the dispatcher's
+        // planned departure, which may be later than "now" to line up with a pickup
+        // window. Adding to an existing trip keeps that trip's own StartedAt.
+        var tripStartTime = request.TripStartTime ?? now;
+        trip ??= Trip.Open(truck.Id, company.Id, tripStartTime);
 
-        if (request.DeliveryInsertIndex < 0 || request.DeliveryInsertIndex > pendingStops)
-        {
-            throw new ArgumentOutOfRangeException(nameof(request.DeliveryInsertIndex), request.DeliveryInsertIndex,
-                "Delivery insertion index is out of range for the current route.");
-        }
+        // Insertion-index bounds are validated inside Trip.AssignShipment against the
+        // pending-stop list - no need to re-check here.
 
         // Fresh GeoLocation/Capacity instances, not the tracked ones off Shipment/
         // TruckingCompany - EF Core's change tracker treats owned-type instances by
@@ -121,6 +121,11 @@ public sealed class AssignShipmentToTruckHandler(
         if (isNewTrip)
         {
             unitOfWork.Trips.Add(trip);
+
+            // A fresh trip: every assigned driver starts it fully rested, anchored at
+            // the trip's planned departure. Adding to an EXISTING trip must not reset
+            // ledgers - the drivers' accumulated hours carry through the trip.
+            truck.BeginTripCompliance(trip.StartedAt);
         }
 
         var previousNextStopId = trip.NextStop?.Id;
@@ -135,8 +140,6 @@ public sealed class AssignShipmentToTruckHandler(
         truck.SyncProgressToNextStop(trip, previousNextStopId);
 
         shipment.AssignToCompany(truck.TruckingCompanyId.Value);
-
-        truck.DriverAssignment.PrimaryDriver.StartDriving(now);
 
         await unitOfWork.SaveChangesAsync(cancellationToken);
 
