@@ -109,7 +109,24 @@ public sealed class AssignShipmentToTruckHandler(
             PlaceholderLegDistanceKm, PlaceholderLegTimeTicks,
             PlaceholderLegDistanceKm, PlaceholderLegTimeTicks);
 
-        var feasibility = insertionEvaluator.Evaluate(preview.Stops, truck.Capacity);
+        var primaryDriver = truck.DriverAssignment.PrimaryDriver;
+
+        // A fresh trip has no ledger yet (BeginTripCompliance seeds it only once the
+        // insertion is committed) - project from a fully-rested ledger anchored at the
+        // planned departure. An existing trip already has an accumulating ledger; project
+        // forward from wherever it currently stands, mid-leg progress and all.
+        var (projectionLedger, projectionStart, currentLegProgress) = isNewTrip
+            ? (new DriverComplianceState(primaryDriver.Id, trip.StartedAt), trip.StartedAt, (RouteProgress?)null)
+            : (primaryDriver.ComplianceState
+                   ?? throw new InvalidOperationException($"Open trip '{trip.Id}' has no compliance ledger for its primary driver."),
+               primaryDriver.ComplianceState!.LastEvaluatedSimulatedTime,
+               truck.CurrentProgress);
+
+        var windows = await BuildShipmentWindowsAsync(preview, shipment, cancellationToken);
+
+        var feasibility = insertionEvaluator.Evaluate(new InsertionContext(
+            preview, truck.Capacity, currentLegProgress,
+            projectionLedger, primaryDriver.Rules, projectionStart, windows));
 
         if (!feasibility.IsFeasible)
         {

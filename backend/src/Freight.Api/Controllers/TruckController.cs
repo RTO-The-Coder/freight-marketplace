@@ -10,6 +10,7 @@ public sealed class TruckController(
     SetTruckActivationHandler truckActivationHandler,
     GetTrucksHandler getTrucksHandler,
     GetTruckDetailHandler getTruckDetailHandler,
+    GetTruckEtasHandler getTruckEtasHandler,
     SetTruckCompanyHandler assignTruckToCompanyHandler,
     AssignDriversHandler assignDriversHandler,
     AssignShipmentToTruckHandler assignShipmentToTruckHandler) : ControllerBase
@@ -65,6 +66,13 @@ public sealed class TruckController(
     public async Task<ActionResult<TruckDetailDto>> GetTruckDetail(Guid truckId, CancellationToken cancellationToken)
     {
         var response = await getTruckDetailHandler.HandleAsync(new GetTruckDetailRequest(truckId), cancellationToken);
+        return Ok(response);
+    }
+
+    [HttpGet("trucks/{truckId:guid}/etas")]
+    public async Task<ActionResult<TruckEtasDto>> GetTruckEtas(Guid truckId, CancellationToken cancellationToken)
+    {
+        var response = await getTruckEtasHandler.HandleAsync(new GetTruckEtasRequest(truckId), cancellationToken);
         return Ok(response);
     }
 

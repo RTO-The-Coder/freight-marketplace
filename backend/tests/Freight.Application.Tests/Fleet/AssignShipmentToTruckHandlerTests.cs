@@ -80,7 +80,7 @@ public sealed class AssignShipmentToTruckHandlerTests
     }
 
     private static AssignShipmentToTruckHandler NewHandler(IUnitOfWork unitOfWork) =>
-        new(unitOfWork, new ShipmentInsertionEvaluator(), new FakeTimeProvider(Now));
+        new(unitOfWork, new ShipmentInsertionEvaluator(new RouteEtaCalculator(new DriverRuleEngine())), new FakeTimeProvider(Now));
 
     [Fact]
     public async Task HandleAsync_ValidRequest_OpensTripInsertsThreeStopsAndStartsDrivingAndSaves()
@@ -153,7 +153,7 @@ public sealed class AssignShipmentToTruckHandlerTests
         unitOfWork.Verify(u => u.SaveChangesAsync(It.IsAny<CancellationToken>()), Times.Never);
     }
 
-    [Fact(Skip = "WIP: handler's index bounds check counts Reached stops and rejects valid second-shipment insert positions. Fix the check or remove it (Trip.AssignShipment already validates).")]
+    [Fact]
     public async Task HandleAsync_SecondShipment_InsertsBeforeExistingOfficeStop()
     {
         var (unitOfWork, trucks, trips, shipments, companies) = NewMocks();
@@ -184,7 +184,7 @@ public sealed class AssignShipmentToTruckHandlerTests
         Assert.Equal(officeStopId, openTrip.Stops[^1].Id);
     }
 
-    [Fact(Skip = "WIP: window feasibility (EvaluateWindows) not yet wired into ShipmentInsertionEvaluator.Evaluate.")]
+    [Fact]
     public async Task HandleAsync_PickupWindowAlreadyPassedByProjectedArrival_ThrowsAndDoesNotSave()
     {
         var (unitOfWork, trucks, trips, shipments, companies) = NewMocks();

@@ -107,6 +107,24 @@ public sealed class DriverRuleEngine : IDriverRuleEngine
         return new RestRuleOutcome(ledger, ledger.CurrentActivity, events, wasPolicyOverridden);
     }
 
+    public int MinutesUntilNextStateChange(
+        DriverComplianceState ledger,
+        RestRuleLimits limits)
+    {
+        ArgumentNullException.ThrowIfNull(ledger);
+        ArgumentNullException.ThrowIfNull(limits);
+
+        // Mid-break/mid-rest: the state changes when the current block runs out.
+        if (ledger.CurrentActivity != DriverActivity.Driving)
+        {
+            return Math.Max(0, ledger.MinutesRemainingInCurrentActivity);
+        }
+
+        // Driving: the state changes when the next hard boundary is reached - the same
+        // set of limits AdvanceCore clamps a driving tick against.
+        return MinutesUntilNextBoundary(ledger, limits);
+    }
+
     public TeamRestRuleOutcome EvaluateTeam(
         DriverComplianceState primaryLedger,
         DriverComplianceState secondaryLedger,

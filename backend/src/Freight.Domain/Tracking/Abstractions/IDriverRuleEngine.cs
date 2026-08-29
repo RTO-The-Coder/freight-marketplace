@@ -36,6 +36,22 @@ public interface IDriverRuleEngine
         DrivingRules rule,
         RestRuleLimits limits);
 
+    /// <summary>
+    /// How many minutes of simulated time until this driver's movement state next
+    /// changes - the largest window <see cref="Advance"/> can be called with, from the
+    /// ledger's current state, without crossing a driving/rest boundary and losing a
+    /// re-evaluation. When the driver is driving: minutes until the next hard boundary
+    /// (daily/weekly/two-week cap, or the 4.5h break trigger). When on a break/rest:
+    /// minutes left in that block. Returns 0 when the driver is driving but already at a
+    /// boundary - the caller should let <see cref="Advance"/> with a 0 window perform the
+    /// transition, then re-query. Pure, non-mutating. Route walkers
+    /// (<see cref="Freight.Domain.Fleet.RouteEtaCalculator"/>) use this to jump in
+    /// variable steps instead of ticking one minute at a time.
+    /// </summary>
+    int MinutesUntilNextStateChange(
+        DriverComplianceState ledger,
+        RestRuleLimits limits);
+
     TeamRestRuleOutcome EvaluateTeam(
         DriverComplianceState primaryLedger,
         DriverComplianceState secondaryLedger,

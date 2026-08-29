@@ -126,18 +126,6 @@ public class TruckTests
         Assert.Equal(20, truck.Capacity.VolumeCubicMeters);
     }
 
-
-    [Fact(Skip = "WIP: route-wide capacity check moved to ShipmentInsertionEvaluator; domain-level guard removed. Re-home this test on the evaluator.")]
-    public void AssignShipment_ExceedsRemainingCapacity_Throws()
-    {
-        var truck = NewTruck();
-        var trip = Trip.Open(truck.Id, truck.TruckingCompanyId!.Value, DateTime.UtcNow);
-
-        Assert.Throws<InvalidOperationException>(() =>
-            AssignShipment(truck, trip, Guid.NewGuid(), Capacity.Create(truck.Capacity.WeightKg + 1, 5), pickupInsertIndex: 0, deliveryInsertIndex: 0));
-        Assert.Empty(trip.Stops);
-    }
-
     [Fact]
     public void AssignShipment_TripBelongsToDifferentTruck_Throws()
     {

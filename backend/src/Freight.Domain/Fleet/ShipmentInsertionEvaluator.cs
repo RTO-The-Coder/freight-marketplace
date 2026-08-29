@@ -1,70 +1,74 @@
-using Freight.Domain.Client;
 using Freight.Domain.Fleet.Abstractions;
-using Freight.Domain.Tracking;
 using Freight.Domain.ValueObjects;
 
 namespace Freight.Domain.Fleet;
 
 /// <summary>
-/// Checks route/window feasibility, plus route-wide capacity - Stops/Trip have no
-/// relation to drivers, and this evaluator does not read driver state. Projected
-/// arrival time is derived purely from route data (leg times), the same way a Trip's
-/// stops relate to each other with no dependency on who's driving. Capacity is checked
-/// at every point along the route (Pickup adds load, Delivery removes it), not just the
+/// Checks window and capacity feasibility for a hypothetical shipment insertion (see
+/// <see cref="IShipmentInsertionEvaluator"/>). Window feasibility asks
+/// <see cref="RouteEtaCalculator"/> for the projected arrival at every Pending stop -
+/// a real forward walk that accounts for the driver's mandatory breaks and rests - and
+/// checks each against that stop's own requested window. Capacity is checked at every
+/// point along the route (a Pickup adds load, a Delivery removes it), not just the
 /// truck's current moment.
 /// </summary>
 public sealed class ShipmentInsertionEvaluator : IShipmentInsertionEvaluator
 {
-    private const int MinutesPerTick = 5;
+    private readonly RouteEtaCalculator _routeEtaCalculator;
 
-    public InsertionFeasibility Evaluate(IReadOnlyList<Stop> proposedStops, Capacity truckCapacity)
+    public ShipmentInsertionEvaluator(RouteEtaCalculator routeEtaCalculator)
     {
-        // // var windowFeasibility = EvaluateWindows(proposedStops, currentProgress, simulatedNow, shipmentWindows);
-        // // if (!windowFeasibility.IsFeasible)
-        // // {
-        // //     return windowFeasibility;
-        // // }
+        ArgumentNullException.ThrowIfNull(routeEtaCalculator);
+        _routeEtaCalculator = routeEtaCalculator;
+    }
 
-        return EvaluateCapacity(proposedStops, truckCapacity);
+    public InsertionFeasibility Evaluate(InsertionContext context)
+    {
+        ArgumentNullException.ThrowIfNull(context);
+
+        var proposedStops = context.ProposedTrip.Stops;
+
+        var capacityFeasibility = EvaluateCapacity(proposedStops, context.TruckCapacity);
+        if (!capacityFeasibility.IsFeasible)
+        {
+            return capacityFeasibility;
+        }
+
+        return EvaluateWindows(context);
     }
 
     /// <summary>
-    /// Walks every Pending stop in sequence, computing each one's projected arrival time
-    /// from the route's leg times, and checks it against that stop's own window. Returns
-    /// the first violation found, or a feasible result if every stop's projected arrival
-    /// falls within its window.
+    /// Projects the arrival time at every Pending Pickup/Delivery stop (via
+    /// <see cref="RouteEtaCalculator"/>) and checks each against its own window. Returns
+    /// the first violation found, or a feasible result if every projected arrival falls
+    /// within its window.
     /// </summary>
-    private static InsertionFeasibility EvaluateWindows(
-        IReadOnlyList<Stop> proposedStops,
-        RouteProgress? currentProgress,
-        DateTime simulatedNow,
-        IReadOnlyDictionary<Guid, TimeWindow> shipmentWindows)
+    private InsertionFeasibility EvaluateWindows(InsertionContext context)
     {
-        var pendingStops = proposedStops.Where(stop => stop.Status == StopStatus.Pending).ToList();
+        var etas = _routeEtaCalculator.CalculateEtas(
+            context.ProposedTrip,
+            context.CurrentLegProgress,
+            context.DriverLedger,
+            context.DriverRules,
+            context.ProjectionStart);
 
-        var elapsedMinutesFromNow = 0;
-
-        for (var i = 0; i < pendingStops.Count; i++)
+        foreach (var stop in context.ProposedTrip.Stops.Where(stop => stop.Status == StopStatus.Pending))
         {
-            var stop = pendingStops[i];
-
-            // The first Pending stop's leg may already be partway driven
-            // (currentProgress); every subsequent stop's leg starts fresh, so only the
-            // first iteration accounts for progress already made.
-            var legTimeTick = i == 0 && currentProgress is not null
-                ? Math.Max(0, currentProgress.TotalTimeTick - currentProgress.CurrentDrivingTimeTick)
-                : stop.IncomingLegTimeTick;
-
-            elapsedMinutesFromNow += legTimeTick * MinutesPerTick;
-            var projectedArrival = simulatedNow.AddMinutes(elapsedMinutesFromNow);
-
-            if (stop.Kind is StopKind.Pickup or StopKind.Delivery)
+            if (stop.Kind is not (StopKind.Pickup or StopKind.Delivery))
             {
-                var windowFeasibility = CheckWindow(stop, projectedArrival, shipmentWindows);
-                if (!windowFeasibility.IsFeasible)
-                {
-                    return windowFeasibility;
-                }
+                continue;
+            }
+
+            if (!etas.TryGetValue(stop.Id, out var projectedArrival))
+            {
+                throw new InvalidOperationException(
+                    $"Route ETA projection produced no arrival time for Pending stop '{stop.Id}'.");
+            }
+
+            var windowFeasibility = CheckWindow(stop, projectedArrival, context.ShipmentWindows);
+            if (!windowFeasibility.IsFeasible)
+            {
+                return windowFeasibility;
             }
         }
 

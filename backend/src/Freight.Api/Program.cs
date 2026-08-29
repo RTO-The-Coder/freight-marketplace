@@ -25,6 +25,7 @@ builder.Services.AddDbContext<FreightDbContext>(options =>
 builder.Services.AddScoped<IUnitOfWork, UnitOfWork>();
 builder.Services.AddSingleton(TimeProvider.System);
 builder.Services.AddScoped<IDriverRuleEngine, DriverRuleEngine>();
+builder.Services.AddScoped<RouteEtaCalculator>();
 builder.Services.AddScoped<IShipmentInsertionEvaluator, ShipmentInsertionEvaluator>();
 
 const string WebAppCorsPolicy = "WebApp";
@@ -45,6 +46,7 @@ builder.Services.AddScoped<GetTrucksHandler>();
 builder.Services.AddScoped<GetDriversHandler>();
 builder.Services.AddScoped<GetTruckForDriverHandler>();
 builder.Services.AddScoped<GetTruckDetailHandler>();
+builder.Services.AddScoped<GetTruckEtasHandler>();
 builder.Services.AddScoped<GetDriverDetailHandler>();
 builder.Services.AddScoped<SetTruckCompanyHandler>();
 builder.Services.AddScoped<BookShipmentHandler>();
