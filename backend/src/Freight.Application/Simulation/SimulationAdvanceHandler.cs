@@ -14,14 +14,17 @@ public sealed record AdvanceSimulationResponse(DateTime CurrentTime, int TripsAd
 /// Moves simulated time forward by <see cref="AdvanceSimulationRequest.Ticks"/> and, in
 /// the same step, moves every in-flight truck along its route.
 ///
-/// Per open trip: roll the active driver's compliance ledger forward across the whole
+/// Per open trip: roll the driver(s)' compliance ledger(s) forward across the whole
 /// window (the rule engine decides how much of it is driving vs. break/rest), then walk
 /// the route forward by the driving-tick count only - reaching stops, transitioning the
 /// corresponding shipments, and completing the trip when the Office stop is reached.
 /// Non-driving ticks pass on the clock but do not move the truck.
 ///
-/// Single-driver only for now - team trucks (active-driver alternation via
-/// <see cref="IDriverRuleEngine.EvaluateTeam"/>) are a follow-up.
+/// Single-driver trucks roll the sole ledger once across the window. Team trucks step
+/// tick by tick through <see cref="IDriverRuleEngine.EvaluateTeam"/> (its swap decision
+/// re-evaluates only once per call, so a whole-window call would miss mid-window swaps),
+/// counting a driving tick whenever the resulting movement state is Driving on whichever
+/// driver is active, and advancing the truck's active-driver pointer as the swap happens.
 /// </summary>
 public sealed class SimulationAdvanceHandler(
     IUnitOfWork unitOfWork,
@@ -99,17 +102,32 @@ public sealed class SimulationAdvanceHandler(
             return false;
         }
 
-        var driver = truck.DriverAssignment.PrimaryDriver;
+        var drivingTicks = truck.DriverAssignment.ConfigurationType == DriverConfigurationType.Team
+            ? AdvanceTeamLedgers(truck, windowTicks, newTime)
+            : AdvanceSingleLedger(truck.DriverAssignment.PrimaryDriver, windowTicks, newTime);
 
+        if (drivingTicks == 0)
+        {
+            return false;
+        }
+
+        await WalkRouteAsync(trip, truck, drivingTicks, newTime, cancellationToken);
+        return true;
+    }
+
+    /// <summary>
+    /// Rolls a single driver's ledger forward across the whole window in one call. The
+    /// engine accrues driving minutes tick by tick and inserts breaks/rests where the
+    /// rules require - the net rise in <c>DailyDrivingMinutesToday</c> is how much of the
+    /// window was spent driving (and therefore how far the truck moved).
+    /// </summary>
+    private int AdvanceSingleLedger(Driver driver, int windowTicks, DateTime newTime)
+    {
         if (driver.ComplianceState is null)
         {
             throw new InvalidOperationException($"Driver '{driver.Id}' has no compliance ledger - trip open should have seeded it.");
         }
 
-        // Roll the ledger forward across the whole window. The engine accrues driving
-        // minutes tick by tick and inserts breaks/rests where the rules require - the
-        // net rise in DailyDrivingMinutesToday is how much of the window was spent
-        // driving (and therefore how far the truck moved).
         var drivingMinutesBefore = driver.ComplianceState.DailyDrivingMinutesToday;
 
         driverRuleEngine.Advance(
@@ -119,15 +137,64 @@ public sealed class SimulationAdvanceHandler(
             driver.Rules,
             RestRuleLimits.Default);
 
-        var drivingTicks = Math.Max(0, (driver.ComplianceState.DailyDrivingMinutesToday - drivingMinutesBefore) / TickMinutes);
+        return Math.Max(0, (driver.ComplianceState.DailyDrivingMinutesToday - drivingMinutesBefore) / TickMinutes);
+    }
 
-        if (drivingTicks == 0)
+    /// <summary>
+    /// Steps a team truck's two ledgers tick by tick through
+    /// <see cref="IDriverRuleEngine.EvaluateTeam"/> (whose swap decision re-evaluates only
+    /// at the start of each call), counting a driving tick whenever the resulting movement
+    /// state is Driving, and threading the active-driver pointer across ticks. Persists the
+    /// final active-driver pointer onto the truck's assignment.
+    /// </summary>
+    private int AdvanceTeamLedgers(Truck truck, int windowTicks, DateTime newTime)
+    {
+        var assignment = truck.DriverAssignment!;
+        var primary = assignment.PrimaryDriver;
+        var secondary = assignment.SecondaryDriver
+            ?? throw new InvalidOperationException($"Team truck '{truck.Id}' has no secondary driver.");
+
+        if (primary.ComplianceState is null || secondary.ComplianceState is null)
         {
-            return false;
+            throw new InvalidOperationException($"Team truck '{truck.Id}' has a driver without a compliance ledger - trip open should have seeded both.");
         }
 
-        await WalkRouteAsync(trip, truck, drivingTicks, newTime, cancellationToken);
-        return true;
+        var activeId = assignment.ActiveDriverId ?? primary.Id;
+        var windowStart = newTime.AddMinutes(-windowTicks * TickMinutes);
+
+        var drivingTicks = 0;
+
+        for (var i = 1; i <= windowTicks; i++)
+        {
+            var tickNow = windowStart.AddMinutes(i * TickMinutes);
+
+            var outcome = driverRuleEngine.EvaluateTeam(
+                primary.ComplianceState,
+                secondary.ComplianceState,
+                activeId,
+                TimeSpan.FromMinutes(TickMinutes),
+                tickNow,
+                primary.Rules,
+                secondary.Rules,
+                RestRuleLimits.Default);
+
+            activeId = outcome.ActiveDriverId;
+
+            if (outcome.ResultingMovementState == MovementState.Driving)
+            {
+                drivingTicks++;
+            }
+        }
+
+        // The active-driver pointer moves one-directionally (primary -> secondary -> null);
+        // only push it when it actually changed, since re-setting the primary after a swap
+        // would throw.
+        if (activeId != assignment.ActiveDriverId)
+        {
+            truck.SetActiveDriver(activeId);
+        }
+
+        return drivingTicks;
     }
 
     /// <summary>

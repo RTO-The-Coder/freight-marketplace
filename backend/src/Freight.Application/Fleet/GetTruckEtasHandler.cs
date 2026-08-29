@@ -49,14 +49,35 @@ public sealed class GetTruckEtasHandler(IUnitOfWork unitOfWork, RouteEtaCalculat
             throw new InvalidOperationException($"Truck '{truck.Id}' has an open trip but no driver assignment.");
         }
 
-        var driver = truck.DriverAssignment.PrimaryDriver;
-        var ledger = driver.ComplianceState
+        var assignment = truck.DriverAssignment;
+        var primary = assignment.PrimaryDriver;
+        var primaryLedger = primary.ComplianceState
             ?? throw new InvalidOperationException($"Open trip '{trip.Id}' has no compliance ledger for its primary driver.");
 
-        var projectionStart = ledger.LastEvaluatedSimulatedTime;
+        // Both ledgers share LastEvaluatedSimulatedTime (EvaluateTeam sets both), so the
+        // primary's is the projection start for a team truck too.
+        var projectionStart = primaryLedger.LastEvaluatedSimulatedTime;
 
-        var etas = routeEtaCalculator.CalculateEtas(
-            trip, truck.CurrentProgress, ledger, driver.Rules, projectionStart);
+        IReadOnlyDictionary<Guid, DateTime> etas;
+        if (assignment.ConfigurationType == DriverConfigurationType.Team)
+        {
+            var secondary = assignment.SecondaryDriver
+                ?? throw new InvalidOperationException($"Team truck '{truck.Id}' has no secondary driver.");
+            var secondaryLedger = secondary.ComplianceState
+                ?? throw new InvalidOperationException($"Open trip '{trip.Id}' has no compliance ledger for its secondary driver.");
+
+            etas = routeEtaCalculator.CalculateEtasForTeam(
+                trip, truck.CurrentProgress,
+                primaryLedger, primary.Rules,
+                secondaryLedger, secondary.Rules,
+                assignment.ActiveDriverId ?? primary.Id,
+                projectionStart);
+        }
+        else
+        {
+            etas = routeEtaCalculator.CalculateEtas(
+                trip, truck.CurrentProgress, primaryLedger, primary.Rules, projectionStart);
+        }
 
         var stops = trip.Stops
             .Select(stop => new TruckEtaStopDto(

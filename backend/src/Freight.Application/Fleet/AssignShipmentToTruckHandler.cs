@@ -109,24 +109,11 @@ public sealed class AssignShipmentToTruckHandler(
             PlaceholderLegDistanceKm, PlaceholderLegTimeTicks,
             PlaceholderLegDistanceKm, PlaceholderLegTimeTicks);
 
-        var primaryDriver = truck.DriverAssignment.PrimaryDriver;
-
-        // A fresh trip has no ledger yet (BeginTripCompliance seeds it only once the
-        // insertion is committed) - project from a fully-rested ledger anchored at the
-        // planned departure. An existing trip already has an accumulating ledger; project
-        // forward from wherever it currently stands, mid-leg progress and all.
-        var (projectionLedger, projectionStart, currentLegProgress) = isNewTrip
-            ? (new DriverComplianceState(primaryDriver.Id, trip.StartedAt), trip.StartedAt, (RouteProgress?)null)
-            : (primaryDriver.ComplianceState
-                   ?? throw new InvalidOperationException($"Open trip '{trip.Id}' has no compliance ledger for its primary driver."),
-               primaryDriver.ComplianceState!.LastEvaluatedSimulatedTime,
-               truck.CurrentProgress);
-
         var windows = await BuildShipmentWindowsAsync(preview, shipment, cancellationToken);
+        var windowProjection = BuildWindowProjection(truck, trip, isNewTrip, windows);
 
-        var feasibility = insertionEvaluator.Evaluate(new InsertionContext(
-            preview, truck.Capacity, currentLegProgress,
-            projectionLedger, primaryDriver.Rules, projectionStart, windows));
+        var feasibility = insertionEvaluator.Evaluate(
+            new InsertionContext(preview, truck.Capacity, windowProjection));
 
         if (!feasibility.IsFeasible)
         {
@@ -194,5 +181,62 @@ public sealed class AssignShipmentToTruckHandler(
         }
 
         return windows;
+    }
+
+    /// <summary>
+    /// Assembles the driver + timing state the window-feasibility projection walks forward.
+    ///
+    /// A fresh trip has no ledger yet (<see cref="Truck.BeginTripCompliance"/> seeds it
+    /// only once the insertion is committed) - project from a fully-rested ledger per
+    /// driver, anchored at the trip's planned departure, with no leg in progress. An
+    /// existing trip already has accumulating ledger(s); project forward from wherever
+    /// they currently stand, carrying the truck's live leg progress.
+    ///
+    /// For a team truck, both drivers' ledgers/rules and the current active-driver pointer
+    /// are supplied so the projection alternates between them as their hours require.
+    /// </summary>
+    private static WindowProjection BuildWindowProjection(
+        Truck truck, Trip trip, bool isNewTrip, IReadOnlyDictionary<Guid, TimeWindow> windows)
+    {
+        var assignment = truck.DriverAssignment
+            ?? throw new InvalidOperationException($"Truck '{truck.Id}' has no driver assignment.");
+
+        var primary = assignment.PrimaryDriver;
+        var secondary = assignment.SecondaryDriver;
+
+        DateTime projectionStart;
+        RouteProgress? currentLegProgress;
+        DriverComplianceState primaryLedger;
+        DriverComplianceState? secondaryLedger;
+
+        if (isNewTrip)
+        {
+            projectionStart = trip.StartedAt;
+            currentLegProgress = null;
+            primaryLedger = new DriverComplianceState(primary.Id, trip.StartedAt);
+            secondaryLedger = secondary is null ? null : new DriverComplianceState(secondary.Id, trip.StartedAt);
+        }
+        else
+        {
+            primaryLedger = primary.ComplianceState
+                ?? throw new InvalidOperationException($"Open trip '{trip.Id}' has no compliance ledger for its primary driver.");
+            // Both ledgers share LastEvaluatedSimulatedTime (EvaluateTeam sets both), so
+            // the primary's is the projection start for a team too.
+            projectionStart = primaryLedger.LastEvaluatedSimulatedTime;
+            currentLegProgress = truck.CurrentProgress;
+            secondaryLedger = secondary is null
+                ? null
+                : secondary.ComplianceState
+                    ?? throw new InvalidOperationException($"Open trip '{trip.Id}' has no compliance ledger for its secondary driver.");
+        }
+
+        var drivers = secondary is null || secondaryLedger is null
+            ? DriverProjection.Single(primaryLedger, primary.Rules)
+            : DriverProjection.Team(
+                primaryLedger, primary.Rules,
+                secondaryLedger, secondary.Rules,
+                assignment.ActiveDriverId ?? primary.Id);
+
+        return new WindowProjection(currentLegProgress, drivers, projectionStart, windows);
     }
 }

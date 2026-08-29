@@ -34,25 +34,20 @@ public sealed class ShipmentInsertionEvaluator : IShipmentInsertionEvaluator
             return capacityFeasibility;
         }
 
-        return EvaluateWindows(context);
+        return EvaluateWindows(context.ProposedTrip, context.Windows);
     }
 
     /// <summary>
     /// Projects the arrival time at every Pending Pickup/Delivery stop (via
-    /// <see cref="RouteEtaCalculator"/>) and checks each against its own window. Returns
-    /// the first violation found, or a feasible result if every projected arrival falls
-    /// within its window.
+    /// <see cref="RouteEtaCalculator"/>, team-aware) and checks each against its own
+    /// window. Returns the first violation found, or a feasible result if every projected
+    /// arrival falls within its window.
     /// </summary>
-    private InsertionFeasibility EvaluateWindows(InsertionContext context)
+    private InsertionFeasibility EvaluateWindows(Trip proposedTrip, WindowProjection windows)
     {
-        var etas = _routeEtaCalculator.CalculateEtas(
-            context.ProposedTrip,
-            context.CurrentLegProgress,
-            context.DriverLedger,
-            context.DriverRules,
-            context.ProjectionStart);
+        var etas = ProjectArrivals(proposedTrip, windows);
 
-        foreach (var stop in context.ProposedTrip.Stops.Where(stop => stop.Status == StopStatus.Pending))
+        foreach (var stop in proposedTrip.Stops.Where(stop => stop.Status == StopStatus.Pending))
         {
             if (stop.Kind is not (StopKind.Pickup or StopKind.Delivery))
             {
@@ -65,7 +60,7 @@ public sealed class ShipmentInsertionEvaluator : IShipmentInsertionEvaluator
                     $"Route ETA projection produced no arrival time for Pending stop '{stop.Id}'.");
             }
 
-            var windowFeasibility = CheckWindow(stop, projectedArrival, context.ShipmentWindows);
+            var windowFeasibility = CheckWindow(stop, projectedArrival, windows.ShipmentWindows);
             if (!windowFeasibility.IsFeasible)
             {
                 return windowFeasibility;
@@ -73,6 +68,36 @@ public sealed class ShipmentInsertionEvaluator : IShipmentInsertionEvaluator
         }
 
         return new InsertionFeasibility(true, null, null);
+    }
+
+    /// <summary>
+    /// Runs the forward route walk that produces each Pending stop's projected arrival -
+    /// the single-driver walk for a single-driver truck, the two-driver alternating walk
+    /// for a team.
+    /// </summary>
+    private IReadOnlyDictionary<Guid, DateTime> ProjectArrivals(Trip proposedTrip, WindowProjection windows)
+    {
+        var drivers = windows.Drivers;
+
+        if (!drivers.IsTeam)
+        {
+            return _routeEtaCalculator.CalculateEtas(
+                proposedTrip,
+                windows.CurrentLegProgress,
+                drivers.PrimaryLedger,
+                drivers.PrimaryRules,
+                windows.ProjectionStart);
+        }
+
+        return _routeEtaCalculator.CalculateEtasForTeam(
+            proposedTrip,
+            windows.CurrentLegProgress,
+            drivers.PrimaryLedger,
+            drivers.PrimaryRules,
+            drivers.SecondaryLedger!,
+            drivers.SecondaryRules!,
+            drivers.ActiveDriverId!.Value,
+            windows.ProjectionStart);
     }
 
     private static InsertionFeasibility CheckWindow(
