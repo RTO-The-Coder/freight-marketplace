@@ -12,8 +12,8 @@ using Npgsql.EntityFrameworkCore.PostgreSQL.Metadata;
 namespace Freight.Infrastructure.Persistence.Migrations
 {
     [DbContext(typeof(FreightDbContext))]
-    [Migration("20260825165823_RedesignRouteAndTripModel")]
-    partial class RedesignRouteAndTripModel
+    [Migration("20260906190127_InitialCreate")]
+    partial class InitialCreate
     {
         /// <inheritdoc />
         protected override void BuildTargetModel(ModelBuilder modelBuilder)
@@ -24,6 +24,60 @@ namespace Freight.Infrastructure.Persistence.Migrations
                 .HasAnnotation("Relational:MaxIdentifierLength", 63);
 
             NpgsqlModelBuilderExtensions.UseIdentityByDefaultColumns(modelBuilder);
+
+            modelBuilder.Entity("Freight.Domain.Client.Shipment", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid");
+
+                    b.Property<DateTime?>("EstimatedPickup")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<DateTime>("OfferDeadline")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<string>("RequiredTruckType")
+                        .IsRequired()
+                        .HasColumnType("text");
+
+                    b.Property<Guid>("ShipperId")
+                        .HasColumnType("uuid");
+
+                    b.Property<string>("Status")
+                        .IsRequired()
+                        .HasColumnType("text");
+
+                    b.Property<Guid?>("TruckingCompanyId")
+                        .HasColumnType("uuid");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("ShipperId");
+
+                    b.HasIndex("TruckingCompanyId");
+
+                    b.ToTable("Shipments", (string)null);
+                });
+
+            modelBuilder.Entity("Freight.Domain.Client.Shipper", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid");
+
+                    b.Property<string>("ContactEmail")
+                        .IsRequired()
+                        .HasColumnType("text");
+
+                    b.Property<string>("Name")
+                        .IsRequired()
+                        .HasColumnType("text");
+
+                    b.HasKey("Id");
+
+                    b.ToTable("Shippers", (string)null);
+                });
 
             modelBuilder.Entity("Freight.Domain.Fleet.Driver", b =>
                 {
@@ -87,20 +141,20 @@ namespace Freight.Infrastructure.Persistence.Migrations
                     b.Property<bool>("IsActive")
                         .HasColumnType("boolean");
 
+                    b.Property<string>("Size")
+                        .IsRequired()
+                        .HasColumnType("text");
+
                     b.Property<string>("TruckName")
-                        .IsRequired()
-                        .HasColumnType("text");
-
-                    b.Property<string>("TruckSize")
-                        .IsRequired()
-                        .HasColumnType("text");
-
-                    b.Property<string>("TruckType")
                         .IsRequired()
                         .HasColumnType("text");
 
                     b.Property<Guid?>("TruckingCompanyId")
                         .HasColumnType("uuid");
+
+                    b.Property<string>("Type")
+                        .IsRequired()
+                        .HasColumnType("text");
 
                     b.HasKey("Id");
 
@@ -122,60 +176,6 @@ namespace Freight.Infrastructure.Persistence.Migrations
                     b.ToTable("TruckingCompanies", (string)null);
                 });
 
-            modelBuilder.Entity("Freight.Domain.Shipment.Shipment", b =>
-                {
-                    b.Property<Guid>("Id")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("uuid");
-
-                    b.Property<DateTime?>("ActualPickupAt")
-                        .HasColumnType("timestamp with time zone");
-
-                    b.Property<DateTime>("OfferDeadline")
-                        .HasColumnType("timestamp with time zone");
-
-                    b.Property<string>("RequiredTruckType")
-                        .IsRequired()
-                        .HasColumnType("text");
-
-                    b.Property<Guid>("ShipperId")
-                        .HasColumnType("uuid");
-
-                    b.Property<string>("Status")
-                        .IsRequired()
-                        .HasColumnType("text");
-
-                    b.Property<Guid?>("TruckingCompanyId")
-                        .HasColumnType("uuid");
-
-                    b.HasKey("Id");
-
-                    b.HasIndex("ShipperId");
-
-                    b.HasIndex("TruckingCompanyId");
-
-                    b.ToTable("Shipments", (string)null);
-                });
-
-            modelBuilder.Entity("Freight.Domain.Shipment.Shipper", b =>
-                {
-                    b.Property<Guid>("Id")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("uuid");
-
-                    b.Property<string>("ContactEmail")
-                        .IsRequired()
-                        .HasColumnType("text");
-
-                    b.Property<string>("Name")
-                        .IsRequired()
-                        .HasColumnType("text");
-
-                    b.HasKey("Id");
-
-                    b.ToTable("Shippers", (string)null);
-                });
-
             modelBuilder.Entity("Freight.Domain.Simulation.SimulationClock", b =>
                 {
                     b.Property<Guid>("Id")
@@ -190,351 +190,7 @@ namespace Freight.Infrastructure.Persistence.Migrations
                     b.ToTable("SimulationClock", (string)null);
                 });
 
-            modelBuilder.Entity("Freight.Domain.Fleet.Driver", b =>
-                {
-                    b.OwnsOne("Freight.Domain.Tracking.DriverComplianceState", "ComplianceState", b1 =>
-                        {
-                            b1.Property<Guid>("DriverId")
-                                .HasColumnType("uuid");
-
-                            b1.Property<bool>("AwaitingSecondBreakBlock")
-                                .HasColumnType("boolean")
-                                .HasColumnName("ComplianceState_AwaitingSecondBreakBlock");
-
-                            b1.Property<bool>("AwaitingSecondDailyRestBlock")
-                                .HasColumnType("boolean")
-                                .HasColumnName("ComplianceState_AwaitingSecondDailyRestBlock");
-
-                            b1.Property<int>("ContinuousDrivingMinutesSinceBreak")
-                                .HasColumnType("integer")
-                                .HasColumnName("ComplianceState_ContinuousDrivingMinutesSinceBreak");
-
-                            b1.Property<string>("CurrentActivity")
-                                .IsRequired()
-                                .HasColumnType("text")
-                                .HasColumnName("ComplianceState_CurrentActivity");
-
-                            b1.Property<int>("DailyDrivingMinutesToday")
-                                .HasColumnType("integer")
-                                .HasColumnName("ComplianceState_DailyDrivingMinutesToday");
-
-                            b1.Property<int>("ExtendedDaysUsedThisWeek")
-                                .HasColumnType("integer")
-                                .HasColumnName("ComplianceState_ExtendedDaysUsedThisWeek");
-
-                            b1.Property<bool>("IsTodayExtended")
-                                .HasColumnType("boolean")
-                                .HasColumnName("ComplianceState_IsTodayExtended");
-
-                            b1.Property<DateTime>("LastEvaluatedSimulatedTime")
-                                .HasColumnType("timestamp with time zone")
-                                .HasColumnName("ComplianceState_LastEvaluatedSimulatedTime");
-
-                            b1.Property<int>("MinutesRemainingInCurrentActivity")
-                                .HasColumnType("integer")
-                                .HasColumnName("ComplianceState_MinutesRemainingInCurrentActivity");
-
-                            b1.Property<int>("ReducedDailyRestsUsedSinceWeeklyRest")
-                                .HasColumnType("integer")
-                                .HasColumnName("ComplianceState_ReducedDailyRestsUsedSinceWeeklyRest");
-
-                            b1.Property<int>("WeeklyDrivingMinutesPriorWeek")
-                                .HasColumnType("integer")
-                                .HasColumnName("ComplianceState_WeeklyDrivingMinutesPriorWeek");
-
-                            b1.Property<int>("WeeklyDrivingMinutesThisWeek")
-                                .HasColumnType("integer")
-                                .HasColumnName("ComplianceState_WeeklyDrivingMinutesThisWeek");
-
-                            b1.HasKey("DriverId");
-
-                            b1.ToTable("DriverComplianceStates", (string)null);
-
-                            b1.WithOwner()
-                                .HasForeignKey("DriverId");
-                        });
-
-                    b.OwnsOne("Freight.Domain.ValueObjects.DrivingRules", "Rules", b1 =>
-                        {
-                            b1.Property<Guid>("DriverId")
-                                .HasColumnType("uuid");
-
-                            b1.Property<string>("BreakRule")
-                                .IsRequired()
-                                .HasColumnType("text")
-                                .HasColumnName("BreakRule");
-
-                            b1.Property<string>("DailyRestRule")
-                                .IsRequired()
-                                .HasColumnType("text")
-                                .HasColumnName("DailyRestRule");
-
-                            b1.Property<bool>("ExtendDailyDrivingWhenEligible")
-                                .HasColumnType("boolean")
-                                .HasColumnName("ExtendDailyDrivingWhenEligible");
-
-                            b1.Property<string>("WeeklyRestRule")
-                                .IsRequired()
-                                .HasColumnType("text")
-                                .HasColumnName("WeeklyRestRule");
-
-                            b1.HasKey("DriverId");
-
-                            b1.ToTable("Drivers");
-
-                            b1.WithOwner()
-                                .HasForeignKey("DriverId");
-                        });
-
-                    b.Navigation("ComplianceState");
-
-                    b.Navigation("Rules")
-                        .IsRequired();
-                });
-
-            modelBuilder.Entity("Freight.Domain.Fleet.Trip", b =>
-                {
-                    b.OwnsMany("Freight.Domain.Fleet.Stop", "Stops", b1 =>
-                        {
-                            b1.Property<Guid>("Id")
-                                .HasColumnType("uuid");
-
-                            b1.Property<double>("IncomingLegDistanceKm")
-                                .HasColumnType("double precision");
-
-                            b1.Property<int>("IncomingLegTimeTick")
-                                .HasColumnType("integer");
-
-                            b1.Property<string>("Kind")
-                                .IsRequired()
-                                .HasColumnType("text");
-
-                            b1.Property<DateTime?>("ReachedAt")
-                                .HasColumnType("timestamp with time zone");
-
-                            b1.Property<int>("Sequence")
-                                .HasColumnType("integer");
-
-                            b1.Property<Guid?>("ShipmentId")
-                                .HasColumnType("uuid");
-
-                            b1.Property<string>("Status")
-                                .IsRequired()
-                                .HasColumnType("text");
-
-                            b1.Property<Guid>("TripId")
-                                .HasColumnType("uuid");
-
-                            b1.Property<Guid?>("TruckingCompanyId")
-                                .HasColumnType("uuid");
-
-                            b1.HasKey("Id");
-
-                            b1.HasIndex("TripId");
-
-                            b1.ToTable("TripStops", (string)null);
-
-                            b1.WithOwner()
-                                .HasForeignKey("TripId");
-
-                            b1.OwnsOne("Freight.Domain.ValueObjects.GeoLocation", "Location", b2 =>
-                                {
-                                    b2.Property<Guid>("StopId")
-                                        .HasColumnType("uuid");
-
-                                    b2.Property<double>("Latitude")
-                                        .HasColumnType("double precision")
-                                        .HasColumnName("LocationLatitude");
-
-                                    b2.Property<double>("Longitude")
-                                        .HasColumnType("double precision")
-                                        .HasColumnName("LocationLongitude");
-
-                                    b2.HasKey("StopId");
-
-                                    b2.ToTable("TripStops");
-
-                                    b2.WithOwner()
-                                        .HasForeignKey("StopId");
-                                });
-
-                            b1.OwnsOne("Freight.Domain.ValueObjects.Capacity", "ShipmentLoad", b2 =>
-                                {
-                                    b2.Property<Guid>("StopId")
-                                        .HasColumnType("uuid");
-
-                                    b2.Property<double>("VolumeCubicMeters")
-                                        .HasColumnType("double precision")
-                                        .HasColumnName("ShipmentLoadVolumeCubicMeters");
-
-                                    b2.Property<double>("WeightKg")
-                                        .HasColumnType("double precision")
-                                        .HasColumnName("ShipmentLoadWeightKg");
-
-                                    b2.HasKey("StopId");
-
-                                    b2.ToTable("TripStops");
-
-                                    b2.WithOwner()
-                                        .HasForeignKey("StopId");
-                                });
-
-                            b1.Navigation("Location")
-                                .IsRequired();
-
-                            b1.Navigation("ShipmentLoad");
-                        });
-
-                    b.Navigation("Stops");
-                });
-
-            modelBuilder.Entity("Freight.Domain.Fleet.Truck", b =>
-                {
-                    b.OwnsOne("Freight.Domain.Fleet.DriverAssignment", "DriverAssignment", b1 =>
-                        {
-                            b1.Property<Guid>("TruckId")
-                                .HasColumnType("uuid");
-
-                            b1.Property<Guid?>("ActiveDriverId")
-                                .HasColumnType("uuid")
-                                .HasColumnName("ActiveDriverId");
-
-                            b1.Property<string>("ConfigurationType")
-                                .IsRequired()
-                                .HasColumnType("text")
-                                .HasColumnName("DriverConfigurationType");
-
-                            b1.Property<Guid>("PrimaryDriverId")
-                                .HasColumnType("uuid");
-
-                            b1.Property<Guid?>("SecondaryDriverId")
-                                .HasColumnType("uuid");
-
-                            b1.HasKey("TruckId");
-
-                            b1.HasIndex("PrimaryDriverId");
-
-                            b1.HasIndex("SecondaryDriverId");
-
-                            b1.ToTable("Trucks");
-
-                            b1.HasOne("Freight.Domain.Fleet.Driver", "PrimaryDriver")
-                                .WithMany()
-                                .HasForeignKey("PrimaryDriverId")
-                                .OnDelete(DeleteBehavior.Restrict)
-                                .IsRequired();
-
-                            b1.HasOne("Freight.Domain.Fleet.Driver", "SecondaryDriver")
-                                .WithMany()
-                                .HasForeignKey("SecondaryDriverId")
-                                .OnDelete(DeleteBehavior.Restrict);
-
-                            b1.WithOwner()
-                                .HasForeignKey("TruckId");
-
-                            b1.Navigation("PrimaryDriver");
-
-                            b1.Navigation("SecondaryDriver");
-                        });
-
-                    b.OwnsOne("Freight.Domain.Tracking.RouteProgress", "CurrentProgress", b1 =>
-                        {
-                            b1.Property<Guid>("TruckId")
-                                .HasColumnType("uuid");
-
-                            b1.Property<int>("CurrentDrivingTimeTick")
-                                .HasColumnType("integer")
-                                .HasColumnName("CurrentProgress_CurrentDrivingTimeTick");
-
-                            b1.Property<double>("TotalDistanceKm")
-                                .HasColumnType("double precision")
-                                .HasColumnName("CurrentProgress_TotalDistanceKm");
-
-                            b1.Property<int>("TotalTimeTick")
-                                .HasColumnType("integer")
-                                .HasColumnName("CurrentProgress_TotalTimeTick");
-
-                            b1.HasKey("TruckId");
-
-                            b1.ToTable("TruckRouteProgresses", (string)null);
-
-                            b1.WithOwner()
-                                .HasForeignKey("TruckId");
-                        });
-
-                    b.OwnsOne("Freight.Domain.ValueObjects.TruckCapacity", "Capacity", b1 =>
-                        {
-                            b1.Property<Guid>("TruckId")
-                                .HasColumnType("uuid");
-
-                            b1.HasKey("TruckId");
-
-                            b1.ToTable("Trucks");
-
-                            b1.WithOwner()
-                                .HasForeignKey("TruckId");
-
-                            b1.OwnsOne("Freight.Domain.ValueObjects.Capacity", "Total", b2 =>
-                                {
-                                    b2.Property<Guid>("TruckCapacityTruckId")
-                                        .HasColumnType("uuid");
-
-                                    b2.Property<double>("VolumeCubicMeters")
-                                        .HasColumnType("double precision")
-                                        .HasColumnName("TotalCapacityVolumeCubicMeters");
-
-                                    b2.Property<double>("WeightKg")
-                                        .HasColumnType("double precision")
-                                        .HasColumnName("TotalCapacityWeightKg");
-
-                                    b2.HasKey("TruckCapacityTruckId");
-
-                                    b2.ToTable("Trucks");
-
-                                    b2.WithOwner()
-                                        .HasForeignKey("TruckCapacityTruckId");
-                                });
-
-                            b1.Navigation("Total")
-                                .IsRequired();
-                        });
-
-                    b.Navigation("Capacity")
-                        .IsRequired();
-
-                    b.Navigation("CurrentProgress");
-
-                    b.Navigation("DriverAssignment");
-                });
-
-            modelBuilder.Entity("Freight.Domain.Fleet.TruckingCompany", b =>
-                {
-                    b.OwnsOne("Freight.Domain.ValueObjects.GeoLocation", "OfficeLocation", b1 =>
-                        {
-                            b1.Property<Guid>("TruckingCompanyId")
-                                .HasColumnType("uuid");
-
-                            b1.Property<double>("Latitude")
-                                .HasColumnType("double precision")
-                                .HasColumnName("OfficeLatitude");
-
-                            b1.Property<double>("Longitude")
-                                .HasColumnType("double precision")
-                                .HasColumnName("OfficeLongitude");
-
-                            b1.HasKey("TruckingCompanyId");
-
-                            b1.ToTable("TruckingCompanies");
-
-                            b1.WithOwner()
-                                .HasForeignKey("TruckingCompanyId");
-                        });
-
-                    b.Navigation("OfficeLocation")
-                        .IsRequired();
-                });
-
-            modelBuilder.Entity("Freight.Domain.Shipment.Shipment", b =>
+            modelBuilder.Entity("Freight.Domain.Client.Shipment", b =>
                 {
                     b.OwnsOne("Freight.Domain.ValueObjects.GeoLocation", "DeliveryLocation", b1 =>
                         {
@@ -701,6 +357,344 @@ namespace Freight.Infrastructure.Persistence.Migrations
                     b.Navigation("ScheduledDeliveryWindow");
 
                     b.Navigation("ScheduledPickupWindow");
+                });
+
+            modelBuilder.Entity("Freight.Domain.Fleet.Driver", b =>
+                {
+                    b.OwnsOne("Freight.Domain.Tracking.DriverComplianceState", "ComplianceState", b1 =>
+                        {
+                            b1.Property<Guid>("DriverId")
+                                .HasColumnType("uuid");
+
+                            b1.Property<bool>("AwaitingSecondBreakBlock")
+                                .HasColumnType("boolean")
+                                .HasColumnName("ComplianceState_AwaitingSecondBreakBlock");
+
+                            b1.Property<bool>("AwaitingSecondDailyRestBlock")
+                                .HasColumnType("boolean")
+                                .HasColumnName("ComplianceState_AwaitingSecondDailyRestBlock");
+
+                            b1.Property<int>("ContinuousDrivingMinutesSinceBreak")
+                                .HasColumnType("integer")
+                                .HasColumnName("ComplianceState_ContinuousDrivingMinutesSinceBreak");
+
+                            b1.Property<string>("CurrentActivity")
+                                .IsRequired()
+                                .HasColumnType("text")
+                                .HasColumnName("ComplianceState_CurrentActivity");
+
+                            b1.Property<int>("DailyDrivingMinutesToday")
+                                .HasColumnType("integer")
+                                .HasColumnName("ComplianceState_DailyDrivingMinutesToday");
+
+                            b1.Property<int>("ExtendedDaysUsedThisWeek")
+                                .HasColumnType("integer")
+                                .HasColumnName("ComplianceState_ExtendedDaysUsedThisWeek");
+
+                            b1.Property<bool>("IsTodayExtended")
+                                .HasColumnType("boolean")
+                                .HasColumnName("ComplianceState_IsTodayExtended");
+
+                            b1.Property<DateTime>("LastEvaluatedSimulatedTime")
+                                .HasColumnType("timestamp with time zone")
+                                .HasColumnName("ComplianceState_LastEvaluatedSimulatedTime");
+
+                            b1.Property<int>("MinutesRemainingInCurrentActivity")
+                                .HasColumnType("integer")
+                                .HasColumnName("ComplianceState_MinutesRemainingInCurrentActivity");
+
+                            b1.Property<int>("ReducedDailyRestsUsedSinceWeeklyRest")
+                                .HasColumnType("integer")
+                                .HasColumnName("ComplianceState_ReducedDailyRestsUsedSinceWeeklyRest");
+
+                            b1.Property<int>("WeeklyDrivingMinutesPriorWeek")
+                                .HasColumnType("integer")
+                                .HasColumnName("ComplianceState_WeeklyDrivingMinutesPriorWeek");
+
+                            b1.Property<int>("WeeklyDrivingMinutesThisWeek")
+                                .HasColumnType("integer")
+                                .HasColumnName("ComplianceState_WeeklyDrivingMinutesThisWeek");
+
+                            b1.HasKey("DriverId");
+
+                            b1.ToTable("DriverComplianceStates", (string)null);
+
+                            b1.WithOwner()
+                                .HasForeignKey("DriverId");
+                        });
+
+                    b.OwnsOne("Freight.Domain.ValueObjects.DrivingRules", "Rules", b1 =>
+                        {
+                            b1.Property<Guid>("DriverId")
+                                .HasColumnType("uuid");
+
+                            b1.Property<string>("BreakRule")
+                                .IsRequired()
+                                .HasColumnType("text")
+                                .HasColumnName("BreakRule");
+
+                            b1.Property<string>("DailyRestRule")
+                                .IsRequired()
+                                .HasColumnType("text")
+                                .HasColumnName("DailyRestRule");
+
+                            b1.Property<bool>("ExtendDailyDrivingWhenEligible")
+                                .HasColumnType("boolean")
+                                .HasColumnName("ExtendDailyDrivingWhenEligible");
+
+                            b1.Property<string>("WeeklyRestRule")
+                                .IsRequired()
+                                .HasColumnType("text")
+                                .HasColumnName("WeeklyRestRule");
+
+                            b1.HasKey("DriverId");
+
+                            b1.ToTable("Drivers");
+
+                            b1.WithOwner()
+                                .HasForeignKey("DriverId");
+                        });
+
+                    b.Navigation("ComplianceState");
+
+                    b.Navigation("Rules")
+                        .IsRequired();
+                });
+
+            modelBuilder.Entity("Freight.Domain.Fleet.Trip", b =>
+                {
+                    b.OwnsMany("Freight.Domain.Fleet.Stop", "Stops", b1 =>
+                        {
+                            b1.Property<Guid>("Id")
+                                .HasColumnType("uuid");
+
+                            b1.Property<double>("IncomingLegDistanceKm")
+                                .HasColumnType("double precision");
+
+                            b1.Property<int>("IncomingLegTimeTick")
+                                .HasColumnType("integer");
+
+                            b1.Property<string>("Kind")
+                                .IsRequired()
+                                .HasColumnType("text");
+
+                            b1.Property<DateTime?>("ReachedAt")
+                                .HasColumnType("timestamp with time zone");
+
+                            b1.Property<int>("Sequence")
+                                .HasColumnType("integer");
+
+                            b1.Property<Guid?>("ShipmentId")
+                                .HasColumnType("uuid");
+
+                            b1.Property<string>("Status")
+                                .IsRequired()
+                                .HasColumnType("text");
+
+                            b1.Property<Guid>("TripId")
+                                .HasColumnType("uuid");
+
+                            b1.Property<Guid?>("TruckingCompanyId")
+                                .HasColumnType("uuid");
+
+                            b1.Property<int>("WaitTimeTick")
+                                .ValueGeneratedOnAdd()
+                                .HasColumnType("integer")
+                                .HasDefaultValue(0);
+
+                            b1.Property<int>("WaitTimeTickElapsed")
+                                .ValueGeneratedOnAdd()
+                                .HasColumnType("integer")
+                                .HasDefaultValue(0);
+
+                            b1.HasKey("Id");
+
+                            b1.HasIndex("TripId");
+
+                            b1.ToTable("TripStops", (string)null);
+
+                            b1.WithOwner()
+                                .HasForeignKey("TripId");
+
+                            b1.OwnsOne("Freight.Domain.ValueObjects.GeoLocation", "Location", b2 =>
+                                {
+                                    b2.Property<Guid>("StopId")
+                                        .HasColumnType("uuid");
+
+                                    b2.Property<double>("Latitude")
+                                        .HasColumnType("double precision")
+                                        .HasColumnName("LocationLatitude");
+
+                                    b2.Property<double>("Longitude")
+                                        .HasColumnType("double precision")
+                                        .HasColumnName("LocationLongitude");
+
+                                    b2.HasKey("StopId");
+
+                                    b2.ToTable("TripStops");
+
+                                    b2.WithOwner()
+                                        .HasForeignKey("StopId");
+                                });
+
+                            b1.OwnsOne("Freight.Domain.ValueObjects.Capacity", "ShipmentLoad", b2 =>
+                                {
+                                    b2.Property<Guid>("StopId")
+                                        .HasColumnType("uuid");
+
+                                    b2.Property<double>("VolumeCubicMeters")
+                                        .HasColumnType("double precision")
+                                        .HasColumnName("ShipmentLoadVolumeCubicMeters");
+
+                                    b2.Property<double>("WeightKg")
+                                        .HasColumnType("double precision")
+                                        .HasColumnName("ShipmentLoadWeightKg");
+
+                                    b2.HasKey("StopId");
+
+                                    b2.ToTable("TripStops");
+
+                                    b2.WithOwner()
+                                        .HasForeignKey("StopId");
+                                });
+
+                            b1.Navigation("Location")
+                                .IsRequired();
+
+                            b1.Navigation("ShipmentLoad");
+                        });
+
+                    b.Navigation("Stops");
+                });
+
+            modelBuilder.Entity("Freight.Domain.Fleet.Truck", b =>
+                {
+                    b.OwnsOne("Freight.Domain.Fleet.DriverAssignment", "DriverAssignment", b1 =>
+                        {
+                            b1.Property<Guid>("TruckId")
+                                .HasColumnType("uuid");
+
+                            b1.Property<Guid?>("ActiveDriverId")
+                                .HasColumnType("uuid")
+                                .HasColumnName("ActiveDriverId");
+
+                            b1.Property<string>("ConfigurationType")
+                                .IsRequired()
+                                .HasColumnType("text")
+                                .HasColumnName("DriverConfigurationType");
+
+                            b1.Property<Guid>("PrimaryDriverId")
+                                .HasColumnType("uuid");
+
+                            b1.Property<Guid?>("SecondaryDriverId")
+                                .HasColumnType("uuid");
+
+                            b1.HasKey("TruckId");
+
+                            b1.HasIndex("PrimaryDriverId");
+
+                            b1.HasIndex("SecondaryDriverId");
+
+                            b1.ToTable("Trucks");
+
+                            b1.HasOne("Freight.Domain.Fleet.Driver", "PrimaryDriver")
+                                .WithMany()
+                                .HasForeignKey("PrimaryDriverId")
+                                .OnDelete(DeleteBehavior.Restrict)
+                                .IsRequired();
+
+                            b1.HasOne("Freight.Domain.Fleet.Driver", "SecondaryDriver")
+                                .WithMany()
+                                .HasForeignKey("SecondaryDriverId")
+                                .OnDelete(DeleteBehavior.Restrict);
+
+                            b1.WithOwner()
+                                .HasForeignKey("TruckId");
+
+                            b1.Navigation("PrimaryDriver");
+
+                            b1.Navigation("SecondaryDriver");
+                        });
+
+                    b.OwnsOne("Freight.Domain.ValueObjects.Capacity", "Capacity", b1 =>
+                        {
+                            b1.Property<Guid>("TruckId")
+                                .HasColumnType("uuid");
+
+                            b1.Property<double>("VolumeCubicMeters")
+                                .HasColumnType("double precision")
+                                .HasColumnName("TotalCapacityVolumeCubicMeters");
+
+                            b1.Property<double>("WeightKg")
+                                .HasColumnType("double precision")
+                                .HasColumnName("TotalCapacityWeightKg");
+
+                            b1.HasKey("TruckId");
+
+                            b1.ToTable("Trucks");
+
+                            b1.WithOwner()
+                                .HasForeignKey("TruckId");
+                        });
+
+                    b.OwnsOne("Freight.Domain.Tracking.RouteProgress", "CurrentProgress", b1 =>
+                        {
+                            b1.Property<Guid>("TruckId")
+                                .HasColumnType("uuid");
+
+                            b1.Property<int>("CurrentDrivingTimeTick")
+                                .HasColumnType("integer")
+                                .HasColumnName("CurrentProgress_CurrentDrivingTimeTick");
+
+                            b1.Property<double>("TotalDistanceKm")
+                                .HasColumnType("double precision")
+                                .HasColumnName("CurrentProgress_TotalDistanceKm");
+
+                            b1.Property<int>("TotalTimeTick")
+                                .HasColumnType("integer")
+                                .HasColumnName("CurrentProgress_TotalTimeTick");
+
+                            b1.HasKey("TruckId");
+
+                            b1.ToTable("TruckRouteProgresses", (string)null);
+
+                            b1.WithOwner()
+                                .HasForeignKey("TruckId");
+                        });
+
+                    b.Navigation("Capacity")
+                        .IsRequired();
+
+                    b.Navigation("CurrentProgress");
+
+                    b.Navigation("DriverAssignment");
+                });
+
+            modelBuilder.Entity("Freight.Domain.Fleet.TruckingCompany", b =>
+                {
+                    b.OwnsOne("Freight.Domain.ValueObjects.GeoLocation", "OfficeLocation", b1 =>
+                        {
+                            b1.Property<Guid>("TruckingCompanyId")
+                                .HasColumnType("uuid");
+
+                            b1.Property<double>("Latitude")
+                                .HasColumnType("double precision")
+                                .HasColumnName("OfficeLatitude");
+
+                            b1.Property<double>("Longitude")
+                                .HasColumnType("double precision")
+                                .HasColumnName("OfficeLongitude");
+
+                            b1.HasKey("TruckingCompanyId");
+
+                            b1.ToTable("TruckingCompanies");
+
+                            b1.WithOwner()
+                                .HasForeignKey("TruckingCompanyId");
+                        });
+
+                    b.Navigation("OfficeLocation")
+                        .IsRequired();
                 });
 #pragma warning restore 612, 618
         }
