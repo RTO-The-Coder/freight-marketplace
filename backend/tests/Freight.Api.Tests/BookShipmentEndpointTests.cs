@@ -7,6 +7,8 @@ using Microsoft.AspNetCore.Mvc.Testing;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
 using ShipmentAggregate = Freight.Domain.Client.Shipment;
+using Freight.Domain.Fleet.Enums;
+using Freight.Domain.Client.Enums;
 
 namespace Freight.Api.Tests;
 

@@ -1,6 +1,9 @@
 using System.Net;
 using System.Net.Http.Json;
 using Freight.Domain.Fleet;
+using Freight.Domain.Fleet.Enums;
+using Freight.Domain.ValueObjects;
+using Freight.Domain.ValueObjects.RuleVariants;
 using Freight.Infrastructure.Persistence;
 using Microsoft.AspNetCore.Mvc.Testing;
 using Microsoft.EntityFrameworkCore;
@@ -13,6 +16,10 @@ public sealed class ActivateDeactivateTruckEndpointTests : IClassFixture<WebAppl
     private readonly WebApplicationFactory<Program> _factory;
 
     public ActivateDeactivateTruckEndpointTests(WebApplicationFactory<Program> factory) => _factory = factory;
+
+    private static Driver NewDriver() =>
+        Driver.Create(Guid.NewGuid(), "Jane", "Doe",
+            DrivingRules.Create(DrivingBreakRule.FullBreak, DailyRestRule.FullRest, WeeklyRestRule.FullWeeklyRest, extendDailyDrivingWhenEligible: false));
 
     public async Task InitializeAsync()
     {
@@ -45,14 +52,39 @@ public sealed class ActivateDeactivateTruckEndpointTests : IClassFixture<WebAppl
     }
 
     [Fact]
-    public async Task PostActivate_TruckWithCompany_Returns204AndPersistsActive()
+    public async Task PostActivate_TruckWithoutDriver_Returns400WithMessage()
     {
-        var truck = Truck.Create("With Company Truck", TruckType.BoxVan, TruckSize.Small);
+        var truck = Truck.Create("No Driver Truck", TruckType.BoxVan, TruckSize.Small);
         truck.AssignToCompany(Guid.NewGuid());
 
         using (var scope = _factory.Services.CreateScope())
         {
             var dbContext = scope.ServiceProvider.GetRequiredService<FreightDbContext>();
+            dbContext.Set<Truck>().Add(truck);
+            await dbContext.SaveChangesAsync();
+        }
+
+        using var client = _factory.CreateClient();
+        var response = await client.PostAsync($"/trucks/{truck.Id}/activate", null);
+
+        Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
+        var body = await response.Content.ReadFromJsonAsync<Dictionary<string, string>>();
+        Assert.NotNull(body);
+        Assert.Contains("driver", body!["error"], StringComparison.OrdinalIgnoreCase);
+    }
+
+    [Fact]
+    public async Task PostActivate_TruckWithCompanyAndDriver_Returns204AndPersistsActive()
+    {
+        var truck = Truck.Create("With Company Truck", TruckType.BoxVan, TruckSize.Small);
+        truck.AssignToCompany(Guid.NewGuid());
+        var driver = NewDriver();
+        truck.AssignDrivers(driver);
+
+        using (var scope = _factory.Services.CreateScope())
+        {
+            var dbContext = scope.ServiceProvider.GetRequiredService<FreightDbContext>();
+            dbContext.Set<Driver>().Add(driver);
             dbContext.Set<Truck>().Add(truck);
             await dbContext.SaveChangesAsync();
         }
@@ -73,11 +105,14 @@ public sealed class ActivateDeactivateTruckEndpointTests : IClassFixture<WebAppl
     {
         var truck = Truck.Create("Active Truck", TruckType.BoxVan, TruckSize.Small);
         truck.AssignToCompany(Guid.NewGuid());
+        var driver = NewDriver();
+        truck.AssignDrivers(driver);
         truck.Activate();
 
         using (var scope = _factory.Services.CreateScope())
         {
             var dbContext = scope.ServiceProvider.GetRequiredService<FreightDbContext>();
+            dbContext.Set<Driver>().Add(driver);
             dbContext.Set<Truck>().Add(truck);
             await dbContext.SaveChangesAsync();
         }

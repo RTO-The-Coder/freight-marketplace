@@ -1,6 +1,7 @@
 using System.Net;
 using System.Net.Http.Json;
 using Freight.Domain.Fleet;
+using Freight.Domain.Fleet.Enums;
 using Freight.Infrastructure.Persistence;
 using Microsoft.AspNetCore.Mvc.Testing;
 using Microsoft.EntityFrameworkCore;
