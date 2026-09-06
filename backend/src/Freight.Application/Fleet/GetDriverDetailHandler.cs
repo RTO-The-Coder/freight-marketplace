@@ -28,7 +28,7 @@ public sealed record DriverDetailDto(
 
 public sealed class GetDriverDetailHandler(IUnitOfWork unitOfWork)
 {
-    public async Task<DriverDetailDto> GetDriverDetailsAsync(GetDriverDetailRequest request, CancellationToken cancellationToken = default)
+    public async Task<DriverDetailDto> GetDriverDetailAsync(GetDriverDetailRequest request, CancellationToken cancellationToken = default)
     {
         var driver = await unitOfWork.Drivers.GetByIdAsync(request.DriverId, cancellationToken)
             ?? throw new InvalidOperationException($"Driver '{request.DriverId}' was not found.");

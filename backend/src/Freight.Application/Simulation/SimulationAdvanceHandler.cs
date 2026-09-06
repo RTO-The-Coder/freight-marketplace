@@ -36,7 +36,7 @@ public sealed class SimulationAdvanceHandler(
     private const int TickMinutes = 5;
     private static readonly TimeSpan Tick = TimeSpan.FromMinutes(TickMinutes);
 
-    public async Task<AdvanceSimulationResponse> AdvanceAsync(AdvanceSimulationRequest request, CancellationToken cancellationToken = default)
+    public async Task<AdvanceSimulationResponse> AdvanceSimulationAsync(AdvanceSimulationRequest request, CancellationToken cancellationToken = default)
     {
         if (request.Ticks < 0)
         {
@@ -138,34 +138,26 @@ public sealed class SimulationAdvanceHandler(
             }
 
             // Case 2: the leg is finished and there is no (remaining) wait - reach the
-            // stop now, this same tick, then fall through so the tick can also drive the
-            // next leg if the driver is able.
+            // stop. This consumes the tick; the next leg's first drive happens on the
+            // following iteration, so one tick never does two units of movement.
             if (progress.IsLegComplete())
             {
                 await ReachStopAsync(trip, truck, stop, tickNow, cancellationToken);
-
-                if (!trip.IsOpen)
-                {
-                    break;
-                }
-
-                stop = trip.NextStop;
-                if (stop is null)
-                {
-                    break;
-                }
+                moved = true;
+                continue;
             }
 
             // Case 3: drive this tick if the driver rules allow it.
             if (mover.DriveTick(tickNow))
             {
-                truck.CurrentProgress!.AdvanceByTicks(1);
+                progress.AdvanceByTicks(1);
                 moved = true;
 
-                if (truck.CurrentProgress!.IsLegComplete() && stop.WaitTimeTick == 0)
+                if (progress.IsLegComplete() && stop.WaitTimeTick == 0)
                 {
-                    // Leg just finished and this stop has no wait - reach it right away
-                    // rather than waiting for the next tick's Case 2.
+                    // The drive that arrived also reaches the stop - reaching is free,
+                    // it does not cost an extra tick. (A stop with a wait is left for
+                    // Case 1 to serve, then reach.)
                     await ReachStopAsync(trip, truck, stop, tickNow, cancellationToken);
                     if (!trip.IsOpen)
                     {

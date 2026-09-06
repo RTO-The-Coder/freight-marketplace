@@ -1,7 +1,5 @@
 using Freight.Domain.Common;
-using Freight.Domain.Fleet;
 using Freight.Domain.Fleet.Enums;
-using Freight.Domain.ValueObjects;
 
 namespace Freight.Application.Fleet;
 
@@ -25,7 +23,7 @@ public sealed record TruckPositionDto(
 /// </summary>
 public sealed class GetTruckPositionHandler(IUnitOfWork unitOfWork)
 {
-    public async Task<TruckPositionDto> GetTruckPoistionAsync(GetTruckPositionRequest request, CancellationToken cancellationToken = default)
+    public async Task<TruckPositionDto> GetTruckPositionAsync(GetTruckPositionRequest request, CancellationToken cancellationToken = default)
     {
         var truck = await unitOfWork.Trucks.GetByIdAsync(request.TruckId, cancellationToken)
             ?? throw new InvalidOperationException($"Truck '{request.TruckId}' was not found.");

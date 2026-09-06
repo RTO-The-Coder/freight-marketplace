@@ -42,12 +42,12 @@ public sealed class AssignShipmentToTruckHandler(
     private static readonly IReadOnlyDictionary<StopRef, int> EmptyWaits = new Dictionary<StopRef, int>();
 
     /// <summary>
-    /// Runs the same route/window/capacity feasibility check <see cref="AssignShipment"/>
+    /// Runs the same route/window/capacity feasibility check <see cref="AssignShipmentAsync"/>
     /// does - loads the truck, finds or opens its trip, measures the road legs the
     /// insertion would create, previews it on a clone, and evaluates - but never commits.
     /// A dry run for the UI: "could this shipment go on this truck at these positions?"
     /// </summary>
-    public async Task<ShipmentFeasibilityResponse> CheckFeasibility(
+    public async Task<ShipmentFeasibilityResponse> CheckFeasibilityAsync(
         AssignShipmentToTruckRequest request, CancellationToken cancellationToken = default)
     {
         var prepared = await PrepareInsertionAsync(request, cancellationToken);
@@ -57,7 +57,7 @@ public sealed class AssignShipmentToTruckHandler(
             feasibility.IsFeasible, feasibility.ViolatingStopId, feasibility.ViolationReason, totalWaitTicks);
     }
 
-    public async Task<AssignShipmentToTruckResponse> AssignShipment(AssignShipmentToTruckRequest request, CancellationToken cancellationToken = default)
+    public async Task<AssignShipmentToTruckResponse> AssignShipmentAsync(AssignShipmentToTruckRequest request, CancellationToken cancellationToken = default)
     {
         var prepared = await PrepareInsertionAsync(request, cancellationToken);
 
@@ -101,7 +101,7 @@ public sealed class AssignShipmentToTruckHandler(
 
     /// <summary>
     /// Shared load → validate → measure-legs → preview-on-clone → evaluate flow behind both
-    /// <see cref="CheckFeasibility"/> and <see cref="AssignShipment"/>. Mutates nothing that
+    /// <see cref="CheckFeasibilityAsync"/> and <see cref="AssignShipmentAsync"/>. Mutates nothing that
     /// survives the call; returns the feasibility verdict plus the (possibly freshly-opened,
     /// uncommitted) real aggregates for the caller to commit or discard.
     /// </summary>

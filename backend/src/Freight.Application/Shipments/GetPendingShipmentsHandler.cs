@@ -1,5 +1,4 @@
 using Freight.Domain.Common;
-using Freight.Domain.Client;
 using Freight.Domain.Client.Enums;
 
 namespace Freight.Application.Shipments;
@@ -8,28 +7,11 @@ public sealed record GetPendingShipmentsResponse(IReadOnlyList<ShipmentSummaryDt
 
 public sealed class GetPendingShipmentsHandler(IUnitOfWork unitOfWork)
 {
-    public async Task<GetPendingShipmentsResponse> GetPendingShipmentAsync(CancellationToken cancellationToken = default)
+    public async Task<GetPendingShipmentsResponse> GetPendingShipmentsAsync(CancellationToken cancellationToken = default)
     {
         var shipments = await unitOfWork.Shipments.GetByStatusAsync(ShipmentStatus.Pending, cancellationToken);
 
-        var dtos = shipments
-            .Select(shipment => new ShipmentSummaryDto(
-                shipment.Id,
-                shipment.TruckingCompanyId,
-                shipment.PickupLocation.Latitude,
-                shipment.PickupLocation.Longitude,
-                shipment.DeliveryLocation.Latitude,
-                shipment.DeliveryLocation.Longitude,
-                shipment.Load.WeightKg,
-                shipment.Load.VolumeCubicMeters,
-                shipment.RequiredTruckType,
-                shipment.PickupWindow.Earliest,
-                shipment.PickupWindow.Latest,
-                shipment.DeliveryWindow.Earliest,
-                shipment.DeliveryWindow.Latest,
-                shipment.OfferDeadline,
-                shipment.Status))
-            .ToList();
+        var dtos = shipments.Select(ShipmentSummaryDto.From).ToList();
 
         return new GetPendingShipmentsResponse(dtos);
     }

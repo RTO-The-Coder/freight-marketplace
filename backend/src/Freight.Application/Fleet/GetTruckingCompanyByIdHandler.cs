@@ -12,7 +12,7 @@ public sealed record GetTruckingCompanyByIdRequest(Guid CompanyId);
 /// </summary>
 public sealed class GetTruckingCompanyByIdHandler(IUnitOfWork unitOfWork)
 {
-    public async Task<TruckingCompanySummaryDto> GetTruckingCompanybyIdAsync(GetTruckingCompanyByIdRequest request, CancellationToken cancellationToken = default)
+    public async Task<TruckingCompanySummaryDto> GetTruckingCompanyByIdAsync(GetTruckingCompanyByIdRequest request, CancellationToken cancellationToken = default)
     {
         var company = await unitOfWork.TruckingCompanies.GetByIdAsync(request.CompanyId, cancellationToken)
             ?? throw new InvalidOperationException($"Trucking company '{request.CompanyId}' was not found.");

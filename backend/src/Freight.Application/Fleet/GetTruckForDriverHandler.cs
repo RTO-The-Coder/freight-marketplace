@@ -8,7 +8,7 @@ public sealed record GetTruckForDriverResponse(TruckSummaryDto? Truck);
 
 public sealed class GetTruckForDriverHandler(IUnitOfWork unitOfWork)
 {
-    public async Task<GetTruckForDriverResponse> HandleAsync(GetTruckForDriverRequest request, CancellationToken cancellationToken = default)
+    public async Task<GetTruckForDriverResponse> GetTruckForDriverAsync(GetTruckForDriverRequest request, CancellationToken cancellationToken = default)
     {
         var trucks = await unitOfWork.Trucks.GetAllAsync(cancellationToken);
 

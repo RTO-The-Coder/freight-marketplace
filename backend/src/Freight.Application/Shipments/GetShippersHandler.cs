@@ -8,7 +8,7 @@ public sealed record GetShippersResponse(IReadOnlyList<ShipperSummaryDto> Shippe
 
 public sealed class GetShippersHandler(IUnitOfWork unitOfWork)
 {
-    public async Task<GetShippersResponse> HandleAsync(CancellationToken cancellationToken = default)
+    public async Task<GetShippersResponse> GetShippersAsync(CancellationToken cancellationToken = default)
     {
         var shippers = await unitOfWork.Shippers.GetAllAsync(cancellationToken);
         var dtos = shippers.Select(shipper => new ShipperSummaryDto(shipper.Id, shipper.Name, shipper.ContactEmail)).ToList();
