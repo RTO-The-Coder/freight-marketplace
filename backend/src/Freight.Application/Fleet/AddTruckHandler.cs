@@ -1,5 +1,6 @@
 using Freight.Domain.Common;
 using Freight.Domain.Fleet;
+using Freight.Domain.Fleet.Enums;
 using Freight.Domain.ValueObjects;
 
 namespace Freight.Application.Fleet;

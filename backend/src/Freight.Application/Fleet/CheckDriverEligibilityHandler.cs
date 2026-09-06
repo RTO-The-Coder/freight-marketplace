@@ -1,6 +1,7 @@
 using Freight.Domain.Common;
-using Freight.Domain.Tracking;
 using Freight.Domain.Tracking.Abstractions;
+using Freight.Domain.Tracking.Enums;
+using Freight.Domain.Tracking.ValueObjects;
 
 namespace Freight.Application.Fleet;
 
@@ -16,7 +17,7 @@ public sealed record CheckDriverEligibilityResponse(bool IsEligible, Ineligibili
 /// </summary>
 public sealed class CheckDriverEligibilityHandler(IUnitOfWork unitOfWork, IDriverRuleEngine driverRuleEngine)
 {
-    public async Task<CheckDriverEligibilityResponse> HandleAsync(CheckDriverEligibilityRequest request, CancellationToken cancellationToken = default)
+    public async Task<CheckDriverEligibilityResponse> CheckDriverEligibilityAsync(CheckDriverEligibilityRequest request, CancellationToken cancellationToken = default)
     {
         if (request.AfterMinutes < 0)
         {

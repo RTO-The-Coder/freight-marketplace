@@ -1,5 +1,6 @@
 using Freight.Domain.Common;
 using Freight.Domain.Fleet;
+using Freight.Domain.Fleet.Enums;
 
 namespace Freight.Application.Fleet;
 
@@ -19,7 +20,7 @@ public sealed record GetTrucksResponse(IReadOnlyList<TruckSummaryDto> Trucks);
 
 public sealed class GetTrucksHandler(IUnitOfWork unitOfWork)
 {
-    public async Task<GetTrucksResponse> HandleAsync(GetTrucksRequest request, CancellationToken cancellationToken = default)
+    public async Task<GetTrucksResponse> GetTrucksAsync(GetTrucksRequest request, CancellationToken cancellationToken = default)
     {
         var trucks = await unitOfWork.Trucks.GetAllAsync(cancellationToken);
 

@@ -7,7 +7,7 @@ public sealed record SetTruckCompanyRequest(Guid TruckId, Guid? TruckingCompanyI
 
 public sealed class SetTruckCompanyHandler(IUnitOfWork unitOfWork)
 {
-    public async Task AssignmentTruckingCompany(SetTruckCompanyRequest request, CancellationToken cancellationToken = default)
+    public async Task AssignmentTruckingCompanyAsync(SetTruckCompanyRequest request, CancellationToken cancellationToken = default)
     {
         var truck = await unitOfWork.Trucks.GetByIdAsync(request.TruckId, cancellationToken) ?? throw new InvalidOperationException($"Truck '{request.TruckId}' was not found.");
 

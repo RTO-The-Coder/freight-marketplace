@@ -1,8 +1,10 @@
-using Freight.Application.Shipments;
 using Freight.Domain.Client;
 using Freight.Domain.Common;
 using Freight.Domain.Fleet;
 using Freight.Domain.Fleet.Abstractions;
+using Freight.Domain.Fleet.Enums;
+using Freight.Domain.Fleet.ValueObjects;
+using Freight.Domain.Routing.Abstractions;
 using Freight.Domain.Tracking;
 using Freight.Domain.ValueObjects;
 
@@ -17,28 +19,94 @@ public sealed record AssignShipmentToTruckRequest(
 
 public sealed record AssignShipmentToTruckResponse(int StopCount);
 
+public sealed record ShipmentFeasibilityResponse(
+    bool IsFeasible,
+    Guid? ViolatingStopId,
+    string? Reason,
+    int TotalPlannedWaitTicks = 0);
+
 /// <summary>
-/// Assigns a booked shipment to a specific truck's route at caller-specified insertion
-/// points - the same workflow Slice 12's offer-approval will later call as its final
-/// step. Finds or opens the truck's current <see cref="Trip"/>, previews the insertion
-/// on a clone (<see cref="Trip.Clone"/>) to run the route/window feasibility check
-/// (<see cref="IShipmentInsertionEvaluator"/> - rejects if any downstream stop's
-/// projected arrival would violate its own requested window), and only if feasible
-/// performs the real insertion (<see cref="Truck.AssignShipment"/>) and starts the
-/// truck's primary driver driving so their compliance ledger begins accumulating.
+/// Assigns a booked shipment to a truck's route at caller-specified insertion points:
+/// finds or opens the truck's <see cref="Trip"/>, measures the road legs the insertion
+/// creates (<see cref="IRoutingService"/>), previews it on a <see cref="Trip.Clone"/> to
+/// run the window/capacity feasibility check (<see cref="IShipmentInsertionEvaluator"/>),
+/// and only if feasible commits the real insertion (<see cref="Trip.AssignShipment"/>),
+/// its planned wait-for-window, and - for a new trip - the drivers' fresh compliance ledgers.
 /// </summary>
 public sealed class AssignShipmentToTruckHandler(
     IUnitOfWork unitOfWork,
     IShipmentInsertionEvaluator insertionEvaluator,
+    IRoutingService routingService,
     TimeProvider timeProvider)
 {
-    // Hardcoded placeholders until OSRM/IRoutingService (Slice 7) computes real
-    // distance/time for each leg. 78 ticks = 6h30m at the fixed 5-minute tick size (see
-    // RouteProgress.TotalTimeTick).
-    private const double PlaceholderLegDistanceKm = 650;
-    private const int PlaceholderLegTimeTicks = 78;
+    private static readonly IReadOnlyDictionary<StopRef, int> EmptyWaits = new Dictionary<StopRef, int>();
+
+    /// <summary>
+    /// Runs the same route/window/capacity feasibility check <see cref="AssignShipment"/>
+    /// does - loads the truck, finds or opens its trip, measures the road legs the
+    /// insertion would create, previews it on a clone, and evaluates - but never commits.
+    /// A dry run for the UI: "could this shipment go on this truck at these positions?"
+    /// </summary>
+    public async Task<ShipmentFeasibilityResponse> CheckFeasibility(
+        AssignShipmentToTruckRequest request, CancellationToken cancellationToken = default)
+    {
+        var prepared = await PrepareInsertionAsync(request, cancellationToken);
+        var feasibility = prepared.Feasibility;
+        var totalWaitTicks = feasibility.PlannedWaitTicks?.Values.Sum() ?? 0;
+        return new ShipmentFeasibilityResponse(
+            feasibility.IsFeasible, feasibility.ViolatingStopId, feasibility.ViolationReason, totalWaitTicks);
+    }
 
     public async Task<AssignShipmentToTruckResponse> AssignShipment(AssignShipmentToTruckRequest request, CancellationToken cancellationToken = default)
+    {
+        var prepared = await PrepareInsertionAsync(request, cancellationToken);
+
+        if (!prepared.Feasibility.IsFeasible)
+        {
+            throw new InvalidOperationException(
+                $"Cannot assign shipment '{prepared.Shipment.Id}' to {prepared.Truck.TruckName}: {prepared.Feasibility.ViolationReason}");
+        }
+
+        var (_, truck, shipment, trip, isNewTrip, legPlan, stopInputs) = prepared;
+
+        if (isNewTrip)
+        {
+            unitOfWork.Trips.Add(trip);
+
+            // A fresh trip: every assigned driver starts it fully rested, anchored at
+            // the trip's planned departure. Adding to an EXISTING trip must not reset
+            // ledgers - the drivers' accumulated hours carry through the trip.
+            truck.BeginTripCompliance(trip.StartedAt);
+        }
+
+        var previousNextStopId = trip.NextStop?.Id;
+
+        trip.AssignShipment(
+            shipment.Id, stopInputs.ShipmentSize, stopInputs.PickupLocation, stopInputs.DeliveryLocation,
+            stopInputs.OfficeLocation, request.PickupInsertIndex, request.DeliveryInsertIndex, legPlan);
+
+        // Persist the wait-for-window the feasibility walk computed onto the real stops -
+        // keyed by StopRef so it lands on the just-inserted stops (different ids than the
+        // preview clone's) and on any downstream stop whose arrival shifted.
+        trip.SetPlannedWaits(prepared.Feasibility.PlannedWaitTicks ?? EmptyWaits);
+
+        truck.SyncProgressToNextStop(trip, previousNextStopId);
+
+        shipment.AssignToCompany(truck.TruckingCompanyId!.Value);
+
+        await unitOfWork.SaveChangesAsync(cancellationToken);
+
+        return new AssignShipmentToTruckResponse(trip.Stops.Count);
+    }
+
+    /// <summary>
+    /// Shared load → validate → measure-legs → preview-on-clone → evaluate flow behind both
+    /// <see cref="CheckFeasibility"/> and <see cref="AssignShipment"/>. Mutates nothing that
+    /// survives the call; returns the feasibility verdict plus the (possibly freshly-opened,
+    /// uncommitted) real aggregates for the caller to commit or discard.
+    /// </summary>
+    private async Task<PreparedInsertion> PrepareInsertionAsync(
+        AssignShipmentToTruckRequest request, CancellationToken cancellationToken)
     {
         var truck = await unitOfWork.Trucks.GetByIdAsync(request.TruckId, cancellationToken)
             ?? throw new InvalidOperationException($"Truck '{request.TruckId}' was not found.");
@@ -99,15 +167,20 @@ public sealed class AssignShipmentToTruckHandler(
 
         var shipmentSize = Capacity.Create(shipment.Load.WeightKg, shipment.Load.VolumeCubicMeters);
 
+        // Measure every road leg the insertion creates BEFORE previewing it, so the same
+        // measured figures feed both the feasibility preview and the real insertion (one
+        // set of OSRM calls, not two). An unroutable/unreachable leg aborts here -
+        // Phase 1 has no fallback distance source (ADR 0011).
+        var legPlan = await ResolveLegPlanAsync(
+            trip, truck, company, pickupLocation, deliveryLocation, officeLocation,
+            request.PickupInsertIndex, request.DeliveryInsertIndex, isNewTrip, cancellationToken);
+
         // Preview the insertion on a throwaway clone so feasibility runs against the
         // route as it WOULD look, without mutating the real trip.
         var preview = trip.Clone();
         preview.AssignShipment(
             shipment.Id, shipmentSize, pickupLocation, deliveryLocation, officeLocation,
-            request.PickupInsertIndex, request.DeliveryInsertIndex,
-            PlaceholderLegDistanceKm, PlaceholderLegTimeTicks,
-            PlaceholderLegDistanceKm, PlaceholderLegTimeTicks,
-            PlaceholderLegDistanceKm, PlaceholderLegTimeTicks);
+            request.PickupInsertIndex, request.DeliveryInsertIndex, legPlan);
 
         var windows = await BuildShipmentWindowsAsync(preview, shipment, cancellationToken);
         var windowProjection = BuildWindowProjection(truck, trip, isNewTrip, windows);
@@ -115,85 +188,128 @@ public sealed class AssignShipmentToTruckHandler(
         var feasibility = insertionEvaluator.Evaluate(
             new InsertionContext(preview, truck.Capacity, windowProjection));
 
-        if (!feasibility.IsFeasible)
-        {
-            throw new InvalidOperationException(
-                $"Cannot assign shipment '{shipment.Id}' to {truck.TruckName}: {feasibility.ViolationReason}");
-        }
-
-        // Feasible - apply the same insertion to the real trip.
-        if (isNewTrip)
-        {
-            unitOfWork.Trips.Add(trip);
-
-            // A fresh trip: every assigned driver starts it fully rested, anchored at
-            // the trip's planned departure. Adding to an EXISTING trip must not reset
-            // ledgers - the drivers' accumulated hours carry through the trip.
-            truck.BeginTripCompliance(trip.StartedAt);
-        }
-
-        var previousNextStopId = trip.NextStop?.Id;
-
-        trip.AssignShipment(
-            shipment.Id, shipmentSize, pickupLocation, deliveryLocation, officeLocation,
-            request.PickupInsertIndex, request.DeliveryInsertIndex,
-            PlaceholderLegDistanceKm, PlaceholderLegTimeTicks,
-            PlaceholderLegDistanceKm, PlaceholderLegTimeTicks,
-            PlaceholderLegDistanceKm, PlaceholderLegTimeTicks);
-
-        truck.SyncProgressToNextStop(trip, previousNextStopId);
-
-        shipment.AssignToCompany(truck.TruckingCompanyId.Value);
-
-        await unitOfWork.SaveChangesAsync(cancellationToken);
-
-        return new AssignShipmentToTruckResponse(trip.Stops.Count);
+        var stopInputs = new StopInputs(shipmentSize, pickupLocation, deliveryLocation, officeLocation);
+        return new PreparedInsertion(feasibility, truck, shipment, trip, isNewTrip, legPlan, stopInputs);
     }
 
     /// <summary>
-    /// Builds the window lookup <see cref="IShipmentInsertionEvaluator.Evaluate"/> needs
-    /// for every Pending stop in <paramref name="preview"/> - the newly-inserted
-    /// shipment's own windows are already known (<paramref name="newShipment"/>); every
-    /// other Pending Pickup/Delivery stop's window is looked up from its own Shipment.
+    /// Measures, via <see cref="IRoutingService"/>, every road leg
+    /// <see cref="Trip.AssignShipment"/> will write for this insertion:
+    /// <list type="bullet">
+    ///   <item>pickup's incoming leg - from its predecessor (a pending stop, the company
+    ///     office for a route that starts here, or the truck's live mid-leg position when
+    ///     the pickup is inserted ahead of a moving truck) to the pickup;</item>
+    ///   <item>the rewritten incoming leg of whatever stop then follows the pickup;</item>
+    ///   <item>the same pair for the delivery;</item>
+    ///   <item>the Office(return) leg, used only when this is the trip's first shipment.</item>
+    /// </list>
     /// </summary>
-    private async Task<Dictionary<Guid, TimeWindow>> BuildShipmentWindowsAsync(
-        Trip preview, Shipment newShipment, CancellationToken cancellationToken)
+    private async Task<LegPlan> ResolveLegPlanAsync(
+        Trip trip,
+        Truck truck,
+        TruckingCompany company,
+        GeoLocation pickupLocation,
+        GeoLocation deliveryLocation,
+        GeoLocation officeLocation,
+        int pickupInsertIndex,
+        int deliveryInsertIndex,
+        bool isNewTrip,
+        CancellationToken cancellationToken)
     {
-        var windows = new Dictionary<Guid, TimeWindow>();
+        var pendingLocations = trip.Stops
+            .Where(stop => stop.Kind != StopKind.Office && stop.Status == StopStatus.Pending)
+            .Select(stop => stop.Location)
+            .ToList();
 
-        foreach (var stop in preview.Stops)
+        // Build the pending non-office route exactly as it will look after both stops are
+        // spliced in - pickup at pickupInsertIndex, then delivery at deliveryInsertIndex + 1
+        // (the +1 accounts for the pickup that now sits before it). The element before
+        // index 0 is the route's start point: the company office, or the truck's live
+        // position when it is already driving.
+        var routeStart = RouteStartLocation(trip, truck, company, isNewTrip);
+
+        var finalRoute = new List<GeoLocation>(pendingLocations);
+        finalRoute.Insert(pickupInsertIndex, pickupLocation);
+        var deliveryFinalIndex = deliveryInsertIndex + 1;
+        finalRoute.Insert(deliveryFinalIndex, deliveryLocation);
+
+        var pickupFinalIndex = pickupInsertIndex;
+
+        GeoLocation Before(int index) => index == 0 ? routeStart : finalRoute[index - 1];
+
+        // Each inserted stop's incoming leg is the hop from whatever now precedes it.
+        var pickupIncoming = await GetLegAsync(Before(pickupFinalIndex), pickupLocation, cancellationToken);
+        var deliveryIncoming = await GetLegAsync(Before(deliveryFinalIndex), deliveryLocation, cancellationToken);
+
+        // Trip.AssignShipment inserts the pickup against the PRE-insertion pending list,
+        // then the delivery against the list-with-pickup. Each insertion rewrites the
+        // incoming leg of the existing stop it landed in front of - matched here index for
+        // index. A null follower means the stop was appended at the end (the Office return
+        // leg below covers that hop instead).
+        RouteSegment? pickupToFollower = pickupInsertIndex < pendingLocations.Count
+            ? await GetLegAsync(pickupLocation, pendingLocations[pickupInsertIndex], cancellationToken)
+            : null;
+
+        var pendingWithPickup = new List<GeoLocation>(pendingLocations);
+        pendingWithPickup.Insert(pickupInsertIndex, pickupLocation);
+        RouteSegment? deliveryToFollower = deliveryFinalIndex < pendingWithPickup.Count
+            ? await GetLegAsync(deliveryLocation, pendingWithPickup[deliveryFinalIndex], cancellationToken)
+            : null;
+
+        // The Office(return) leg is only written the first time this trip receives a
+        // shipment; EnsureOfficeStop ignores it once an Office stop exists.
+        RouteSegment toOffice;
+        if (trip.Stops.Any(stop => stop.Kind == StopKind.Office))
         {
-            if (stop.Status != StopStatus.Pending || stop.Kind == StopKind.Office || stop.ShipmentId is not { } shipmentId)
-            {
-                continue;
-            }
-
-            if (shipmentId == newShipment.Id)
-            {
-                windows[stop.Id] = stop.Kind == StopKind.Pickup ? newShipment.PickupWindow : newShipment.DeliveryWindow;
-                continue;
-            }
-
-            var existingShipment = await unitOfWork.Shipments.GetByIdAsync(shipmentId, cancellationToken)
-                ?? throw new InvalidOperationException($"Shipment '{shipmentId}' referenced by stop '{stop.Id}' was not found.");
-
-            windows[stop.Id] = stop.Kind == StopKind.Pickup ? existingShipment.PickupWindow : existingShipment.DeliveryWindow;
+            toOffice = new RouteSegment(0, 0);
+        }
+        else
+        {
+            toOffice = await GetLegAsync(finalRoute[^1], officeLocation, cancellationToken);
         }
 
-        return windows;
+        return new LegPlan(pickupIncoming, pickupToFollower, deliveryIncoming, deliveryToFollower, toOffice);
     }
 
     /// <summary>
-    /// Assembles the driver + timing state the window-feasibility projection walks forward.
-    ///
-    /// A fresh trip has no ledger yet (<see cref="Truck.BeginTripCompliance"/> seeds it
-    /// only once the insertion is committed) - project from a fully-rested ledger per
-    /// driver, anchored at the trip's planned departure, with no leg in progress. An
-    /// existing trip already has accumulating ledger(s); project forward from wherever
-    /// they currently stand, carrying the truck's live leg progress.
-    ///
-    /// For a team truck, both drivers' ledgers/rules and the current active-driver pointer
-    /// are supplied so the projection alternates between them as their hours require.
+    /// Where the truck sets off from for a leg that has no preceding stop: the company
+    /// office for a route whose first pending stop is the insertion, or - when a pickup
+    /// is inserted ahead of a truck already driving a leg - the truck's live position,
+    /// interpolated along its current leg (distance tracks time, see
+    /// <see cref="RouteProgress"/>).
+    /// </summary>
+    private static GeoLocation RouteStartLocation(Trip trip, Truck truck, TruckingCompany company, bool isNewTrip)
+    {
+        if (isNewTrip || truck.CurrentProgress is null)
+        {
+            return GeoLocation.Create(company.OfficeLocation.Latitude, company.OfficeLocation.Longitude);
+        }
+
+        var nextStop = trip.NextStop;
+        if (nextStop is null)
+        {
+            return GeoLocation.Create(company.OfficeLocation.Latitude, company.OfficeLocation.Longitude);
+        }
+
+        var lastReached = trip.Stops.LastOrDefault(stop => stop.Status == StopStatus.Reached);
+        var legStart = lastReached?.Location
+            ?? GeoLocation.Create(company.OfficeLocation.Latitude, company.OfficeLocation.Longitude);
+
+        return legStart.InterpolateTo(nextStop.Location, truck.CurrentProgress.GetProgressFraction());
+    }
+
+    private async Task<RouteSegment> GetLegAsync(GeoLocation from, GeoLocation to, CancellationToken cancellationToken)
+    {
+        var leg = await routingService.GetRouteAsync(from, to, cancellationToken);
+        return new RouteSegment(leg.DistanceKm, leg.TimeTicks);
+    }
+
+    /// <summary>
+    /// Assembles the driver + timing state the feasibility projection walks forward. A
+    /// fresh trip projects from a fully-rested ledger per driver anchored at the planned
+    /// departure, no leg in progress; an existing trip projects from where its ledger(s)
+    /// currently stand, carrying live leg progress. A team supplies both ledgers + the
+    /// active-driver pointer.
     /// </summary>
     private static WindowProjection BuildWindowProjection(
         Truck truck, Trip trip, bool isNewTrip, IReadOnlyDictionary<Guid, TimeWindow> windows)
@@ -239,4 +355,57 @@ public sealed class AssignShipmentToTruckHandler(
 
         return new WindowProjection(currentLegProgress, drivers, projectionStart, windows);
     }
+
+    /// <summary>
+    /// Each Pending Pickup/Delivery stop's own window, keyed by stop id - the new
+    /// shipment's from <paramref name="newShipment"/>, every other from its own Shipment.
+    /// </summary>
+    private async Task<Dictionary<Guid, TimeWindow>> BuildShipmentWindowsAsync(
+        Trip preview, Shipment newShipment, CancellationToken cancellationToken)
+    {
+        var windows = new Dictionary<Guid, TimeWindow>();
+
+        foreach (var stop in preview.Stops)
+        {
+            if (stop.Status != StopStatus.Pending || stop.Kind == StopKind.Office || stop.ShipmentId is not { } shipmentId)
+            {
+                continue;
+            }
+
+            if (shipmentId == newShipment.Id)
+            {
+                windows[stop.Id] = stop.Kind == StopKind.Pickup ? newShipment.PickupWindow : newShipment.DeliveryWindow;
+                continue;
+            }
+
+            var existingShipment = await unitOfWork.Shipments.GetByIdAsync(shipmentId, cancellationToken)
+                ?? throw new InvalidOperationException($"Shipment '{shipmentId}' referenced by stop '{stop.Id}' was not found.");
+
+            windows[stop.Id] = stop.Kind == StopKind.Pickup ? existingShipment.PickupWindow : existingShipment.DeliveryWindow;
+        }
+
+        return windows;
+    }
+
+    /// <summary>Output of <see cref="PrepareInsertionAsync"/> - see that method.</summary>
+    private sealed record PreparedInsertion(
+        InsertionFeasibility Feasibility,
+        Truck Truck,
+        Shipment Shipment,
+        Trip Trip,
+        bool IsNewTrip,
+        LegPlan LegPlan,
+        StopInputs StopInputs);
+
+    /// <summary>
+    /// Fresh (non-tracked) owned-type instances for the real <see cref="Trip.AssignShipment"/>
+    /// call - built once and reused so EF's change tracker never conflates them with
+    /// Shipment's / TruckingCompany's own navigations (see the fresh-instance comment in
+    /// <see cref="PrepareInsertionAsync"/>).
+    /// </summary>
+    private sealed record StopInputs(
+        Capacity ShipmentSize,
+        GeoLocation PickupLocation,
+        GeoLocation DeliveryLocation,
+        GeoLocation OfficeLocation);
 }

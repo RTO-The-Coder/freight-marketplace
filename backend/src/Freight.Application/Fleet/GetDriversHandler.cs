@@ -11,7 +11,7 @@ public sealed record GetDriversResponse(IReadOnlyList<DriverSummaryDto> Drivers)
 
 public sealed class GetDriversHandler(IUnitOfWork unitOfWork)
 {
-    public async Task<GetDriversResponse> HandleAsync(GetDriversRequest request, CancellationToken cancellationToken = default)
+    public async Task<GetDriversResponse> GetDriversAsync(GetDriversRequest request, CancellationToken cancellationToken = default)
     {
         var allDrivers = await unitOfWork.Drivers.GetAllAsync(cancellationToken);
 

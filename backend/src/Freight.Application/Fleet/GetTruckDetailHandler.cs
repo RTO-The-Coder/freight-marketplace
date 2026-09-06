@@ -1,5 +1,6 @@
 using Freight.Domain.Common;
 using Freight.Domain.Fleet;
+using Freight.Domain.Fleet.Enums;
 
 namespace Freight.Application.Fleet;
 
@@ -34,7 +35,7 @@ public sealed record TruckDetailDto(
 
 public sealed class GetTruckDetailHandler(IUnitOfWork unitOfWork)
 {
-    public async Task<TruckDetailDto> HandleAsync(GetTruckDetailRequest request, CancellationToken cancellationToken = default)
+    public async Task<TruckDetailDto> GetTruckDetailAsync(GetTruckDetailRequest request, CancellationToken cancellationToken = default)
     {
         var truck = await unitOfWork.Trucks.GetByIdAsync(request.TruckId, cancellationToken)
             ?? throw new InvalidOperationException($"Truck '{request.TruckId}' was not found.");

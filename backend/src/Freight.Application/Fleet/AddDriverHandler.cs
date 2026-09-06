@@ -17,7 +17,7 @@ public sealed record AddDriverResponse(Guid DriverId, string FirstName, string L
 
 public sealed class AddDriverHandler(IUnitOfWork unitOfWork)
 {
-    public async Task<AddDriverResponse> AddDriver(AddDriverRequest request, CancellationToken cancellationToken = default)
+    public async Task<AddDriverResponse> AddDriverAsync(AddDriverRequest request, CancellationToken cancellationToken = default)
     {
         var rules = DrivingRules.Create(
             request.BreakRule,

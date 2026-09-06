@@ -1,5 +1,5 @@
 using Freight.Domain.Common;
-using Freight.Domain.Tracking;
+using Freight.Domain.Tracking.Enums;
 using Freight.Domain.ValueObjects.RuleVariants;
 
 namespace Freight.Application.Fleet;
@@ -28,7 +28,7 @@ public sealed record DriverDetailDto(
 
 public sealed class GetDriverDetailHandler(IUnitOfWork unitOfWork)
 {
-    public async Task<DriverDetailDto> HandleAsync(GetDriverDetailRequest request, CancellationToken cancellationToken = default)
+    public async Task<DriverDetailDto> GetDriverDetailsAsync(GetDriverDetailRequest request, CancellationToken cancellationToken = default)
     {
         var driver = await unitOfWork.Drivers.GetByIdAsync(request.DriverId, cancellationToken)
             ?? throw new InvalidOperationException($"Driver '{request.DriverId}' was not found.");
