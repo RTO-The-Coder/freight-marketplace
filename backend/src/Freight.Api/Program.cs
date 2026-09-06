@@ -1,9 +1,5 @@
 using System.Text.Json.Serialization;
-using Freight.Application.Client;
-using Freight.Application.Fleet;
-using Freight.Application.Routing;
-using Freight.Application.Simulation;
-using Freight.Application.Tracking;
+using Freight.Application;
 using Freight.Domain.Common;
 using Freight.Domain.Fleet.Abstractions;
 using Freight.Domain.Fleet.Services;
@@ -59,34 +55,7 @@ builder.Services.AddCors(options =>
             .AllowAnyHeader()
             .AllowAnyMethod()));
 
-builder.Services.AddScoped<AddTruckHandler>();
-builder.Services.AddScoped<AddDriverHandler>();
-builder.Services.AddScoped<AssignDriversHandler>();
-builder.Services.AddScoped<RemoveDriversHandler>();
-builder.Services.AddScoped<SetTruckActivationHandler>();
-builder.Services.AddScoped<GetFleetTreeHandler>();
-builder.Services.AddScoped<GetTruckingCompaniesHandler>();
-builder.Services.AddScoped<GetTruckingCompanyByIdHandler>();
-builder.Services.AddScoped<GetTrucksHandler>();
-builder.Services.AddScoped<GetDriversHandler>();
-builder.Services.AddScoped<GetTruckForDriverHandler>();
-builder.Services.AddScoped<GetTruckDetailHandler>();
-builder.Services.AddScoped<GetTruckEtasHandler>();
-builder.Services.AddScoped<GetTruckPositionHandler>();
-builder.Services.AddScoped<GetRouteLegHandler>();
-builder.Services.AddScoped<GetRouteGeometryHandler>();
-builder.Services.AddScoped<GetDriverDetailHandler>();
-builder.Services.AddScoped<SetTruckCompanyHandler>();
-builder.Services.AddScoped<BookShipmentHandler>();
-builder.Services.AddScoped<UpdatePickupWindowHandler>();
-builder.Services.AddScoped<GetShippersHandler>();
-builder.Services.AddScoped<GetShipmentsByShipperHandler>();
-builder.Services.AddScoped<GetPendingShipmentsHandler>();
-builder.Services.AddScoped<AssignShipmentToTruckHandler>();
-builder.Services.AddScoped<RescheduleTripHandler>();
-builder.Services.AddScoped<CheckDriverEligibilityHandler>();
-builder.Services.AddScoped<SimulationClockHandler>();
-builder.Services.AddScoped<SimulationAdvanceHandler>();
+builder.Services.AddApplication();
 
 var app = builder.Build();
 
