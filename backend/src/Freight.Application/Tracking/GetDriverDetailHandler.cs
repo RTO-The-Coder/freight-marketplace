@@ -2,7 +2,7 @@ using Freight.Domain.Common;
 using Freight.Domain.Tracking.Enums;
 using Freight.Domain.ValueObjects.RuleVariants;
 
-namespace Freight.Application.Fleet;
+namespace Freight.Application.Tracking;
 
 public sealed record GetDriverDetailRequest(Guid DriverId);
 

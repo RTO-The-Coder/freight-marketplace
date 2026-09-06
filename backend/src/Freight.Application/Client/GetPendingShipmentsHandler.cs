@@ -1,7 +1,7 @@
 using Freight.Domain.Common;
 using Freight.Domain.Client.Enums;
 
-namespace Freight.Application.Shipments;
+namespace Freight.Application.Client;
 
 public sealed record GetPendingShipmentsResponse(IReadOnlyList<ShipmentSummaryDto> Shipments);
 

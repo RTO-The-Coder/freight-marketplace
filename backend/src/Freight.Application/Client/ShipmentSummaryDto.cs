@@ -2,7 +2,7 @@ using Freight.Domain.Client;
 using Freight.Domain.Client.Enums;
 using Freight.Domain.Fleet.Enums;
 
-namespace Freight.Application.Shipments;
+namespace Freight.Application.Client;
 
 /// <summary>
 /// Flat snapshot of a <see cref="Shipment"/> for shipper- and marketplace-facing lists.

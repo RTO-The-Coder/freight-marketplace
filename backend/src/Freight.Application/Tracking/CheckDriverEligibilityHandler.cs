@@ -3,7 +3,7 @@ using Freight.Domain.Tracking.Abstractions;
 using Freight.Domain.Tracking.Enums;
 using Freight.Domain.Tracking.ValueObjects;
 
-namespace Freight.Application.Fleet;
+namespace Freight.Application.Tracking;
 
 public sealed record CheckDriverEligibilityRequest(Guid DriverId, int AfterMinutes);
 

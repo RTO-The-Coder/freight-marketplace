@@ -1,7 +1,7 @@
 using Freight.Domain.Common;
 using Freight.Domain.ValueObjects;
 
-namespace Freight.Application.Shipments;
+namespace Freight.Application.Client;
 
 public sealed record UpdatePickupWindowRequest(Guid ShipmentId, TimeWindow NewPickupWindow);
 

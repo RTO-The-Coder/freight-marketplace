@@ -4,7 +4,7 @@ using Freight.Domain.Fleet.Enums;
 using Freight.Domain.ValueObjects;
 using ShipmentAggregate = Freight.Domain.Client.Shipment;
 
-namespace Freight.Application.Shipments;
+namespace Freight.Application.Client;
 
 public sealed record BookShipmentRequest(
     Guid ShipperId,

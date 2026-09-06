@@ -1,6 +1,6 @@
 using Freight.Domain.Common;
 
-namespace Freight.Application.Shipments;
+namespace Freight.Application.Client;
 
 public sealed record ShipperSummaryDto(Guid ShipperId, string Name, string ContactEmail);
 
