@@ -1,6 +1,8 @@
 using Freight.Application.Fleet;
 using Freight.Domain.Common;
 using Freight.Domain.Fleet;
+using Freight.Domain.Fleet.Abstractions;
+using Freight.Domain.Fleet.Enums;
 using Freight.Domain.ValueObjects;
 using Freight.Domain.ValueObjects.RuleVariants;
 using Moq;

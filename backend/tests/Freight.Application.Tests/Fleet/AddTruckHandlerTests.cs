@@ -1,6 +1,8 @@
 using Freight.Application.Fleet;
 using Freight.Domain.Common;
 using Freight.Domain.Fleet;
+using Freight.Domain.Fleet.Abstractions;
+using Freight.Domain.Fleet.Enums;
 using Moq;
 
 namespace Freight.Application.Tests.Fleet;

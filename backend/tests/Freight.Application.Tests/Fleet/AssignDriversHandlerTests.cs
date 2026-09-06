@@ -1,6 +1,8 @@
 using Freight.Application.Fleet;
 using Freight.Domain.Common;
 using Freight.Domain.Fleet;
+using Freight.Domain.Fleet.Abstractions;
+using Freight.Domain.Fleet.Enums;
 using Freight.Domain.ValueObjects;
 using Freight.Domain.ValueObjects.RuleVariants;
 using Moq;
@@ -37,7 +39,7 @@ public sealed class AssignDriversHandlerTests
 
         var handler = new AssignDriversHandler(unitOfWork.Object);
 
-        await handler.AssignDrivers(new AssignDriversRequest(truck.Id, primary.Id, SecondaryDriverId: null));
+        await handler.AssignDriversAsync(new AssignDriversRequest(truck.Id, primary.Id, SecondaryDriverId: null));
 
         Assert.Equal(primary.Id, truck.DriverAssignment!.PrimaryDriver.Id);
         unitOfWork.Verify(u => u.SaveChangesAsync(It.IsAny<CancellationToken>()), Times.Once);
@@ -58,7 +60,7 @@ public sealed class AssignDriversHandlerTests
         var handler = new AssignDriversHandler(unitOfWork.Object);
 
         await Assert.ThrowsAsync<InvalidOperationException>(() =>
-            handler.AssignDrivers(new AssignDriversRequest(truck.Id, primary.Id, secondary.Id)));
+            handler.AssignDriversAsync(new AssignDriversRequest(truck.Id, primary.Id, secondary.Id)));
 
         unitOfWork.Verify(u => u.SaveChangesAsync(It.IsAny<CancellationToken>()), Times.Never);
     }
@@ -72,6 +74,6 @@ public sealed class AssignDriversHandlerTests
         var handler = new AssignDriversHandler(unitOfWork.Object);
 
         await Assert.ThrowsAsync<InvalidOperationException>(() =>
-            handler.AssignDrivers(new AssignDriversRequest(Guid.NewGuid(), Guid.NewGuid(), null)));
+            handler.AssignDriversAsync(new AssignDriversRequest(Guid.NewGuid(), Guid.NewGuid(), null)));
     }
 }

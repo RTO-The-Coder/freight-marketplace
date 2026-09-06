@@ -1,4 +1,4 @@
-using Freight.Application.Shipments;
+using Freight.Application.Client;
 using Freight.Application.Tests;
 using Freight.Domain.Common;
 using Freight.Domain.Fleet;
@@ -6,6 +6,9 @@ using Freight.Domain.Client;
 using Freight.Domain.ValueObjects;
 using Moq;
 using ShipmentAggregate = Freight.Domain.Client.Shipment;
+using Freight.Domain.Client.Abstractions;
+using Freight.Domain.Fleet.Enums;
+using Freight.Domain.Client.Enums;
 
 namespace Freight.Application.Tests.Shipments;
 
@@ -37,7 +40,7 @@ public sealed class BookShipmentHandlerTests
         var handler = new BookShipmentHandler(unitOfWork.Object, timeProvider);
         var shipperId = Guid.NewGuid();
 
-        var response = await handler.HandleAsync(new BookShipmentRequest(
+        var response = await handler.BookShipmentAsync(new BookShipmentRequest(
             shipperId, Pickup(), Delivery(), ValidLoad(), TruckType.Flatbed, ValidPickupWindow(), ValidDeliveryWindow()));
 
         Assert.NotNull(added);

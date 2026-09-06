@@ -1,4 +1,4 @@
-using Freight.Application.Shipments;
+using Freight.Application.Client;
 using Freight.Application.Tests;
 using Freight.Domain.Common;
 using Freight.Domain.Fleet;
@@ -6,6 +6,8 @@ using Freight.Domain.Client;
 using Freight.Domain.ValueObjects;
 using Moq;
 using ShipmentAggregate = Freight.Domain.Client.Shipment;
+using Freight.Domain.Fleet.Enums;
+using Freight.Domain.Client.Abstractions;
 
 namespace Freight.Application.Tests.Shipments;
 

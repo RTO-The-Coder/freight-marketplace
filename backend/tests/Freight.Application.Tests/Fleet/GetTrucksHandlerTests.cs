@@ -1,6 +1,8 @@
 using Freight.Application.Fleet;
 using Freight.Domain.Common;
 using Freight.Domain.Fleet;
+using Freight.Domain.Fleet.Abstractions;
+using Freight.Domain.Fleet.Enums;
 using Freight.Domain.ValueObjects;
 using Freight.Domain.ValueObjects.RuleVariants;
 using Moq;
@@ -32,7 +34,7 @@ public sealed class GetTrucksHandlerTests
 
         var handler = new GetTrucksHandler(unitOfWork.Object);
 
-        var response = await handler.HandleAsync(new GetTrucksRequest(UnassignedOnly: true));
+        var response = await handler.GetTrucksAsync(new GetTrucksRequest(UnassignedOnly: true));
 
         var dto = Assert.Single(response.Trucks);
         Assert.Equal(unassignedTruck.Id, dto.TruckId);
@@ -50,7 +52,7 @@ public sealed class GetTrucksHandlerTests
 
         var handler = new GetTrucksHandler(unitOfWork.Object);
 
-        var response = await handler.HandleAsync(new GetTrucksRequest(UnassignedOnly: false));
+        var response = await handler.GetTrucksAsync(new GetTrucksRequest(UnassignedOnly: false));
 
         Assert.Equal(2, response.Trucks.Count);
     }
@@ -74,7 +76,7 @@ public sealed class GetTrucksHandlerTests
 
         var handler = new GetTrucksHandler(unitOfWork.Object);
 
-        var response = await handler.HandleAsync(new GetTrucksRequest(UnassignedOnly: true, TruckingCompanyId: companyId));
+        var response = await handler.GetTrucksAsync(new GetTrucksRequest(UnassignedOnly: true, TruckingCompanyId: companyId));
 
         var dto = Assert.Single(response.Trucks);
         Assert.Equal(matchingTruck.Id, dto.TruckId);
@@ -99,7 +101,7 @@ public sealed class GetTrucksHandlerTests
 
         var handler = new GetTrucksHandler(unitOfWork.Object);
 
-        var response = await handler.HandleAsync(new GetTrucksRequest(UnassignedOnly: false));
+        var response = await handler.GetTrucksAsync(new GetTrucksRequest(UnassignedOnly: false));
 
         Assert.True(response.Trucks.Single(t => t.TruckId == truckWithDriver.Id).HasDriverAssignment);
         Assert.False(response.Trucks.Single(t => t.TruckId == truckWithoutDriver.Id).HasDriverAssignment);

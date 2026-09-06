@@ -1,5 +1,6 @@
 using Freight.Domain.Common;
 using Freight.Domain.Simulation;
+using Freight.Domain.Simulation.Abstractions;
 using Moq;
 
 namespace Freight.Application.Tests;

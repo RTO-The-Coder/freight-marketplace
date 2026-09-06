@@ -1,8 +1,9 @@
-using Freight.Application.Shipments;
+using Freight.Application.Client;
 using Freight.Domain.Common;
 using Freight.Domain.Client;
 using Moq;
 using ShipperAggregate = Freight.Domain.Client.Shipper;
+using Freight.Domain.Client.Abstractions;
 
 namespace Freight.Application.Tests.Shipments;
 
@@ -21,7 +22,7 @@ public sealed class GetShippersHandlerTests
 
         var handler = new GetShippersHandler(unitOfWork.Object);
 
-        var response = await handler.HandleAsync();
+        var response = await handler.GetShippersAsync();
 
         Assert.Equal(2, response.Shippers.Count);
         Assert.Contains(response.Shippers, s => s.ShipperId == shipper1.Id && s.Name == shipper1.Name);

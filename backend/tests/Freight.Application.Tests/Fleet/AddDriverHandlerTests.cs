@@ -1,6 +1,7 @@
 using Freight.Application.Fleet;
 using Freight.Domain.Common;
 using Freight.Domain.Fleet;
+using Freight.Domain.Fleet.Abstractions;
 using Freight.Domain.ValueObjects.RuleVariants;
 using Moq;
 
@@ -20,7 +21,7 @@ public sealed class AddDriverHandlerTests
 
         var handler = new AddDriverHandler(unitOfWork.Object);
 
-        var response = await handler.AddDriver(new AddDriverRequest(
+        var response = await handler.AddDriverAsync(new AddDriverRequest(
             "Jane",
             "Doe",
             DrivingBreakRule.FullBreak,

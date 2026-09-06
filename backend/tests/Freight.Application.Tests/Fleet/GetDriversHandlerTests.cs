@@ -1,6 +1,8 @@
 using Freight.Application.Fleet;
 using Freight.Domain.Common;
 using Freight.Domain.Fleet;
+using Freight.Domain.Fleet.Abstractions;
+using Freight.Domain.Fleet.Enums;
 using Freight.Domain.ValueObjects;
 using Freight.Domain.ValueObjects.RuleVariants;
 using Moq;
@@ -36,7 +38,7 @@ public sealed class GetDriversHandlerTests
 
         var handler = new GetDriversHandler(unitOfWork.Object);
 
-        var response = await handler.HandleAsync(new GetDriversRequest(UnassignedOnly: false));
+        var response = await handler.GetDriversAsync(new GetDriversRequest(UnassignedOnly: false));
 
         Assert.Equal(2, response.Drivers.Count);
         trucks.Verify(t => t.GetAllAsync(It.IsAny<CancellationToken>()), Times.Never);
@@ -59,7 +61,7 @@ public sealed class GetDriversHandlerTests
 
         var handler = new GetDriversHandler(unitOfWork.Object);
 
-        var response = await handler.HandleAsync(new GetDriversRequest(UnassignedOnly: true));
+        var response = await handler.GetDriversAsync(new GetDriversRequest(UnassignedOnly: true));
 
         var dto = Assert.Single(response.Drivers);
         Assert.Equal(unassignedDriver.Id, dto.DriverId);

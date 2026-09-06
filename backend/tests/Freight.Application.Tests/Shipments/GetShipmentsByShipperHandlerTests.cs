@@ -1,10 +1,13 @@
-using Freight.Application.Shipments;
+using Freight.Application.Client;
 using Freight.Domain.Common;
 using Freight.Domain.Fleet;
 using Freight.Domain.Client;
 using Freight.Domain.ValueObjects;
 using Moq;
 using ShipmentAggregate = Freight.Domain.Client.Shipment;
+using Freight.Domain.Client.Abstractions;
+using Freight.Domain.Fleet.Enums;
+using Freight.Domain.Client.Enums;
 
 namespace Freight.Application.Tests.Shipments;
 
@@ -36,7 +39,7 @@ public sealed class GetShipmentsByShipperHandlerTests
 
         var handler = new GetShipmentsByShipperHandler(unitOfWork.Object);
 
-        var response = await handler.HandleAsync(new GetShipmentsByShipperRequest(shipperId));
+        var response = await handler.GetShipmentsByShipperAsync(new GetShipmentsByShipperRequest(shipperId));
 
         var dto = Assert.Single(response.Shipments);
         Assert.Equal(shipment.Id, dto.ShipmentId);

@@ -1,8 +1,10 @@
-using Freight.Application.Fleet;
+using Freight.Application.Tracking;
 using Freight.Domain.Common;
 using Freight.Domain.Fleet;
+using Freight.Domain.Fleet.Abstractions;
 using Freight.Domain.Tracking;
 using Freight.Domain.Tracking.Abstractions;
+using Freight.Domain.Tracking.ValueObjects;
 using Freight.Domain.ValueObjects;
 using Freight.Domain.ValueObjects.RuleVariants;
 using Moq;
@@ -40,7 +42,7 @@ public sealed class CheckDriverEligibilityHandlerTests
 
         var handler = new CheckDriverEligibilityHandler(unitOfWork.Object, ruleEngine.Object);
 
-        var response = await handler.HandleAsync(new CheckDriverEligibilityRequest(driver.Id, 120));
+        var response = await handler.CheckDriverEligibilityAsync(new CheckDriverEligibilityRequest(driver.Id, 120));
 
         Assert.True(response.IsEligible);
         Assert.Null(response.Reason);
@@ -57,7 +59,7 @@ public sealed class CheckDriverEligibilityHandlerTests
         var handler = new CheckDriverEligibilityHandler(unitOfWork.Object, ruleEngine.Object);
 
         await Assert.ThrowsAsync<InvalidOperationException>(() =>
-            handler.HandleAsync(new CheckDriverEligibilityRequest(driver.Id, 60)));
+            handler.CheckDriverEligibilityAsync(new CheckDriverEligibilityRequest(driver.Id, 60)));
     }
 
     [Fact]
@@ -72,7 +74,7 @@ public sealed class CheckDriverEligibilityHandlerTests
         var handler = new CheckDriverEligibilityHandler(unitOfWork.Object, ruleEngine.Object);
 
         await Assert.ThrowsAsync<ArgumentOutOfRangeException>(() =>
-            handler.HandleAsync(new CheckDriverEligibilityRequest(driver.Id, -1)));
+            handler.CheckDriverEligibilityAsync(new CheckDriverEligibilityRequest(driver.Id, -1)));
     }
 
     [Fact]
@@ -84,6 +86,6 @@ public sealed class CheckDriverEligibilityHandlerTests
         var handler = new CheckDriverEligibilityHandler(unitOfWork.Object, ruleEngine.Object);
 
         await Assert.ThrowsAsync<InvalidOperationException>(() =>
-            handler.HandleAsync(new CheckDriverEligibilityRequest(Guid.NewGuid(), 60)));
+            handler.CheckDriverEligibilityAsync(new CheckDriverEligibilityRequest(Guid.NewGuid(), 60)));
     }
 }
