@@ -1,4 +1,5 @@
 using Freight.Domain.Client;
+using Freight.Domain.Client.Abstractions;
 using Microsoft.EntityFrameworkCore;
 
 namespace Freight.Infrastructure.Persistence.Repositories;

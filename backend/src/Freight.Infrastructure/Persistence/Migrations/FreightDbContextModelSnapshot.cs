@@ -494,6 +494,16 @@ namespace Freight.Infrastructure.Persistence.Migrations
                             b1.Property<Guid?>("TruckingCompanyId")
                                 .HasColumnType("uuid");
 
+                            b1.Property<int>("WaitTimeTick")
+                                .ValueGeneratedOnAdd()
+                                .HasColumnType("integer")
+                                .HasDefaultValue(0);
+
+                            b1.Property<int>("WaitTimeTickElapsed")
+                                .ValueGeneratedOnAdd()
+                                .HasColumnType("integer")
+                                .HasDefaultValue(0);
+
                             b1.HasKey("Id");
 
                             b1.HasIndex("TripId");

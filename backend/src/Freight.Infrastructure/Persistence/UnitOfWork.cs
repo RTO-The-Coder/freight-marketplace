@@ -3,6 +3,9 @@ using Freight.Domain.Fleet;
 using Freight.Domain.Client;
 using Freight.Domain.Simulation;
 using Freight.Infrastructure.Persistence.Repositories;
+using Freight.Domain.Fleet.Abstractions;
+using Freight.Domain.Client.Abstractions;
+using Freight.Domain.Simulation.Abstractions;
 
 namespace Freight.Infrastructure.Persistence;
 

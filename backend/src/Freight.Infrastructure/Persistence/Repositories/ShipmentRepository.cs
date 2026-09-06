@@ -1,4 +1,6 @@
 using Freight.Domain.Client;
+using Freight.Domain.Client.Abstractions;
+using Freight.Domain.Client.Enums;
 using Microsoft.EntityFrameworkCore;
 
 namespace Freight.Infrastructure.Persistence.Repositories;

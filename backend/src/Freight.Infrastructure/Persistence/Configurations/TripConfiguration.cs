@@ -73,6 +73,13 @@ public sealed class TripConfiguration : IEntityTypeConfiguration<Trip>
 
             stop.Property(s => s.ReachedAt);
 
+            stop.Property(s => s.WaitTimeTick).IsRequired().HasDefaultValue(0);
+
+            stop.Property(s => s.WaitTimeTickElapsed).IsRequired().HasDefaultValue(0);
+
+            // IsWaitComplete is derived from the two wait counters, never stored.
+            stop.Ignore(s => s.IsWaitComplete);
+
             stop.OwnsOne(s => s.Location, location =>
             {
                 location.Property(l => l.Latitude).HasColumnName("LocationLatitude");
