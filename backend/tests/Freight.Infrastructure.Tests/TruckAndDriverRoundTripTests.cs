@@ -1,4 +1,6 @@
 using Freight.Domain.Fleet;
+using Freight.Domain.Fleet.Enums;
+using Freight.Domain.Fleet.ValueObjects;
 using Freight.Domain.ValueObjects;
 using Freight.Domain.ValueObjects.RuleVariants;
 using Freight.Infrastructure.Persistence;
@@ -96,6 +98,38 @@ public class TruckAndDriverRoundTripTests : IAsyncLifetime
     }
 
     [Fact]
+    public async Task Truck_DriverAssignmentClearedByRemoveDrivers_RoundTripsAsNull()
+    {
+        var driver = Driver.Create(Guid.NewGuid(), "Primary", "Driver", SampleRules());
+        var truck = Truck.Create(Guid.NewGuid(), "Truck-2b", TruckType.Flatbed, TruckSize.Large);
+        truck.AssignToCompany(Guid.NewGuid());
+        truck.AssignDrivers(driver);
+        truck.Activate();
+
+        await using (var writeContext = new FreightDbContext(Options()))
+        {
+            writeContext.Set<Driver>().Add(driver);
+            writeContext.Set<Truck>().Add(truck);
+            await writeContext.SaveChangesAsync();
+        }
+
+        // Reload, clear the assignment, save - the owned DriverAssignment must transition
+        // back to null in the database, and the truck must come back inactive.
+        await using (var mutateContext = new FreightDbContext(Options()))
+        {
+            var loaded = await mutateContext.Set<Truck>().FirstAsync(t => t.Id == truck.Id);
+            loaded.RemoveDrivers();
+            await mutateContext.SaveChangesAsync();
+        }
+
+        await using var readContext = new FreightDbContext(Options());
+        var reloaded = await readContext.Set<Truck>().FirstAsync(t => t.Id == truck.Id);
+
+        Assert.Null(reloaded.DriverAssignment);
+        Assert.False(reloaded.IsActive);
+    }
+
+    [Fact]
     public async Task Truck_WithTeamDrivers_RoundTripsBothDriverReferences()
     {
         var primary = Driver.Create(Guid.NewGuid(), "Primary", "Driver", SampleRules());
@@ -139,9 +173,10 @@ public class TruckAndDriverRoundTripTests : IAsyncLifetime
             company.OfficeLocation,
             pickupInsertIndex: 0,
             deliveryInsertIndex: 0,
-            pickupLegDistanceKm: 650, pickupLegTimeTick: 78,
-            deliveryLegDistanceKm: 650, deliveryLegTimeTick: 78,
-            officeLegDistanceKm: 650, officeLegTimeTick: 78);
+            new LegPlan(
+                new RouteSegment(650, 78), new RouteSegment(650, 78),
+                new RouteSegment(650, 78), new RouteSegment(650, 78),
+                new RouteSegment(650, 78)));
         truck.SyncProgressToNextStop(trip, previousNextStopId);
 
         await using (var writeContext = new FreightDbContext(Options()))
