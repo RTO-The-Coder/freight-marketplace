@@ -1,6 +1,8 @@
 using Freight.Domain.Common;
 using Freight.Domain.Fleet;
 using Freight.Domain.Client;
+using Freight.Domain.Fleet.Enums;
+using Freight.Domain.Client.Enums;
 
 namespace Freight.Application.Shipments;
 
@@ -27,7 +29,7 @@ public sealed record GetShipmentsByShipperResponse(IReadOnlyList<ShipmentSummary
 
 public sealed class GetShipmentsByShipperHandler(IUnitOfWork unitOfWork)
 {
-    public async Task<GetShipmentsByShipperResponse> HandleAsync(GetShipmentsByShipperRequest request, CancellationToken cancellationToken = default)
+    public async Task<GetShipmentsByShipperResponse> GetShipmentByShipperAsync(GetShipmentsByShipperRequest request, CancellationToken cancellationToken = default)
     {
         var shipments = await unitOfWork.Shipments.GetByShipperIdAsync(request.ShipperId, cancellationToken);
 

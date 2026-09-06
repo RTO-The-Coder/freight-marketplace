@@ -1,5 +1,6 @@
 using Freight.Domain.Common;
 using Freight.Domain.Client;
+using Freight.Domain.Client.Enums;
 
 namespace Freight.Application.Shipments;
 
@@ -7,7 +8,7 @@ public sealed record GetPendingShipmentsResponse(IReadOnlyList<ShipmentSummaryDt
 
 public sealed class GetPendingShipmentsHandler(IUnitOfWork unitOfWork)
 {
-    public async Task<GetPendingShipmentsResponse> HandleAsync(CancellationToken cancellationToken = default)
+    public async Task<GetPendingShipmentsResponse> GetPendingShipmentAsync(CancellationToken cancellationToken = default)
     {
         var shipments = await unitOfWork.Shipments.GetByStatusAsync(ShipmentStatus.Pending, cancellationToken);
 

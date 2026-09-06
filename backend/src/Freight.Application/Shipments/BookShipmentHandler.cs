@@ -1,5 +1,6 @@
 using Freight.Domain.Common;
 using Freight.Domain.Fleet;
+using Freight.Domain.Fleet.Enums;
 using Freight.Domain.ValueObjects;
 using ShipmentAggregate = Freight.Domain.Client.Shipment;
 
@@ -18,7 +19,7 @@ public sealed record BookShipmentResponse(Guid ShipmentId);
 
 public sealed class BookShipmentHandler(IUnitOfWork unitOfWork, TimeProvider timeProvider)
 {
-    public async Task<BookShipmentResponse> HandleAsync(BookShipmentRequest request, CancellationToken cancellationToken = default)
+    public async Task<BookShipmentResponse> BookShipmentAsync(BookShipmentRequest request, CancellationToken cancellationToken = default)
     {
         var clock = await unitOfWork.SimulationClock.GetOrCreateAsync(
             () => timeProvider.GetUtcNow().UtcDateTime, cancellationToken);
