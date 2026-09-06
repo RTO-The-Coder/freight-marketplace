@@ -1,4 +1,6 @@
 using Freight.Domain.Fleet;
+using Freight.Domain.Fleet.Enums;
+using Freight.Domain.Fleet.ValueObjects;
 using Freight.Domain.ValueObjects;
 using Freight.Domain.ValueObjects.RuleVariants;
 
@@ -36,12 +38,11 @@ public class TruckTests
     {
         var previousNextStopId = trip.NextStop?.Id;
 
+        var placeholderLeg = new RouteSegment(PlaceholderLegDistanceKm, PlaceholderLegTimeTick);
         trip.AssignShipment(
             shipmentId, size, PickupLocation, DeliveryLocation, OfficeLocation,
             pickupInsertIndex, deliveryInsertIndex,
-            PlaceholderLegDistanceKm, PlaceholderLegTimeTick,
-            PlaceholderLegDistanceKm, PlaceholderLegTimeTick,
-            PlaceholderLegDistanceKm, PlaceholderLegTimeTick);
+            new LegPlan(placeholderLeg, placeholderLeg, placeholderLeg, placeholderLeg, placeholderLeg));
 
         truck.SyncProgressToNextStop(trip, previousNextStopId);
     }
@@ -64,10 +65,20 @@ public class TruckTests
     }
 
     [Fact]
-    public void Activate_AfterAssignToCompany_Succeeds()
+    public void Activate_WithCompanyButNoDriver_Throws()
     {
         var truck = Truck.Create(Guid.NewGuid(), "Truck-1", TruckType.BoxVan, TruckSize.Large);
         truck.AssignToCompany(NewCompany().Id);
+
+        Assert.Throws<InvalidOperationException>(truck.Activate);
+    }
+
+    [Fact]
+    public void Activate_AfterCompanyAndDriverAssigned_Succeeds()
+    {
+        var truck = Truck.Create(Guid.NewGuid(), "Truck-1", TruckType.BoxVan, TruckSize.Large);
+        truck.AssignToCompany(NewCompany().Id);
+        truck.AssignDrivers(NewDriver());
 
         truck.Activate();
 
@@ -89,6 +100,7 @@ public class TruckTests
     {
         var truck = Truck.Create(Guid.NewGuid(), "Truck-1", TruckType.BoxVan, TruckSize.Large);
         truck.AssignToCompany(NewCompany().Id);
+        truck.AssignDrivers(NewDriver());
         truck.Activate();
 
         truck.UnassignFromCompany();
@@ -146,11 +158,11 @@ public class TruckTests
     }
 
     [Fact]
-    public void DetermineStatus_NoTrip_IsRunning()
+    public void DetermineStatus_HasDriverButNoTrip_IsAtOffice()
     {
         var truck = NewTruck();
 
-        Assert.Equal(TruckStatus.Running, truck.DetermineStatus(null));
+        Assert.Equal(TruckStatus.AtOffice, truck.DetermineStatus(null));
     }
 
     [Fact]

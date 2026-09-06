@@ -1,4 +1,6 @@
 using Freight.Domain.Fleet;
+using Freight.Domain.Fleet.Enums;
+using Freight.Domain.Fleet.ValueObjects;
 using Freight.Domain.ValueObjects;
 
 namespace Freight.Domain.Tests;
@@ -12,6 +14,13 @@ public class TripTests
     private const double PlaceholderLegDistanceKm = 650;
     private const int PlaceholderLegTimeTick = 78;
 
+    private static readonly RouteSegment PlaceholderLeg = new(PlaceholderLegDistanceKm, PlaceholderLegTimeTick);
+
+    // A uniform LegPlan: every leg the same placeholder value, including the two
+    // follower-rewrite legs (non-null so an inserted stop can always have a follower).
+    private static LegPlan PlaceholderPlan() =>
+        new(PlaceholderLeg, PlaceholderLeg, PlaceholderLeg, PlaceholderLeg, PlaceholderLeg);
+
     private static Trip NewTrip() => Trip.Open(Guid.NewGuid(), Guid.NewGuid(), DateTime.UtcNow);
 
     private static Capacity SmallShipment() => Capacity.Create(100, 2);
@@ -19,10 +28,7 @@ public class TripTests
     private static void AssignShipment(Trip trip, Guid shipmentId, Capacity size, int pickupInsertIndex, int deliveryInsertIndex) =>
         trip.AssignShipment(
             shipmentId, size, PickupLocation, DeliveryLocation, OfficeLocation,
-            pickupInsertIndex, deliveryInsertIndex,
-            PlaceholderLegDistanceKm, PlaceholderLegTimeTick,
-            PlaceholderLegDistanceKm, PlaceholderLegTimeTick,
-            PlaceholderLegDistanceKm, PlaceholderLegTimeTick);
+            pickupInsertIndex, deliveryInsertIndex, PlaceholderPlan());
 
     [Fact]
     public void Open_StartsWithNoStops()
@@ -177,19 +183,25 @@ public class TripTests
         var firstPickupStop = trip.Stops.Single(s => s.ShipmentId == firstShipmentId && s.Kind == StopKind.Pickup);
         Assert.Equal(PlaceholderLegDistanceKm, firstPickupStop.IncomingLegDistanceKm);
 
-        // Insert a new pickup ahead of the first shipment's pickup.
+        // Insert a new pickup ahead of the first shipment's pickup. The new pickup's own
+        // incoming leg (100/10) and the follower-rewrite leg from it to the first
+        // shipment's pickup (55/5) are distinct measured values.
         var secondShipmentId = Guid.NewGuid();
         trip.AssignShipment(
             secondShipmentId, SmallShipment(), PickupLocation, DeliveryLocation, OfficeLocation,
             pickupInsertIndex: 0, deliveryInsertIndex: 2,
-            pickupLegDistanceKm: 100, pickupLegTimeTick: 10,
-            deliveryLegDistanceKm: 200, deliveryLegTimeTick: 20,
-            officeLegDistanceKm: PlaceholderLegDistanceKm, officeLegTimeTick: PlaceholderLegTimeTick);
+            new LegPlan(
+                PickupIncoming: new RouteSegment(100, 10),
+                PickupToFollower: new RouteSegment(55, 5),
+                DeliveryIncoming: new RouteSegment(200, 20),
+                DeliveryToFollower: PlaceholderLeg,
+                ToOffice: PlaceholderLeg));
 
         // The first shipment's pickup stop now follows the new pickup, so its incoming
-        // leg has been overwritten - no longer the original placeholder value.
-        Assert.Equal(100, firstPickupStop.IncomingLegDistanceKm);
-        Assert.Equal(10, firstPickupStop.IncomingLegTimeTick);
+        // leg has been overwritten with the PickupToFollower value - not the new pickup's
+        // own incoming leg, and not the original placeholder.
+        Assert.Equal(55, firstPickupStop.IncomingLegDistanceKm);
+        Assert.Equal(5, firstPickupStop.IncomingLegTimeTick);
     }
 
     [Fact]

@@ -46,4 +46,51 @@ public class GeoLocationTests
     {
         Assert.Throws<ArgumentOutOfRangeException>(() => GeoLocation.Create(latitude, longitude));
     }
+
+    [Fact]
+    public void InterpolateTo_ZeroFraction_ReturnsStart()
+    {
+        var start = GeoLocation.Create(52.0, 13.0);
+        var end = GeoLocation.Create(48.0, 11.0);
+
+        var point = start.InterpolateTo(end, 0);
+
+        Assert.Equal(52.0, point.Latitude, precision: 9);
+        Assert.Equal(13.0, point.Longitude, precision: 9);
+    }
+
+    [Fact]
+    public void InterpolateTo_FullFraction_ReturnsEnd()
+    {
+        var start = GeoLocation.Create(52.0, 13.0);
+        var end = GeoLocation.Create(48.0, 11.0);
+
+        var point = start.InterpolateTo(end, 1);
+
+        Assert.Equal(48.0, point.Latitude, precision: 9);
+        Assert.Equal(11.0, point.Longitude, precision: 9);
+    }
+
+    [Fact]
+    public void InterpolateTo_HalfFraction_ReturnsMidpoint()
+    {
+        var start = GeoLocation.Create(52.0, 13.0);
+        var end = GeoLocation.Create(48.0, 11.0);
+
+        var point = start.InterpolateTo(end, 0.5);
+
+        Assert.Equal(50.0, point.Latitude, precision: 9);
+        Assert.Equal(12.0, point.Longitude, precision: 9);
+    }
+
+    [Theory]
+    [InlineData(-0.1)]
+    [InlineData(1.1)]
+    public void InterpolateTo_FractionOutOfRange_Throws(double fraction)
+    {
+        var start = GeoLocation.Create(52.0, 13.0);
+        var end = GeoLocation.Create(48.0, 11.0);
+
+        Assert.Throws<ArgumentOutOfRangeException>(() => start.InterpolateTo(end, fraction));
+    }
 }

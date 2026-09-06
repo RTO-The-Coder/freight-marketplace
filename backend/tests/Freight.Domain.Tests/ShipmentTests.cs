@@ -1,4 +1,6 @@
+using Freight.Domain.Client.Enums;
 using Freight.Domain.Fleet;
+using Freight.Domain.Fleet.Enums;
 using Freight.Domain.ValueObjects;
 using ShipmentAggregate = Freight.Domain.Client.Shipment;
 
@@ -55,7 +57,7 @@ public class ShipmentTests
         Assert.Null(shipment.ScheduledPickupWindow);
         Assert.Null(shipment.ScheduledDeliveryWindow);
         Assert.Null(shipment.EstimatedPickup);
-        Assert.Equal(Client.ShipmentStatus.Pending, shipment.Status);
+        Assert.Equal(ShipmentStatus.Pending, shipment.Status);
     }
 
     [Fact]
@@ -148,7 +150,7 @@ public class ShipmentTests
         shipment.AssignToCompany(companyId);
 
         Assert.Equal(companyId, shipment.TruckingCompanyId);
-        Assert.Equal(Client.ShipmentStatus.Booked, shipment.Status);
+        Assert.Equal(ShipmentStatus.Booked, shipment.Status);
     }
 
     [Fact]
@@ -178,7 +180,7 @@ public class ShipmentTests
         shipment.MarkPickedUp(pickedUpAt);
 
         Assert.Equal(pickedUpAt, shipment.EstimatedPickup);
-        Assert.Equal(Client.ShipmentStatus.InTransit, shipment.Status);
+        Assert.Equal(ShipmentStatus.InTransit, shipment.Status);
     }
 
     [Fact]
@@ -198,7 +200,7 @@ public class ShipmentTests
 
         shipment.MarkDelivered(new DateTime(2026, 1, 2, 15, 0, 0, DateTimeKind.Utc));
 
-        Assert.Equal(Client.ShipmentStatus.Delivered, shipment.Status);
+        Assert.Equal(ShipmentStatus.Delivered, shipment.Status);
     }
 
     [Fact]

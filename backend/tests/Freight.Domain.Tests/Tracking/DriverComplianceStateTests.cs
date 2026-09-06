@@ -1,4 +1,5 @@
 using Freight.Domain.Tracking;
+using Freight.Domain.Tracking.Enums;
 
 namespace Freight.Domain.Tests.Tracking;
 

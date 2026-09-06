@@ -1,6 +1,10 @@
 using Freight.Domain.Fleet;
+using Freight.Domain.Fleet.Enums;
+using Freight.Domain.Fleet.Services;
+using Freight.Domain.Fleet.ValueObjects;
 using Freight.Domain.Tracking;
 using Freight.Domain.Tracking.Abstractions;
+using Freight.Domain.Tracking.Services;
 using Freight.Domain.ValueObjects;
 using Freight.Domain.ValueObjects.RuleVariants;
 
@@ -36,12 +40,18 @@ public class RouteEtaCalculatorTests
     /// </summary>
     private static Trip TripWithOneShipment(int legTicks, double legKm = 100)
     {
+        var seg = new RouteSegment(legKm, legTicks);
         var trip = Trip.Open(Guid.NewGuid(), Guid.NewGuid(), Start);
         trip.AssignShipment(
             Guid.NewGuid(), Capacity.Create(100, 2),
             PickupLocation, DeliveryLocation, OfficeLocation,
             pickupInsertIndex: 0, deliveryInsertIndex: 0,
-            legKm, legTicks, legKm, legTicks, legKm, legTicks);
+            new LegPlan(
+                PickupIncoming: seg,
+                PickupToFollower: null,
+                DeliveryIncoming: seg,
+                DeliveryToFollower: null,
+                ToOffice: seg));
         return trip;
     }
 
@@ -54,7 +64,7 @@ public class RouteEtaCalculatorTests
         var trip = TripWithOneShipment(legTicks: 12);
         var calculator = NewCalculator();
 
-        var etas = calculator.CalculateEtas(trip, null, FullyRestedLedger(), FullRule, Start);
+        var etas = calculator.CalculateEtas(trip, null, FullyRestedLedger(), FullRule, Start).Etas;
 
         Assert.Equal(Start.AddHours(1), etas[StopOfKind(trip, StopKind.Pickup).Id]);
         Assert.Equal(Start.AddHours(2), etas[StopOfKind(trip, StopKind.Delivery).Id]);
@@ -69,7 +79,7 @@ public class RouteEtaCalculatorTests
         var trip = TripWithOneShipment(legTicks: 72);
         var calculator = NewCalculator();
 
-        var etas = calculator.CalculateEtas(trip, null, FullyRestedLedger(), FullRule, Start);
+        var etas = calculator.CalculateEtas(trip, null, FullyRestedLedger(), FullRule, Start).Etas;
 
         Assert.Equal(Start.AddHours(6).AddMinutes(45), etas[StopOfKind(trip, StopKind.Pickup).Id]);
     }
@@ -83,7 +93,7 @@ public class RouteEtaCalculatorTests
         progress.AdvanceByTicks(8);
         var calculator = NewCalculator();
 
-        var etas = calculator.CalculateEtas(trip, progress, FullyRestedLedger(), FullRule, Start);
+        var etas = calculator.CalculateEtas(trip, progress, FullyRestedLedger(), FullRule, Start).Etas;
 
         Assert.Equal(Start.AddMinutes(20), etas[StopOfKind(trip, StopKind.Pickup).Id]);
     }
@@ -99,7 +109,7 @@ public class RouteEtaCalculatorTests
         var trip = TripWithOneShipment(legTicks: 30);
         var calculator = NewCalculator();
 
-        var etas = calculator.CalculateEtas(trip, null, FullyRestedLedger(), FullRule, Start);
+        var etas = calculator.CalculateEtas(trip, null, FullyRestedLedger(), FullRule, Start).Etas;
 
         Assert.Equal(Start.AddHours(2).AddMinutes(30), etas[StopOfKind(trip, StopKind.Pickup).Id]);
         Assert.Equal(Start.AddHours(5).AddMinutes(45), etas[StopOfKind(trip, StopKind.Delivery).Id]);
@@ -116,7 +126,7 @@ public class RouteEtaCalculatorTests
         var trip = TripWithOneShipment(legTicks: 132);
         var calculator = NewCalculator();
 
-        var etas = calculator.CalculateEtas(trip, null, FullyRestedLedger(), FullRule, Start);
+        var etas = calculator.CalculateEtas(trip, null, FullyRestedLedger(), FullRule, Start).Etas;
 
         Assert.Equal(Start.AddHours(22).AddMinutes(45), etas[StopOfKind(trip, StopKind.Pickup).Id]);
     }
@@ -127,7 +137,7 @@ public class RouteEtaCalculatorTests
         var trip = Trip.Open(Guid.NewGuid(), Guid.NewGuid(), Start);
         var calculator = NewCalculator();
 
-        var etas = calculator.CalculateEtas(trip, null, FullyRestedLedger(), FullRule, Start);
+        var etas = calculator.CalculateEtas(trip, null, FullyRestedLedger(), FullRule, Start).Etas;
 
         Assert.Empty(etas);
     }

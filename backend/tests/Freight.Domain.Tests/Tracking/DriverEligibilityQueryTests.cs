@@ -1,5 +1,8 @@
 using Freight.Domain.Tracking;
 using Freight.Domain.Tracking.Abstractions;
+using Freight.Domain.Tracking.Enums;
+using Freight.Domain.Tracking.Services;
+using Freight.Domain.Tracking.ValueObjects;
 using Freight.Domain.ValueObjects;
 using Freight.Domain.ValueObjects.RuleVariants;
 
