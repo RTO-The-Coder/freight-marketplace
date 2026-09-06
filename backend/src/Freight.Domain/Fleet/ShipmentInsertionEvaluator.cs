@@ -5,12 +5,10 @@ namespace Freight.Domain.Fleet;
 
 /// <summary>
 /// Checks window and capacity feasibility for a hypothetical shipment insertion (see
-/// <see cref="IShipmentInsertionEvaluator"/>). Window feasibility asks
-/// <see cref="RouteEtaCalculator"/> for the projected arrival at every Pending stop -
-/// a real forward walk that accounts for the driver's mandatory breaks and rests - and
-/// checks each against that stop's own requested window. Capacity is checked at every
-/// point along the route (a Pickup adds load, a Delivery removes it), not just the
-/// truck's current moment.
+/// <see cref="IShipmentInsertionEvaluator"/>). Windows: <see cref="RouteEtaCalculator"/>
+/// projects each Pending stop's arrival (a real forward walk with driver breaks/rests) and
+/// each is checked against its own window. Capacity: checked after every pickup along the
+/// whole route, not just now.
 /// </summary>
 public sealed class ShipmentInsertionEvaluator : IShipmentInsertionEvaluator
 {
@@ -38,14 +36,13 @@ public sealed class ShipmentInsertionEvaluator : IShipmentInsertionEvaluator
     }
 
     /// <summary>
-    /// Projects the arrival time at every Pending Pickup/Delivery stop (via
-    /// <see cref="RouteEtaCalculator"/>, team-aware) and checks each against its own
-    /// window. Returns the first violation found, or a feasible result if every projected
-    /// arrival falls within its window.
+    /// Projects each Pending Pickup/Delivery stop's arrival and checks it against its
+    /// window. Returns the first violation, or a feasible result carrying the per-stop
+    /// wait-for-window ticks.
     /// </summary>
     private InsertionFeasibility EvaluateWindows(Trip proposedTrip, WindowProjection windows)
     {
-        var etas = ProjectArrivals(proposedTrip, windows);
+        var projection = ProjectArrivals(proposedTrip, windows);
 
         foreach (var stop in proposedTrip.Stops.Where(stop => stop.Status == StopStatus.Pending))
         {
@@ -54,7 +51,7 @@ public sealed class ShipmentInsertionEvaluator : IShipmentInsertionEvaluator
                 continue;
             }
 
-            if (!etas.TryGetValue(stop.Id, out var projectedArrival))
+            if (!projection.Etas.TryGetValue(stop.Id, out var projectedArrival))
             {
                 throw new InvalidOperationException(
                     $"Route ETA projection produced no arrival time for Pending stop '{stop.Id}'.");
@@ -67,15 +64,28 @@ public sealed class ShipmentInsertionEvaluator : IShipmentInsertionEvaluator
             }
         }
 
-        return new InsertionFeasibility(true, null, null);
+        // Re-key the walk's per-stop wait (stop id) to StopRef (shipment + kind) so the
+        // caller can apply it to the real trip, whose freshly-inserted stops carry
+        // different ids than this preview clone's.
+        var plannedWaits = new Dictionary<StopRef, int>();
+        foreach (var stop in proposedTrip.Stops)
+        {
+            if (stop.ShipmentId is null || stop.Kind is not (StopKind.Pickup or StopKind.Delivery))
+            {
+                continue;
+            }
+
+            if (projection.WaitTicks.TryGetValue(stop.Id, out var ticks) && ticks > 0)
+            {
+                plannedWaits[StopRef.For(stop)] = ticks;
+            }
+        }
+
+        return new InsertionFeasibility(true, null, null, plannedWaits);
     }
 
-    /// <summary>
-    /// Runs the forward route walk that produces each Pending stop's projected arrival -
-    /// the single-driver walk for a single-driver truck, the two-driver alternating walk
-    /// for a team.
-    /// </summary>
-    private IReadOnlyDictionary<Guid, DateTime> ProjectArrivals(Trip proposedTrip, WindowProjection windows)
+    /// <summary>Runs the single- or team-driver forward route walk, per <paramref name="windows"/>.Drivers.</summary>
+    private RouteProjection ProjectArrivals(Trip proposedTrip, WindowProjection windows)
     {
         var drivers = windows.Drivers;
 
@@ -86,7 +96,8 @@ public sealed class ShipmentInsertionEvaluator : IShipmentInsertionEvaluator
                 windows.CurrentLegProgress,
                 drivers.PrimaryLedger,
                 drivers.PrimaryRules,
-                windows.ProjectionStart);
+                windows.ProjectionStart,
+                windows.ShipmentWindows);
         }
 
         return _routeEtaCalculator.CalculateEtasForTeam(
@@ -97,7 +108,8 @@ public sealed class ShipmentInsertionEvaluator : IShipmentInsertionEvaluator
             drivers.SecondaryLedger!,
             drivers.SecondaryRules!,
             drivers.ActiveDriverId!.Value,
-            windows.ProjectionStart);
+            windows.ProjectionStart,
+            windows.ShipmentWindows);
     }
 
     private static InsertionFeasibility CheckWindow(
@@ -108,24 +120,30 @@ public sealed class ShipmentInsertionEvaluator : IShipmentInsertionEvaluator
             throw new InvalidOperationException($"No window supplied for stop '{stop.Id}'.");
         }
 
-        if (projectedArrival < window.Earliest || projectedArrival > window.Latest)
+        // Arriving before the window opens is always fine - the route walk parks the truck
+        // at the stop and waits (see RouteEtaCalculator.WaitForWindow), so the only real
+        // violation is arriving after the window has already closed.
+        if (projectedArrival > window.Latest)
         {
             var kindLabel = stop.Kind == StopKind.Pickup ? "pickup" : "delivery";
+            // Operator-facing text: no stop GUID (the caller already gets ViolatingStopId
+            // separately) and plain "MMM d, HH:mm" timestamps rather than ISO-8601.
             return new InsertionFeasibility(
                 false, stop.Id,
-                $"Projected {kindLabel} arrival {projectedArrival:O} at stop '{stop.Id}' falls outside its window " +
-                $"({window.Earliest:O} - {window.Latest:O}).");
+                $"The truck would reach the {kindLabel} at {Format(projectedArrival)} - " +
+                $"after its window closes at {Format(window.Latest)}.");
         }
 
         return new InsertionFeasibility(true, null, null);
     }
 
+    private static string Format(DateTime instant) =>
+        instant.ToString("MMM d, HH:mm", System.Globalization.CultureInfo.InvariantCulture);
+
     /// <summary>
-    /// Walks every stop in sequence, tracking on-board load (Pickup adds, Delivery
-    /// removes), starting from what's already on board right now (Reached Pickup whose
-    /// matching Delivery is still Pending - same pairing <see cref="Trip.CurrentLoad"/>
-    /// uses). Returns the first point where the running load would exceed
-    /// <paramref name="truckCapacity"/>, or a feasible result if it never does.
+    /// Walks the route tracking on-board load (starting from what's already aboard), and
+    /// returns the first pickup that would exceed <paramref name="truckCapacity"/>, or a
+    /// feasible result.
     /// </summary>
     private static InsertionFeasibility EvaluateCapacity(IReadOnlyList<Stop> proposedStops, Capacity truckCapacity)
     {
@@ -160,10 +178,14 @@ public sealed class ShipmentInsertionEvaluator : IShipmentInsertionEvaluator
 
                 if (weight > truckCapacity.WeightKg || volume > truckCapacity.VolumeCubicMeters)
                 {
+                    // Operator-facing: no stop GUID (ViolatingStopId carries it), just the
+                    // dimension that overflowed.
+                    var overflow = weight > truckCapacity.WeightKg
+                        ? $"{weight:0.#} kg on board would exceed the truck's {truckCapacity.WeightKg:0.#} kg limit"
+                        : $"{volume:0.#} m³ on board would exceed the truck's {truckCapacity.VolumeCubicMeters:0.#} m³ limit";
                     return new InsertionFeasibility(
                         false, stop.Id,
-                        $"On-board load after pickup at stop '{stop.Id}' ({weight}kg / {volume}m³) " +
-                        $"exceeds truck capacity ({truckCapacity.WeightKg}kg / {truckCapacity.VolumeCubicMeters}m³).");
+                        $"After this pickup the truck would be overloaded - {overflow}.");
                 }
             }
             else if (stop.Kind == StopKind.Delivery)
@@ -177,12 +199,7 @@ public sealed class ShipmentInsertionEvaluator : IShipmentInsertionEvaluator
         return new InsertionFeasibility(true, null, null);
     }
 
-    /// <summary>
-    /// A Pickup/Delivery stop with a null ShipmentLoad is corrupt data (every shipment
-    /// stop must carry its load - see Stop.ForShipment) - fail loudly instead of silently
-    /// under-counting on-board load, which would make this entire check meaningless
-    /// without any visible sign of the problem.
-    /// </summary>
+    /// <summary>A shipment stop must carry its load (see <c>Stop.ForShipment</c>) - throw loudly if not, rather than under-count.</summary>
     private static Capacity RequireLoad(Stop stop) =>
         stop.ShipmentLoad ?? throw new InvalidOperationException($"{stop.Kind} stop '{stop.Id}' has no ShipmentLoad.");
 }

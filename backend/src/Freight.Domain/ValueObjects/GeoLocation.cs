@@ -46,5 +46,26 @@ public sealed record GeoLocation
         return EarthRadiusKm * c;
     }
 
+    /// <summary>
+    /// The point <paramref name="fraction"/> of the way to <paramref name="other"/> by
+    /// linear lat/lon interpolation - used to place a truck partway along a leg (the route
+    /// model treats distance covered as tracking time elapsed, see <c>RouteProgress</c>).
+    /// Not a road-following position: it only seeds a fresh OSRM call for the diverted leg,
+    /// so straight-vs-road error is immaterial.
+    /// </summary>
+    public GeoLocation InterpolateTo(GeoLocation other, double fraction)
+    {
+        ArgumentNullException.ThrowIfNull(other);
+
+        if (fraction is < 0 or > 1)
+        {
+            throw new ArgumentOutOfRangeException(nameof(fraction), fraction, "Fraction must be between 0 and 1.");
+        }
+
+        return new GeoLocation(
+            Latitude + (other.Latitude - Latitude) * fraction,
+            Longitude + (other.Longitude - Longitude) * fraction);
+    }
+
     private static double DegreesToRadians(double degrees) => degrees * Math.PI / 180.0;
 }

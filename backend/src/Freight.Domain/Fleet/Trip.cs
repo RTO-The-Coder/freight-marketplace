@@ -1,16 +1,13 @@
-using System.Runtime.CompilerServices;
 using Freight.Domain.ValueObjects;
 
 namespace Freight.Domain.Fleet;
 
 /// <summary>
-/// A truck's full journey from leaving its office, through however many Pickup/Delivery
-/// stops get assigned along the way, back to office. Opens when an idle truck (no
-/// currently-open trip) is assigned its first shipment; closes when the truck reaches
-/// its Office(return) stop. Never deleted - <see cref="Stop"/>s belonging to a Trip are
-/// never removed either, only marked <see cref="StopStatus.Reached"/>, so a Trip is a
-/// permanent, always-queryable record of everything the truck has done and is still
-/// planning to do on this journey.
+/// A truck's journey from its office, through the Pickup/Delivery stops assigned along
+/// the way, back to office. Opens on the truck's first shipment; closes when it reaches
+/// the Office(return) stop. Never deleted, and its <see cref="Stop"/>s are only ever
+/// marked <see cref="StopStatus.Reached"/>, never removed - so a Trip is a permanent
+/// record of the whole journey, done and still planned.
 /// </summary>
 public sealed class Trip
 {
@@ -18,32 +15,25 @@ public sealed class Trip
 
     public Guid Id { get; private set; }
 
-    /// <summary>Plain reference, no forced navigation back to Truck - same loose-reference style as <see cref="Stop.ShipmentId"/>.</summary>
+    /// <summary>Loose reference, no navigation back to Truck - like <see cref="Stop.ShipmentId"/>.</summary>
     public Guid TruckId { get; private set; }
 
-    /// <summary>
-    /// The trucking company this trip's truck belonged to at the time it opened - needed
-    /// only to construct the trip's Office(return) stop (see <see cref="Stop.ForOffice"/>).
-    /// </summary>
+    /// <summary>The truck's company when the trip opened - used to build the Office(return) stop.</summary>
     public Guid TruckingCompanyId { get; private set; }
 
     /// <summary>
-    /// Planned departure time - supplied by the caller opening the trip, never stamped
-    /// to "now" (the truck may not actually leave until later, e.g. to match a
-    /// shipment's pickup window).
+    /// Planned departure - set by the caller, never stamped to "now" (the truck may leave
+    /// later, e.g. to match a pickup window). Adjustable pre-departure via <see cref="Reschedule"/>.
     /// </summary>
     public DateTime StartedAt { get; private set; }
 
-    /// <summary>Null while the trip is in progress; set when the truck reaches its Office(return) stop.</summary>
+    /// <summary>Null while in progress; set when the truck reaches its Office(return) stop.</summary>
     public DateTime? CompletedAt { get; private set; }
 
     /// <summary>
-    /// Running total of ACTUAL distance covered so far - accumulates the incoming-leg
-    /// distance of every Stop that flips to Reached, plus any partial-leg distance
-    /// banked when an in-progress leg is abandoned and replaced by a mid-route
-    /// insertion (see <see cref="BankPartialLeg"/>). Not derivable purely by summing
-    /// Stops after the fact, because banked partial-leg distance isn't attributable to
-    /// any single Stop.
+    /// Actual distance covered so far: the incoming-leg distance of every Reached Stop, plus
+    /// partial-leg distance banked when a mid-route insertion abandons an in-progress leg
+    /// (<see cref="BankPartialLeg"/>) - which is why it is stored, not summed after the fact.
     /// </summary>
     public double DistanceTravelledSoFar { get; private set; }
 
@@ -53,10 +43,7 @@ public sealed class Trip
     /// <summary>Ordered by <see cref="Stop.Sequence"/>, not by insertion order. Never has entries removed.</summary>
     public IReadOnlyList<Stop> Stops => [.. _stops.OrderBy(stop => stop.Sequence)];
 
-    /// <summary>
-    /// Total planned distance for the whole journey - always a derived read-time sum
-    /// across every Stop (Pending + Reached), never stored, since Stops are never gone.
-    /// </summary>
+    /// <summary>Planned distance for the whole journey - a read-time sum over every Stop, never stored.</summary>
     public double TotalPlannedDistanceKm => _stops.Sum(stop => stop.IncomingLegDistanceKm);
 
     /// <summary>Same as <see cref="TotalPlannedDistanceKm"/>, for time.</summary>
@@ -71,11 +58,8 @@ public sealed class Trip
     public bool IsAtOffice => NextStop?.Kind == StopKind.Office;
 
     /// <summary>
-    /// Load currently on board, derived from this trip's own stops - the sum of
-    /// <see cref="Stop.ShipmentLoad"/> for every shipment whose Pickup stop is Reached
-    /// but whose matching Delivery stop is still Pending. Stops are never deleted, so
-    /// "does the Pickup stop still exist" can no longer answer "is it still on board" the
-    /// way it used to; this Reached-Pickup/Pending-Delivery pairing replaces that check.
+    /// Load currently on board: the sum of <see cref="Stop.ShipmentLoad"/> for every
+    /// shipment whose Pickup stop is Reached but whose Delivery stop is still Pending.
     /// </summary>
     public Capacity CurrentLoad
     {
@@ -146,15 +130,40 @@ public sealed class Trip
     }
 
     /// <summary>
-    /// A full, independent copy - for a what-if insertion preview (see
-    /// IShipmentInsertionEvaluator): call the real <see cref="AssignShipment"/> on the
-    /// clone, inspect the resulting Stops to check feasibility, then discard the clone
-    /// (or, if feasible, run the same AssignShipment call for real on the original) -
-    /// never used to mutate the real, tracked Trip. Same identity (Id/TruckId) as the
-    /// original: this is a scratch copy of one Trip's state, never persisted or queried
-    /// as a second real Trip. Stops are deep-copied via <see cref="Stop.Clone"/> so that
-    /// mutating the clone's stops (inserting new ones, overwriting incoming legs) never
-    /// touches the original's stops.
+    /// Changes the planned departure. Only while the trip is open, no stop is reached, and
+    /// the truck has not started driving (<paramref name="truckHasStartedDriving"/> - the
+    /// caller derives this from <see cref="Truck.CurrentProgress"/>).
+    /// </summary>
+    public void Reschedule(DateTime newStart, bool truckHasStartedDriving)
+    {
+        if (!IsOpen)
+        {
+            throw new InvalidOperationException($"Trip '{Id}' has completed - its start time cannot be changed.");
+        }
+
+        if (_stops.Any(stop => stop.Status == StopStatus.Reached))
+        {
+            throw new InvalidOperationException(
+                $"Trip '{Id}' has already reached a stop - its start time cannot be changed.");
+        }
+
+        if (truckHasStartedDriving)
+        {
+            throw new InvalidOperationException(
+                $"Trip '{Id}'s truck is already driving - its start time cannot be changed.");
+        }
+
+        StartedAt = newStart;
+    }
+
+    /// <summary>
+    /// A deep, independent copy for what-if insertion previews (see
+    /// <c>IShipmentInsertionEvaluator</c>): run <see cref="AssignShipment"/> on the clone,
+    /// check feasibility from its Stops, then discard it - never persisted or tracked.
+    /// Stops are copied via <see cref="Stop.Clone"/>. Existing stops keep their ids, but
+    /// stops the clone then inserts get fresh ids that will NOT match the ids the real
+    /// trip's own <see cref="AssignShipment"/> produces - carry per-stop results back by
+    /// <see cref="StopRef"/>, not by stop id.
     /// </summary>
     public Trip Clone()
     {
@@ -174,11 +183,9 @@ public sealed class Trip
     }
 
     /// <summary>
-    /// Banks distance/time already covered on a leg that's being abandoned - e.g. a new
-    /// stop is inserted ahead of the truck's live position, replacing the leg it was
-    /// mid-way through. Must be called before the truck's RouteProgress is replaced,
-    /// otherwise that partial progress is lost (it isn't attributable to any single
-    /// Stop once the leg's original target is no longer the immediate next stop).
+    /// Banks distance/time covered on a leg being abandoned (a stop inserted ahead of the
+    /// truck's live position). Must be called before the truck's RouteProgress is
+    /// replaced, or that partial progress is lost.
     /// </summary>
     public void BankPartialLeg(double distanceKm, int timeTick)
     {
@@ -196,7 +203,40 @@ public sealed class Trip
         TimeElapsedSoFar += timeTick;
     }
 
-    /// <summary>Marks a stop Reached and folds its incoming-leg distance/time into the running totals.</summary>
+    /// <summary>
+    /// Sets each Pending Pickup/Delivery stop's planned wait-for-window (5-minute ticks),
+    /// keyed by <see cref="StopRef"/> - the output of the feasibility walk. Stops absent
+    /// from <paramref name="waitTicksByStop"/> are reset to no wait; Reached and Office
+    /// stops are untouched. Called after a feasible insertion is committed.
+    /// </summary>
+    public void SetPlannedWaits(IReadOnlyDictionary<StopRef, int> waitTicksByStop)
+    {
+        ArgumentNullException.ThrowIfNull(waitTicksByStop);
+
+        foreach (var stop in _stops.Where(stop =>
+                     stop.Status == StopStatus.Pending &&
+                     stop.Kind is StopKind.Pickup or StopKind.Delivery))
+        {
+            stop.PlanWait(waitTicksByStop.TryGetValue(StopRef.For(stop), out var ticks) ? ticks : 0);
+        }
+    }
+
+    /// <summary>
+    /// Serves <paramref name="ticks"/> more of a stop's planned wait-for-window - called
+    /// once per parked simulation tick while the truck waits for the window to open.
+    /// </summary>
+    public void AccrueStopWait(Guid stopId, int ticks)
+    {
+        var stop = _stops.FirstOrDefault(stop => stop.Id == stopId)
+            ?? throw new InvalidOperationException($"Stop '{stopId}' does not belong to this trip.");
+
+        stop.AccrueWait(ticks);
+    }
+
+    /// <summary>
+    /// Marks a stop Reached, folds its incoming-leg distance/time into the running totals,
+    /// and - if it is the Office stop - completes the trip (sets <see cref="CompletedAt"/>).
+    /// </summary>
     public void MarkStopReached(Guid stopId, DateTime reachedAt)
     {
         var stop = _stops.FirstOrDefault(stop => stop.Id == stopId)
@@ -215,25 +255,19 @@ public sealed class Trip
 
     private const int SequenceGap = 10;
 
-    /// <summary>
-    /// Fixed sequence for the trip's single Office(return) stop - always last, comfortably
-    /// above anything <see cref="SequenceGap"/>-based numbering will produce for a
-    /// Pickup/Delivery stop, so it never needs to be bumped by ordinary insertion.
-    /// </summary>
+    /// <summary>Fixed sequence for the trip's single Office(return) stop - always last, above any gap-based value.</summary>
     private const int OfficeStopSequence = 1000;
 
     /// <summary>
-    /// Inserts a Pickup + Delivery stop pair for a shipment, following the general
-    /// hop-splitting insertion rule: the new stop's incoming leg is the caller-supplied
-    /// distance/time (a placeholder for this slice - no OSRM integration yet), and
-    /// whichever stop previously followed the insertion point has its OWN incoming leg
-    /// OVERWRITTEN to now mean "from the new stop" instead of "from whatever used to
-    /// precede it". <paramref name="pickupInsertIndex"/>/<paramref name="deliveryInsertIndex"/>
-    /// are positions among the trip's PENDING, non-Office stops only - Reached stops are
-    /// history and are never insertion targets, and the trip's single Office(return) stop
-    /// always stays last regardless of these indices (created here via
-    /// <paramref name="officeLocation"/> the first time this trip receives a shipment, if
-    /// it doesn't already have one).
+    /// Inserts a Pickup + Delivery stop pair for a shipment (hop-splitting rule): each new
+    /// stop's incoming leg comes from <paramref name="legPlan"/>, and the stop that
+    /// previously followed each insertion point has its own incoming leg overwritten to
+    /// start from the new stop (<see cref="LegPlan.PickupToFollower"/> /
+    /// <see cref="LegPlan.DeliveryToFollower"/>).
+    /// <paramref name="pickupInsertIndex"/> / <paramref name="deliveryInsertIndex"/> index
+    /// the trip's Pending non-Office stops only. The Office(return) stop always stays last
+    /// and is created here (via <paramref name="officeLocation"/>) on the first shipment.
+    /// Does not set wait-for-window - see <see cref="SetPlannedWaits"/>.
     /// </summary>
     public void AssignShipment(
         Guid shipmentId,
@@ -243,12 +277,7 @@ public sealed class Trip
         GeoLocation officeLocation,
         int pickupInsertIndex,
         int deliveryInsertIndex,
-        double pickupLegDistanceKm,
-        int pickupLegTimeTick,
-        double deliveryLegDistanceKm,
-        int deliveryLegTimeTick,
-        double officeLegDistanceKm,
-        int officeLegTimeTick)
+        LegPlan legPlan)
     {
         if (shipmentId == Guid.Empty)
         {
@@ -259,6 +288,7 @@ public sealed class Trip
         ArgumentNullException.ThrowIfNull(pickupLocation);
         ArgumentNullException.ThrowIfNull(deliveryLocation);
         ArgumentNullException.ThrowIfNull(officeLocation);
+        ArgumentNullException.ThrowIfNull(legPlan);
 
         var pendingStops = PendingNonOfficeStops();
 
@@ -294,8 +324,9 @@ public sealed class Trip
         // at its own layer - see AssignShipmentToTruckHandler's fresh-instance comment).
         var pickupStop = Stop.ForShipment(
             shipmentId, Capacity.Create(shipmentSize.WeightKg, shipmentSize.VolumeCubicMeters), StopKind.Pickup, pickupLocation,
-            SequenceForInsertAt(pendingStops, pickupInsertIndex), pickupLegDistanceKm, pickupLegTimeTick);
-        InsertStop(pickupStop, pendingStops, pickupInsertIndex);
+            SequenceForInsertAt(pendingStops, pickupInsertIndex),
+            legPlan.PickupIncoming.DistanceKm, legPlan.PickupIncoming.TimeTick);
+        InsertStop(pickupStop, pendingStops, pickupInsertIndex, legPlan.PickupToFollower);
 
         // deliveryInsertIndex was expressed against the pre-insertion route; the pickup
         // insertion above shifted every original index at/after pickupInsertIndex right
@@ -303,37 +334,42 @@ public sealed class Trip
         var pendingStopsAfterPickup = PendingNonOfficeStops();
         var deliveryStop = Stop.ForShipment(
             shipmentId, Capacity.Create(shipmentSize.WeightKg, shipmentSize.VolumeCubicMeters), StopKind.Delivery, deliveryLocation,
-            SequenceForInsertAt(pendingStopsAfterPickup, deliveryInsertIndex + 1), deliveryLegDistanceKm, deliveryLegTimeTick);
-        InsertStop(deliveryStop, pendingStopsAfterPickup, deliveryInsertIndex + 1);
+            SequenceForInsertAt(pendingStopsAfterPickup, deliveryInsertIndex + 1),
+            legPlan.DeliveryIncoming.DistanceKm, legPlan.DeliveryIncoming.TimeTick);
+        InsertStop(deliveryStop, pendingStopsAfterPickup, deliveryInsertIndex + 1, legPlan.DeliveryToFollower);
 
-        EnsureOfficeStop(officeLocation, officeLegDistanceKm, officeLegTimeTick);
+        EnsureOfficeStop(officeLocation, legPlan.ToOffice.DistanceKm, legPlan.ToOffice.TimeTick);
     }
 
     /// <summary>
-    /// Inserts <paramref name="newStop"/> at <paramref name="index"/> among
-    /// <paramref name="orderedNeighbors"/> (the pre-insertion pending/non-office stops)
-    /// and, per the general hop-splitting rule, overwrites the incoming leg of whichever
-    /// stop now immediately follows it - that stop's hop used to start from
-    /// <paramref name="newStop"/>'s predecessor, and now starts from
-    /// <paramref name="newStop"/> instead.
+    /// Adds <paramref name="newStop"/> and, if a stop follows the insertion point,
+    /// overwrites that follower's incoming leg with <paramref name="followerIncomingLeg"/>
+    /// (the hop from <paramref name="newStop"/>). <paramref name="followerIncomingLeg"/>
+    /// must be non-null exactly when <paramref name="index"/> is not past the end.
     /// </summary>
-    private void InsertStop(Stop newStop, IReadOnlyList<Stop> orderedNeighbors, int index)
+    private void InsertStop(Stop newStop, IReadOnlyList<Stop> orderedNeighbors, int index, RouteSegment? followerIncomingLeg)
     {
         _stops.Add(newStop);
 
-        if (index < orderedNeighbors.Count)
+        if (index >= orderedNeighbors.Count)
         {
-            orderedNeighbors[index].ReplaceIncomingLeg(newStop.IncomingLegDistanceKm, newStop.IncomingLegTimeTick);
+            return;
         }
+
+        if (followerIncomingLeg is null)
+        {
+            throw new ArgumentNullException(
+                nameof(followerIncomingLeg),
+                $"A stop follows insertion index {index}, so its rewritten incoming leg must be supplied.");
+        }
+
+        orderedNeighbors[index].ReplaceIncomingLeg(followerIncomingLeg.DistanceKm, followerIncomingLeg.TimeTick);
     }
 
     private List<Stop> PendingNonOfficeStops() =>
         [.. Stops.Where(stop => stop.Kind != StopKind.Office && stop.Status == StopStatus.Pending)];
 
-    /// <summary>
-    /// Ensures this trip has its single, always-last Office(return) stop - a no-op if one
-    /// already exists.
-    /// </summary>
+    /// <summary>Adds the trip's single Office(return) stop - a no-op if one already exists.</summary>
     private void EnsureOfficeStop(GeoLocation officeLocation, double legDistanceKm, int legTimeTick)
     {
         if (_stops.Any(stop => stop.Kind == StopKind.Office))
@@ -345,12 +381,9 @@ public sealed class Trip
     }
 
     /// <summary>
-    /// Computes a gap-based <see cref="Stop.Sequence"/> value for inserting a new stop at
-    /// <paramref name="index"/> among <paramref name="orderedStops"/> (already
-    /// Sequence-ordered) - the midpoint between its two neighbors, or
-    /// <see cref="SequenceGap"/> before/after the first/last stop. Falls back to
-    /// <see cref="RenumberStops"/> when the computed value would collide with a neighbor
-    /// (the gap between them has been exhausted by repeated same-slot insertion).
+    /// A gap-based <see cref="Stop.Sequence"/> for inserting at <paramref name="index"/> -
+    /// the midpoint of its neighbors, or <see cref="SequenceGap"/> past the first/last.
+    /// Falls back to <see cref="RenumberStops"/> if the gap is exhausted.
     /// </summary>
     private int SequenceForInsertAt(IReadOnlyList<Stop> orderedStops, int index)
     {
@@ -375,11 +408,8 @@ public sealed class Trip
     }
 
     /// <summary>
-    /// Bounded, rare, self-healing fallback for when a gap-based Sequence value has been
-    /// exhausted by repeated insertion into the exact same slot (~4 repeated same-slot
-    /// insertions collapse a starting gap of <see cref="SequenceGap"/> via integer
-    /// division). Renumbers every stop in the trip to fresh, evenly-spaced values -
-    /// does not run on the normal insertion path.
+    /// Rare self-healing fallback: renumbers every non-Office stop to fresh evenly-spaced
+    /// values when repeated same-slot insertion has exhausted a <see cref="SequenceGap"/>.
     /// </summary>
     private void RenumberStops()
     {

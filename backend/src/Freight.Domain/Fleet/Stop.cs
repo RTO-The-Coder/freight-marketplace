@@ -3,11 +3,10 @@ using Freight.Domain.ValueObjects;
 namespace Freight.Domain.Fleet;
 
 /// <summary>
-/// A waypoint on a <see cref="Trip"/>'s route. Owned by the trip - never accessed
-/// through a repository of its own. <see cref="ShipmentId"/> is null for Office stops;
-/// <see cref="TruckingCompanyId"/> is set only for Office stops. Never deleted - once
-/// reached, <see cref="Status"/> flips to <see cref="StopStatus.Reached"/> and the row
-/// stays forever, which is what makes the owning Trip a permanent historical record.
+/// A waypoint on a <see cref="Trip"/>'s route, owned by the trip (no repository of its
+/// own). <see cref="ShipmentId"/> is set for Pickup/Delivery stops,
+/// <see cref="TruckingCompanyId"/> only for the Office stop. Never deleted - a reached
+/// stop just flips <see cref="Status"/> to <see cref="StopStatus.Reached"/>.
 /// </summary>
 public sealed class Stop
 {
@@ -19,18 +18,14 @@ public sealed class Stop
     public GeoLocation Location { get; private set; } = null!;
 
     /// <summary>
-    /// Gap-based route order (10/20/30...) so a mid-route insertion only needs a
-    /// value between its two neighbors, not a renumbering of every later stop. See
-    /// <see cref="Truck.SequenceForInsertAt"/> for the fallback when a gap is
-    /// exhausted by repeated same-slot insertion.
+    /// Gap-based route order (10/20/30...) so a mid-route insertion only needs a value
+    /// between its neighbors. See <c>Trip.SequenceForInsertAt</c> for the exhausted-gap fallback.
     /// </summary>
     public int Sequence { get; private set; }
 
     /// <summary>
-    /// Distance of the hop FROM this stop's immediate predecessor TO this stop - never
-    /// a cumulative/absolute figure. Overwritten whenever a new stop is inserted
-    /// immediately before this one (the predecessor changes, so the hop leading here
-    /// changes too).
+    /// Distance of the hop from this stop's immediate predecessor to this stop (not
+    /// cumulative). Overwritten when a stop is inserted immediately before this one.
     /// </summary>
     public double IncomingLegDistanceKm { get; private set; }
 
@@ -41,18 +36,27 @@ public sealed class Stop
     public DateTime? ReachedAt { get; private set; }
 
     /// <summary>
-    /// The shipment's load, carried on BOTH its Pickup and Delivery stops (not Pickup
-    /// only) - now that stops are never deleted, "is this shipment still on board" can
-    /// no longer be inferred from "does its Pickup stop still exist in the route." It's
-    /// instead: Pickup is Reached and its matching Delivery is still Pending. Both
-    /// stops need to carry the figure so that check doesn't need to reach back into the
-    /// Shipment aggregate. Null for Office stops.
+    /// Planned wait at this stop, in 5-minute ticks, before the truck may act on it and
+    /// depart - because its time window has not opened yet. Set by the feasibility walk
+    /// (see <c>RouteEtaCalculator</c>), re-set on later insertions. 0 for Office stops and
+    /// on-time arrivals.
+    /// </summary>
+    public int WaitTimeTick { get; private set; }
+
+    /// <summary>
+    /// Ticks of <see cref="WaitTimeTick"/> already served - persists so a wait can span
+    /// multiple simulation-advance calls. Reset by <see cref="PlanWait"/>.
+    /// </summary>
+    public int WaitTimeTickElapsed { get; private set; }
+
+    /// <summary>
+    /// The shipment's load, carried on both its Pickup and Delivery stops - so "still on
+    /// board" (Pickup Reached, Delivery Pending) needs no reach into the Shipment
+    /// aggregate. Null for Office stops.
     /// </summary>
     public Capacity? ShipmentLoad { get; private set; }
 
-    // EF Core materializes owned entities through a parameterless constructor and sets
-    // the properties above via reflection. The factories below remain the only
-    // construction path reachable from application code.
+    // EF Core materializer only - the factories below are the sole construction path for app code.
     private Stop()
     {
     }
@@ -91,6 +95,8 @@ public sealed class Stop
             IncomingLegDistanceKm = incomingLegDistanceKm,
             IncomingLegTimeTick = incomingLegTimeTick,
             ReachedAt = null,
+            WaitTimeTick = 0,
+            WaitTimeTickElapsed = 0,
             ShipmentLoad = shipmentLoad,
         };
     }
@@ -121,10 +127,12 @@ public sealed class Stop
             IncomingLegDistanceKm = incomingLegDistanceKm,
             IncomingLegTimeTick = incomingLegTimeTick,
             ReachedAt = null,
+            WaitTimeTick = 0,
+            WaitTimeTickElapsed = 0,
         };
     }
 
-    /// <summary>Replaces this stop's incoming leg - called when a new stop is inserted immediately before it, per the general hop-splitting insertion rule.</summary>
+    /// <summary>Replaces this stop's incoming leg - when a new stop is inserted immediately before it.</summary>
     internal void ReplaceIncomingLeg(double incomingLegDistanceKm, int incomingLegTimeTick)
     {
         IncomingLegDistanceKm = incomingLegDistanceKm;
@@ -133,6 +141,40 @@ public sealed class Stop
 
     /// <summary>Reassigns this stop's Sequence - only via the gap-collision renumbering fallback (see Trip.RenumberStops); never part of ordinary insertion.</summary>
     internal void Renumber(int sequence) => Sequence = sequence;
+
+    /// <summary>
+    /// Sets the planned wait (5-minute ticks) and resets the served count. Throws if the
+    /// stop is already Reached - its wait is settled.
+    /// </summary>
+    internal void PlanWait(int waitTimeTick)
+    {
+        if (waitTimeTick < 0)
+        {
+            throw new ArgumentOutOfRangeException(nameof(waitTimeTick), waitTimeTick, "Planned wait cannot be negative.");
+        }
+
+        if (Status == StopStatus.Reached)
+        {
+            throw new InvalidOperationException($"Stop '{Id}' has already been reached - its wait cannot be re-planned.");
+        }
+
+        WaitTimeTick = waitTimeTick;
+        WaitTimeTickElapsed = 0;
+    }
+
+    /// <summary>Serves <paramref name="ticks"/> more of the planned wait, capped at <see cref="WaitTimeTick"/>.</summary>
+    internal void AccrueWait(int ticks)
+    {
+        if (ticks < 0)
+        {
+            throw new ArgumentOutOfRangeException(nameof(ticks), ticks, "Cannot accrue a negative wait.");
+        }
+
+        WaitTimeTickElapsed = Math.Min(WaitTimeTick, WaitTimeTickElapsed + ticks);
+    }
+
+    /// <summary>True once the truck has served this stop's full planned wait (trivially true when there is none).</summary>
+    public bool IsWaitComplete => WaitTimeTickElapsed >= WaitTimeTick;
 
     internal void MarkReached(DateTime reachedAt)
     {
@@ -146,13 +188,9 @@ public sealed class Stop
     }
 
     /// <summary>
-    /// A full, independent copy - for <see cref="Trip.Clone"/>'s what-if insertion
-    /// preview (see Trip's doc comment). Same identity (Id) as the original: the clone
-    /// is a scratch copy of one Trip's state, never persisted or compared against other
-    /// Stops, so id collision isn't a concern here the way it would be for a second
-    /// independently-persisted row. Location/ShipmentLoad are immutable value objects,
-    /// so sharing the same instance is safe - only the mutable scalar fields need an
-    /// independent copy for mutations on the clone to never affect the original.
+    /// An independent copy for <see cref="Trip.Clone"/>'s insertion preview - keeps the
+    /// same Id (a scratch copy, never persisted). Immutable value objects
+    /// (Location/ShipmentLoad) are shared; only the mutable scalars are copied.
     /// </summary>
     internal Stop Clone() => new()
     {
@@ -166,6 +204,8 @@ public sealed class Stop
         IncomingLegDistanceKm = IncomingLegDistanceKm,
         IncomingLegTimeTick = IncomingLegTimeTick,
         ReachedAt = ReachedAt,
+        WaitTimeTick = WaitTimeTick,
+        WaitTimeTickElapsed = WaitTimeTickElapsed,
         ShipmentLoad = ShipmentLoad,
     };
 }

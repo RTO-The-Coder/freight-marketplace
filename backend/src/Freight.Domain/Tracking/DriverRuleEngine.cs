@@ -107,6 +107,65 @@ public sealed class DriverRuleEngine : IDriverRuleEngine
         return new RestRuleOutcome(ledger, ledger.CurrentActivity, events, wasPolicyOverridden);
     }
 
+    public RestRuleOutcome RecordVoluntaryStop(
+        DriverComplianceState ledger,
+        int waitMinutes,
+        DateTime simulatedNow,
+        DrivingRules rule,
+        RestRuleLimits limits)
+    {
+        ArgumentNullException.ThrowIfNull(ledger);
+        ArgumentNullException.ThrowIfNull(rule);
+        ArgumentNullException.ThrowIfNull(limits);
+
+        if (waitMinutes < 0)
+        {
+            throw new ArgumentOutOfRangeException(nameof(waitMinutes), waitMinutes, "waitMinutes cannot be negative.");
+        }
+
+        var events = new List<IDomainEvent>();
+        var wasPolicyOverridden = false;
+
+        if (ledger.CurrentActivity != DriverActivity.Driving)
+        {
+            // Already mid-break or mid-rest - a stop that overlaps a forced rest just
+            // extends that ongoing block, exactly like any other tick would.
+            wasPolicyOverridden = AdvanceOngoingActivity(ledger, waitMinutes, simulatedNow, rule, limits, events);
+        }
+        else
+        {
+            // The driver was driving (or idle). No driving accrues while parked; instead
+            // the wait may satisfy a break and/or a daily rest.
+            var dailyRestMinutes = rule.DailyRestRule == DailyRestRule.ReducedRest
+                ? limits.ReducedDailyRestMinutes
+                : limits.FullDailyRestMinutes;
+
+            if (waitMinutes >= dailyRestMinutes)
+            {
+                // Counts as a daily rest: clear the daily counters (same fields
+                // CompleteDailyRestBlock resets) plus the continuous-driving counter.
+                ledger.DailyDrivingMinutesToday = 0;
+                ledger.IsTodayExtended = false;
+                ledger.AwaitingSecondDailyRestBlock = false;
+                ledger.ContinuousDrivingMinutesSinceBreak = 0;
+                ledger.AwaitingSecondBreakBlock = false;
+                events.Add(new TruckWentIntoRest(ledger.DriverId, simulatedNow, DriverActivity.OnDailyRest, WasPolicyOverridden: false));
+            }
+            else if (waitMinutes >= limits.RequiredBreakMinutes)
+            {
+                // Counts as the 45-minute break: reset the continuous-driving counter only.
+                ledger.ContinuousDrivingMinutesSinceBreak = 0;
+                ledger.AwaitingSecondBreakBlock = false;
+                events.Add(new TruckWentIntoRest(ledger.DriverId, simulatedNow, DriverActivity.OnBreak, WasPolicyOverridden: false));
+            }
+            // else: too short to count as anything - the driver simply idled.
+        }
+
+        ledger.LastEvaluatedSimulatedTime = simulatedNow;
+
+        return new RestRuleOutcome(ledger, ledger.CurrentActivity, events, wasPolicyOverridden);
+    }
+
     public int MinutesUntilNextStateChange(
         DriverComplianceState ledger,
         RestRuleLimits limits)
@@ -273,17 +332,11 @@ public sealed class DriverRuleEngine : IDriverRuleEngine
                 currentlyActiveDriverId);
         }
 
-        // Both drivers' futures are fully determined by their fixed rules, so
-        // replaying EvaluateTeam's deterministic swap logic forward on private copies
-        // always produces the one correct answer. Neither real ledger is touched.
-        //
-        // This must tick EvaluateTeam in a loop rather than calling it once with the
-        // full duration: EvaluateTeam only re-evaluates the swap decision once per
-        // call, at the start, then hands the entire elapsed duration to whichever
-        // driver was already active via AdvanceCore. A projection spanning multiple
-        // boundary crossings (e.g. primary's daily cap, then secondary's weekly cap,
-        // as in the two-driver worked example) needs a fresh swap check at each
-        // crossing, exactly like the real tick-by-tick caller (Slice 7) would produce.
+        // Replay EvaluateTeam's deterministic swap logic forward on private copies -
+        // one tick at a time, NOT one call for the whole duration: EvaluateTeam
+        // re-evaluates its swap decision only once per call, so a projection crossing
+        // multiple boundaries (primary's daily cap, then secondary's weekly cap) needs a
+        // fresh swap check at each, like the real tick-by-tick caller. Real ledgers untouched.
         var projectedPrimary = primaryLedger.Clone();
         var projectedSecondary = secondaryLedger.Clone();
         var projectedNow = projectedPrimary.LastEvaluatedSimulatedTime;
@@ -384,15 +437,10 @@ public sealed class DriverRuleEngine : IDriverRuleEngine
     }
 
     /// <summary>
-    /// Advances a driver who is being treated as not-actively-driving this tick (e.g.
-    /// the inactive member of a team). If they are mid-break/rest, that continues
-    /// (ticking down like any other rest). If their ledger says
-    /// <see cref="DriverActivity.Driving"/> but they are still legally eligible to
-    /// drive, they are simply left untouched this tick — not driving, but not forced
-    /// into an unneeded break/rest either (this is the "idle, waiting to become the
-    /// active driver" case, distinct from actually failing a hard-gate limit). Only if
-    /// their ledger says Driving AND they are no longer eligible does a required stop
-    /// begin.
+    /// Advances a driver treated as not driving this tick (e.g. a team's inactive driver).
+    /// Mid-break/rest continues; a still-eligible driver is left untouched (idle, waiting
+    /// to take the wheel - not forced into an unneeded rest); only a no-longer-eligible
+    /// driver begins a required stop.
     /// </summary>
     private bool AdvanceRestingCore(
         DriverComplianceState ledger,

@@ -6,43 +6,32 @@ namespace Freight.Domain.Fleet;
 
 /// <summary>
 /// Projects the arrival time at every still-Pending stop of a trip by walking the route
-/// forward, asking the driver rule engine how long until the driver's state next changes
-/// and jumping that far (or to the end of the current leg, whichever comes first).
-/// Driving jumps advance the truck along its legs; rest/break jumps pass time without
-/// moving it. When a leg completes, the stop it leads to gets stamped with the current
-/// simulated time as its projected arrival.
+/// forward: driving time advances the truck along its legs, mandatory breaks/rests pass
+/// time without moving it, and when a leg completes the stop it leads to is stamped with
+/// the current simulated time. The same walk the movement simulation
+/// (<c>SimulationAdvanceHandler</c>) performs, but forward-open (runs to the end) and
+/// non-mutating (works on a <see cref="Trip.Clone"/> and cloned ledgers).
 ///
-/// This is the same walk <see cref="Freight.Application"/>'s movement simulation performs,
-/// but: forward-open (runs until every stop is reached), and non-mutating (operates on a
-/// <see cref="Trip.Clone"/> and a <see cref="DriverComplianceState.Clone"/>).
-///
-/// <see cref="CalculateEtas"/> (single driver) bounds each jump so it never crosses a
-/// driver boundary (a break trigger, a daily/weekly cap) - the rule engine still
-/// re-evaluates at every boundary, just without the wasted iterations in between.
-/// <see cref="CalculateEtasForTeam"/> (two drivers) cannot use that jump optimization -
-/// <see cref="IDriverRuleEngine.EvaluateTeam"/> re-evaluates its swap decision only once
-/// per call, so the team walk steps one tick at a time, mirroring
-/// <see cref="IDriverRuleEngine.EvaluateTeamFuture"/>.
+/// <see cref="CalculateEtas"/> (single driver) jumps in variable steps bounded by the
+/// next driver boundary. <see cref="CalculateEtasForTeam"/> (two drivers) steps one tick
+/// at a time, because <see cref="IDriverRuleEngine.EvaluateTeam"/> re-evaluates its swap
+/// decision only once per call.
 /// </summary>
 public sealed class RouteEtaCalculator
 {
     private const int TickMinutes = 5;
 
     /// <summary>
-    /// A generous upper bound on how many jump iterations a single-driver route projection
-    /// may take before we treat it as non-terminating and bail. Each iteration crosses at
-    /// least one driver boundary or finishes a leg, so a legitimate long-haul trip needs
-    /// only a handful per leg; hitting this means the walk isn't making progress (e.g. a
-    /// zero-length leg loop, or a driver who can never drive).
+    /// Bail-out for the single-driver jump loop: each iteration crosses a driver boundary
+    /// or finishes a leg, so a real trip needs only a handful per leg. Hitting this means
+    /// the walk isn't progressing (zero-length leg loop, a driver who can never drive).
     /// </summary>
     private const int MaxProjectionIterations = 10_000;
 
     /// <summary>
-    /// Upper bound on ticks for a team route projection (one tick = <see cref="TickMinutes"/>
-    /// minutes). The team walk is tick-by-tick, so this is much larger than
-    /// <see cref="MaxProjectionIterations"/>: a multi-week long-haul with weekly rests is
-    /// still well under it, but a route that never progresses (a driver pair who can never
-    /// drive, a zero-length leg loop) trips it instead of spinning forever.
+    /// Bail-out for the tick-by-tick team walk - much larger than
+    /// <see cref="MaxProjectionIterations"/> since it counts ticks, not boundary crossings.
+    /// A multi-week long-haul stays well under it; a non-progressing route trips it.
     /// </summary>
     private const int MaxTeamProjectionTicks = 200_000;
 
@@ -55,29 +44,29 @@ public sealed class RouteEtaCalculator
     }
 
     /// <summary>
-    /// Walks <paramref name="trip"/>'s remaining route forward from <paramref name="startFrom"/>,
-    /// returning the projected arrival time for each still-Pending stop keyed by stop id.
+    /// Walks <paramref name="trip"/>'s remaining route forward from
+    /// <paramref name="startFrom"/>, returning each still-Pending stop's projected arrival
+    /// and wait-for-window ticks (see <see cref="RouteProjection"/>). All arguments are
+    /// passed as-is - the walk operates on private copies and never mutates them.
     /// </summary>
-    /// <param name="trip">
-    /// The route to project. Passed as-is - this method walks a private
-    /// <see cref="Trip.Clone"/> and never mutates the argument.
-    /// </param>
-    /// <param name="currentLegProgress">
-    /// How far the truck already is along its current (first Pending) leg. Null when the
-    /// truck hasn't started the leg - the whole leg is still ahead.
-    /// </param>
-    /// <param name="driverLedger">
-    /// The active driver's compliance ledger - passed as-is (the real, tracked one is
-    /// fine); this method walks a private copy and never mutates the argument.
-    /// </param>
+    /// <param name="currentLegProgress">Progress into the first Pending leg, or null if the whole leg is ahead.</param>
+    /// <param name="driverLedger">The active driver's compliance ledger.</param>
     /// <param name="driverRules">The active driver's fixed driving-rule variant.</param>
     /// <param name="startFrom">Simulated time the projection starts at.</param>
-    public IReadOnlyDictionary<Guid, DateTime> CalculateEtas(
+    /// <param name="stopWindows">
+    /// Each Pending stop's requested time window, keyed by stop id. When the walk reaches a
+    /// stop before its window opens, the truck parks and waits - time passes, the driver's
+    /// ledger is credited (<see cref="IDriverRuleEngine.RecordVoluntaryStop"/>), and the
+    /// next leg departs at the window open. The stamped arrival stays the physical arrival.
+    /// Null skips wait modelling.
+    /// </param>
+    public RouteProjection CalculateEtas(
         Trip trip,
         RouteProgress? currentLegProgress,
         DriverComplianceState driverLedger,
         DrivingRules driverRules,
-        DateTime startFrom)
+        DateTime startFrom,
+        IReadOnlyDictionary<Guid, TimeWindow>? stopWindows = null)
     {
         ArgumentNullException.ThrowIfNull(trip);
         ArgumentNullException.ThrowIfNull(driverLedger);
@@ -90,11 +79,12 @@ public sealed class RouteEtaCalculator
         var route = trip.Clone();
 
         var etas = new Dictionary<Guid, DateTime>();
+        var waitTicks = new Dictionary<Guid, int>();
 
         var nextStop = route.NextStop;
         if (nextStop is null)
         {
-            return etas;
+            return RouteProjection.Empty;
         }
 
         var legProgress = BuildLegProgress(currentLegProgress, nextStop);
@@ -148,14 +138,26 @@ public sealed class RouteEtaCalculator
                 continue;
             }
 
-            // Leg finished this jump - the stop it leads to is reached now.
-            etas[nextStop.Id] = currentTime;
-            route.MarkStopReached(nextStop.Id, currentTime);
+            // Leg finished this jump - the stop it leads to is reached now. The stamped
+            // arrival is the physical arrival; if the stop's window has not opened yet the
+            // truck waits here before the next leg departs (see WaitForWindow).
+            var reachedStopId = nextStop.Id;
+            etas[reachedStopId] = currentTime;
+            route.MarkStopReached(reachedStopId, currentTime);
+
+            currentTime = WaitForWindow(
+                reachedStopId, currentTime, stopWindows,
+                (wait, ticks) =>
+                {
+                    waitTicks[reachedStopId] = ticks;
+                    _driverRuleEngine.RecordVoluntaryStop(
+                        ledger, wait, currentTime.AddMinutes(wait), driverRules, RestRuleLimits.Default);
+                });
 
             nextStop = route.NextStop;
             if (nextStop is null)
             {
-                return etas;
+                return new RouteProjection(etas, waitTicks);
             }
 
             legProgress.StartNewLeg(nextStop.IncomingLegDistanceKm, nextStop.IncomingLegTimeTick);
@@ -167,22 +169,13 @@ public sealed class RouteEtaCalculator
     }
 
     /// <summary>
-    /// Two-driver version of <see cref="CalculateEtas"/>. Walks the route forward one tick
-    /// at a time, asking <see cref="IDriverRuleEngine.EvaluateTeam"/> each tick whether the
-    /// truck is driving (on whichever driver is active) or resting. Driving ticks advance
-    /// the leg; the active-driver pointer is threaded across ticks so a swap mid-route is
-    /// picked up. Both ledgers and the trip are walked on private copies - the caller's
-    /// state is never touched.
+    /// Team version of <see cref="CalculateEtas"/> - same contract, but walks one tick at a
+    /// time through <see cref="IDriverRuleEngine.EvaluateTeam"/>, driving on whichever
+    /// driver is active and threading the active-driver pointer so a mid-route swap is
+    /// picked up. A wait-for-window credits <b>both</b> ledgers.
     /// </summary>
-    /// <param name="trip">The route to project. Walked on a private <see cref="Trip.Clone"/>.</param>
-    /// <param name="currentLegProgress">Progress already made on the first Pending leg, or null if it is entirely ahead.</param>
-    /// <param name="primaryLedger">The primary driver's ledger - passed as-is, walked on a copy.</param>
-    /// <param name="primaryRules">The primary driver's fixed driving-rule variant.</param>
-    /// <param name="secondaryLedger">The secondary driver's ledger - passed as-is, walked on a copy.</param>
-    /// <param name="secondaryRules">The secondary driver's fixed driving-rule variant.</param>
-    /// <param name="activeDriverId">Which driver is at the wheel at <paramref name="startFrom"/> (the assignment's current <c>ActiveDriverId</c>).</param>
-    /// <param name="startFrom">Simulated time the projection starts at.</param>
-    public IReadOnlyDictionary<Guid, DateTime> CalculateEtasForTeam(
+    /// <param name="activeDriverId">Which driver is at the wheel at <paramref name="startFrom"/> (the assignment's <c>ActiveDriverId</c>).</param>
+    public RouteProjection CalculateEtasForTeam(
         Trip trip,
         RouteProgress? currentLegProgress,
         DriverComplianceState primaryLedger,
@@ -190,7 +183,8 @@ public sealed class RouteEtaCalculator
         DriverComplianceState secondaryLedger,
         DrivingRules secondaryRules,
         Guid activeDriverId,
-        DateTime startFrom)
+        DateTime startFrom,
+        IReadOnlyDictionary<Guid, TimeWindow>? stopWindows = null)
     {
         ArgumentNullException.ThrowIfNull(trip);
         ArgumentNullException.ThrowIfNull(primaryLedger);
@@ -203,11 +197,12 @@ public sealed class RouteEtaCalculator
         var route = trip.Clone();
 
         var etas = new Dictionary<Guid, DateTime>();
+        var waitTicks = new Dictionary<Guid, int>();
 
         var nextStop = route.NextStop;
         if (nextStop is null)
         {
-            return etas;
+            return RouteProjection.Empty;
         }
 
         var legProgress = BuildLegProgress(currentLegProgress, nextStop);
@@ -243,13 +238,24 @@ public sealed class RouteEtaCalculator
                 continue;
             }
 
-            etas[nextStop.Id] = currentTime;
-            route.MarkStopReached(nextStop.Id, currentTime);
+            var reachedStopId = nextStop.Id;
+            etas[reachedStopId] = currentTime;
+            route.MarkStopReached(reachedStopId, currentTime);
+
+            currentTime = WaitForWindow(
+                reachedStopId, currentTime, stopWindows,
+                (wait, ticks) =>
+                {
+                    waitTicks[reachedStopId] = ticks;
+                    var waitEnd = currentTime.AddMinutes(wait);
+                    _driverRuleEngine.RecordVoluntaryStop(primary, wait, waitEnd, primaryRules, RestRuleLimits.Default);
+                    _driverRuleEngine.RecordVoluntaryStop(secondary, wait, waitEnd, secondaryRules, RestRuleLimits.Default);
+                });
 
             nextStop = route.NextStop;
             if (nextStop is null)
             {
-                return etas;
+                return new RouteProjection(etas, waitTicks);
             }
 
             legProgress.StartNewLeg(nextStop.IncomingLegDistanceKm, nextStop.IncomingLegTimeTick);
@@ -258,6 +264,37 @@ public sealed class RouteEtaCalculator
         throw new InvalidOperationException(
             $"Team route ETA projection for trip '{route.Id}' did not terminate within {MaxTeamProjectionTicks} ticks - " +
             "the route walk is not making progress.");
+    }
+
+    /// <summary>
+    /// If <paramref name="stopId"/>'s window opens after <paramref name="arrivedAt"/>,
+    /// invokes <paramref name="recordWait"/> with (waitMinutes, waitTicks) - the caller
+    /// credits the ledger(s) and records the wait - and returns the window-open time.
+    /// Otherwise returns <paramref name="arrivedAt"/> unchanged. waitTicks is rounded up
+    /// so the truck never departs early.
+    /// </summary>
+    private static DateTime WaitForWindow(
+        Guid stopId,
+        DateTime arrivedAt,
+        IReadOnlyDictionary<Guid, TimeWindow>? stopWindows,
+        Action<int, int> recordWait)
+    {
+        if (stopWindows is null
+            || !stopWindows.TryGetValue(stopId, out var window)
+            || arrivedAt >= window.Earliest)
+        {
+            return arrivedAt;
+        }
+
+        var waitMinutes = (int)Math.Ceiling((window.Earliest - arrivedAt).TotalMinutes);
+        if (waitMinutes <= 0)
+        {
+            return arrivedAt;
+        }
+
+        var waitTicks = (int)Math.Ceiling(waitMinutes / (double)TickMinutes);
+        recordWait(waitMinutes, waitTicks);
+        return window.Earliest;
     }
 
     /// <summary>
