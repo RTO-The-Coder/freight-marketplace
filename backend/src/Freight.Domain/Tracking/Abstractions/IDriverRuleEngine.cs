@@ -1,3 +1,4 @@
+using Freight.Domain.Tracking.ValueObjects;
 using Freight.Domain.ValueObjects;
 using Freight.Domain.ValueObjects.RuleVariants;
 

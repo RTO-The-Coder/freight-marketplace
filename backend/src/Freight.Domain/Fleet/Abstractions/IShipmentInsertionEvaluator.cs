@@ -1,3 +1,5 @@
+using Freight.Domain.Fleet.ValueObjects;
+
 namespace Freight.Domain.Fleet.Abstractions;
 
 /// <summary>

@@ -1,4 +1,5 @@
 using Freight.Domain.Fleet;
+using Freight.Domain.Fleet.Enums;
 
 namespace Freight.Domain.ValueObjects;
 

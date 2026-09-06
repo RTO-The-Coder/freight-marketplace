@@ -1,3 +1,5 @@
+using Freight.Domain.Fleet.Enums;
+
 namespace Freight.Domain.Fleet;
 
 public sealed class DriverAssignment

@@ -1,3 +1,4 @@
+using Freight.Domain.Fleet.Enums;
 using Freight.Domain.Tracking;
 using Freight.Domain.ValueObjects;
 
