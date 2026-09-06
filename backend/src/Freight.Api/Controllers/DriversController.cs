@@ -1,4 +1,5 @@
 using Freight.Application.Fleet;
+using Freight.Application.Tracking;
 using Freight.Domain.Fleet;
 using Freight.Domain.ValueObjects.RuleVariants;
 using Microsoft.AspNetCore.Mvc;
@@ -16,7 +17,7 @@ public sealed class DriversController(
     [HttpPost("drivers")]
     public async Task<ActionResult<AddDriverResponse>> AddDriver(AddDriverBody body, CancellationToken cancellationToken)
     {
-        var response = await addDriverHandler.AddDriver(
+        var response = await addDriverHandler.AddDriverAsync(
             new AddDriverRequest(
                 body.FirstName,
                 body.LastName,
@@ -31,21 +32,21 @@ public sealed class DriversController(
     [HttpGet("drivers")]
     public async Task<ActionResult<GetDriversResponse>> GetDrivers([FromQuery] bool unassigned, CancellationToken cancellationToken)
     {
-        var response = await getDriversHandler.HandleAsync(new GetDriversRequest(unassigned), cancellationToken);
+        var response = await getDriversHandler.GetDriversAsync(new GetDriversRequest(unassigned), cancellationToken);
         return Ok(response);
     }
 
     [HttpGet("drivers/{driverId:guid}/truck")]
     public async Task<ActionResult<GetTruckForDriverResponse>> GetTruckForDriver(Guid driverId, CancellationToken cancellationToken)
     {
-        var response = await getTruckForDriverHandler.HandleAsync(new GetTruckForDriverRequest(driverId), cancellationToken);
+        var response = await getTruckForDriverHandler.GetTruckForDriverAsync(new GetTruckForDriverRequest(driverId), cancellationToken);
         return Ok(response);
     }
 
     [HttpGet("drivers/{driverId:guid}")]
     public async Task<ActionResult<DriverDetailDto>> GetDriverDetail(Guid driverId, CancellationToken cancellationToken)
     {
-        var response = await getDriverDetailHandler.HandleAsync(new GetDriverDetailRequest(driverId), cancellationToken);
+        var response = await getDriverDetailHandler.GetDriverDetailAsync(new GetDriverDetailRequest(driverId), cancellationToken);
         return Ok(response);
     }
 
@@ -55,7 +56,7 @@ public sealed class DriversController(
         CheckDriverEligibilityBody body,
         CancellationToken cancellationToken)
     {
-        var response = await checkDriverEligibilityHandler.HandleAsync(
+        var response = await checkDriverEligibilityHandler.CheckDriverEligibilityAsync(
             new CheckDriverEligibilityRequest(driverId, body.AfterMinutes),
             cancellationToken);
         return Ok(response);

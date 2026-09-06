@@ -1,4 +1,4 @@
-using Freight.Application.Shipments;
+using Freight.Application.Client;
 using Microsoft.AspNetCore.Mvc;
 
 namespace Freight.Api.Controllers;
@@ -12,7 +12,7 @@ public sealed class ShippersController(
     [HttpGet]
     public async Task<ActionResult<GetShippersResponse>> GetShippers(CancellationToken cancellationToken)
     {
-        var response = await getShippersHandler.HandleAsync(cancellationToken);
+        var response = await getShippersHandler.GetShippersAsync(cancellationToken);
         return Ok(response);
     }
 
@@ -21,7 +21,7 @@ public sealed class ShippersController(
         Guid shipperId,
         CancellationToken cancellationToken)
     {
-        var response = await getShipmentsByShipperHandler.HandleAsync(new GetShipmentsByShipperRequest(shipperId), cancellationToken);
+        var response = await getShipmentsByShipperHandler.GetShipmentsByShipperAsync(new GetShipmentsByShipperRequest(shipperId), cancellationToken);
         return Ok(response);
     }
 }

@@ -26,7 +26,7 @@ public sealed class SimulationController(
     [HttpPost("advance")]
     public async Task<ActionResult<AdvanceSimulationResponse>> Advance(AdvanceSimulationBody body, CancellationToken cancellationToken)
     {
-        var response = await simulationAdvanceHandler.HandleAsync(new AdvanceSimulationRequest(body.Ticks), cancellationToken);
+        var response = await simulationAdvanceHandler.AdvanceSimulationAsync(new AdvanceSimulationRequest(body.Ticks), cancellationToken);
         return Ok(response);
     }
 }

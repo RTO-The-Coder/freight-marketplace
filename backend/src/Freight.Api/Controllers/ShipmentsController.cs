@@ -1,5 +1,5 @@
-using Freight.Application.Shipments;
-using Freight.Domain.Fleet;
+using Freight.Application.Client;
+using Freight.Domain.Fleet.Enums;
 using Freight.Domain.ValueObjects;
 using Microsoft.AspNetCore.Mvc;
 
@@ -15,7 +15,7 @@ public sealed class ShipmentsController(
     [HttpGet("pending")]
     public async Task<ActionResult<GetPendingShipmentsResponse>> GetPendingShipments(CancellationToken cancellationToken)
     {
-        var response = await getPendingShipmentsHandler.HandleAsync(cancellationToken);
+        var response = await getPendingShipmentsHandler.GetPendingShipmentsAsync(cancellationToken);
         return Ok(response);
     }
 
@@ -24,7 +24,7 @@ public sealed class ShipmentsController(
         BookShipmentBody body,
         CancellationToken cancellationToken)
     {
-        var response = await bookShipmentHandler.HandleAsync(
+        var response = await bookShipmentHandler.BookShipmentAsync(
             new BookShipmentRequest(
                 body.ShipperId,
                 GeoLocation.Create(body.PickupLatitude, body.PickupLongitude),
