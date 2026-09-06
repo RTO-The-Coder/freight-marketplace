@@ -1,4 +1,4 @@
-namespace Freight.Domain.Fleet;
+namespace Freight.Domain.Tracking;
 
 public enum MovementState
 {

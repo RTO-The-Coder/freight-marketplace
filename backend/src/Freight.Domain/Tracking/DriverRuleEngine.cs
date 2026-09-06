@@ -1,5 +1,4 @@
 using Freight.Domain.Common;
-using Freight.Domain.Fleet;
 using Freight.Domain.Tracking.Abstractions;
 using Freight.Domain.Tracking.Events;
 using Freight.Domain.ValueObjects;

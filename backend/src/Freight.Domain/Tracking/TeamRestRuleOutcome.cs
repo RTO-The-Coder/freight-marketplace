@@ -1,5 +1,4 @@
 using Freight.Domain.Common;
-using Freight.Domain.Fleet;
 
 namespace Freight.Domain.Tracking;
 
