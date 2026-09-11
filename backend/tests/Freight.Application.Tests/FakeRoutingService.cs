@@ -4,54 +4,49 @@ using Freight.Domain.ValueObjects;
 namespace Freight.Application.Tests;
 
 /// <summary>
-/// An <see cref="IRoutingService"/> test double that returns a fixed leg for every call
-/// (default 650 km / 78 ticks - the placeholder figures the handler used before OSRM was
-/// wired, so existing assertions on leg distance/time stay valid) and records the
-/// from/to coordinate pairs it was asked about, so a test can assert which legs the
-/// handler measured for a given insertion.
+/// Deterministic <see cref="IRoutingService"/> test double. Records every call (so tests
+/// can assert exactly which legs were measured, and how many times) and returns a fixed
+/// leg by default - override <see cref="LegFor"/> to vary the response per from/to pair,
+/// or set <see cref="ThrowOnCall"/> to simulate an unroutable/unreachable provider.
 /// </summary>
-internal sealed class FakeRoutingService : IRoutingService
+public sealed class FakeRoutingService : IRoutingService
 {
-    private readonly RouteLeg _leg;
+    public sealed record Call(GeoLocation From, GeoLocation To);
 
-    public FakeRoutingService(double distanceKm = 650, int timeTicks = 78)
-    {
-        _leg = new RouteLeg(distanceKm, timeTicks);
-    }
+    public List<Call> Requests { get; } = [];
 
-    public List<(GeoLocation From, GeoLocation To)> Requests { get; } = [];
+    /// <summary>Default leg returned when <see cref="LegFor"/> has no override for the requested pair.</summary>
+    public RouteLeg DefaultLeg { get; set; } = new(DistanceKm: 20, TimeTicks: 6);
 
-    /// <summary>When set, thrown instead of returning a leg - to exercise the abort path.</summary>
-    public Exception? ThrowOnCall { get; set; }
+    /// <summary>Optional per-pair override, keyed by (From, To) reference equality is not required - lookup uses value equality on the records' coordinates.</summary>
+    public Dictionary<(GeoLocation From, GeoLocation To), RouteLeg> LegFor { get; } = [];
+
+    /// <summary>When set, every call throws this instead of returning a leg - simulates a routing-provider failure.</summary>
+    public RoutingUnavailableException? ThrowOnCall { get; set; }
 
     public Task<RouteLeg> GetRouteAsync(GeoLocation from, GeoLocation to, CancellationToken cancellationToken = default)
     {
-        Requests.Add((from, to));
+        Requests.Add(new Call(from, to));
 
         if (ThrowOnCall is not null)
         {
             throw ThrowOnCall;
         }
 
-        return Task.FromResult(_leg);
+        var leg = LegFor.TryGetValue((from, to), out var overriddenLeg) ? overriddenLeg : DefaultLeg;
+        return Task.FromResult(leg);
     }
 
     public Task<RouteGeometry> GetRouteGeometryAsync(GeoLocation from, GeoLocation to, CancellationToken cancellationToken = default)
     {
-        Requests.Add((from, to));
+        Requests.Add(new Call(from, to));
 
         if (ThrowOnCall is not null)
         {
             throw ThrowOnCall;
         }
 
-        // A trivial two-point path from start to end - enough for callers that just need
-        // a non-empty geometry.
-        var path = new List<GeoPoint>
-        {
-            new(from.Latitude, from.Longitude),
-            new(to.Latitude, to.Longitude),
-        };
-        return Task.FromResult(new RouteGeometry(_leg.DistanceKm, _leg.TimeTicks, path));
+        var leg = LegFor.TryGetValue((from, to), out var overriddenLeg) ? overriddenLeg : DefaultLeg;
+        return Task.FromResult(new RouteGeometry(leg.DistanceKm, leg.TimeTicks, Path: [new GeoPoint(from.Latitude, from.Longitude), new GeoPoint(to.Latitude, to.Longitude)]));
     }
 }

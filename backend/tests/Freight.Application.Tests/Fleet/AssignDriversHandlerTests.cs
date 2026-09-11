@@ -11,69 +11,95 @@ namespace Freight.Application.Tests.Fleet;
 
 public sealed class AssignDriversHandlerTests
 {
-    private static Driver NewDriver() =>
-        Driver.Create(
-            "Jane",
-            "Doe",
-            DrivingRules.Create(DrivingBreakRule.FullBreak, DailyRestRule.FullRest, WeeklyRestRule.FullWeeklyRest, false));
+    private static DrivingRules SomeRules() =>
+        DrivingRules.Create(DrivingBreakRule.FullBreak, DailyRestRule.FullRest, WeeklyRestRule.FullWeeklyRest, false);
 
-    private static (Mock<IUnitOfWork> UnitOfWork, Mock<ITruckRepository> Trucks, Mock<IDriverRepository> Drivers) NewMocks()
+    private static Driver SomeDriver() => Driver.Create(Guid.NewGuid(), "Jane", "Doe", SomeRules());
+
+    private static Mock<IUnitOfWork> SetUp(Truck? truck, Dictionary<Guid, Driver> driversById)
     {
         var trucks = new Mock<ITruckRepository>();
+        trucks.Setup(t => t.GetByIdAsync(It.IsAny<Guid>(), It.IsAny<CancellationToken>())).ReturnsAsync(truck);
         var drivers = new Mock<IDriverRepository>();
+        drivers.Setup(d => d.GetByIdAsync(It.IsAny<Guid>(), It.IsAny<CancellationToken>()))
+            .ReturnsAsync((Guid id, CancellationToken _) => driversById.GetValueOrDefault(id));
+
         var unitOfWork = new Mock<IUnitOfWork>();
         unitOfWork.SetupGet(u => u.Trucks).Returns(trucks.Object);
         unitOfWork.SetupGet(u => u.Drivers).Returns(drivers.Object);
-        return (unitOfWork, trucks, drivers);
+        return unitOfWork;
     }
 
     [Fact]
-    public async Task HandleAsync_SingleDriverOnMediumTruck_AssignsAndSaves()
+    public async Task AssignDriversAsync_PrimaryOnly_CallsAssignDriversWithNullSecondary()
     {
-        var (unitOfWork, trucks, drivers) = NewMocks();
-        var truck = Truck.Create("Truck 1", TruckType.BoxVan, TruckSize.Medium);
-        var primary = NewDriver();
-
-        trucks.Setup(t => t.GetByIdAsync(truck.Id, It.IsAny<CancellationToken>())).ReturnsAsync(truck);
-        drivers.Setup(d => d.GetByIdAsync(primary.Id, It.IsAny<CancellationToken>())).ReturnsAsync(primary);
+        var truck = Truck.Create(Guid.NewGuid(), "Truck-1", TruckType.Refrigerated, TruckSize.Medium);
+        var primary = SomeDriver();
+        var unitOfWork = SetUp(truck, new Dictionary<Guid, Driver> { [primary.Id] = primary });
 
         var handler = new AssignDriversHandler(unitOfWork.Object);
+        await handler.AssignDriversAsync(new AssignDriversRequest(truck.Id, primary.Id, null));
 
-        await handler.AssignDriversAsync(new AssignDriversRequest(truck.Id, primary.Id, SecondaryDriverId: null));
-
-        Assert.Equal(primary.Id, truck.DriverAssignment!.PrimaryDriver.Id);
+        Assert.Equal(DriverConfigurationType.Single, truck.DriverAssignment!.ConfigurationType);
+        Assert.Same(primary, truck.DriverAssignment.PrimaryDriver);
+        Assert.Null(truck.DriverAssignment.SecondaryDriver);
         unitOfWork.Verify(u => u.SaveChangesAsync(It.IsAny<CancellationToken>()), Times.Once);
     }
 
     [Fact]
-    public async Task HandleAsync_SecondDriverOnMediumTruck_ThrowsAndDoesNotSave()
+    public async Task AssignDriversAsync_PrimaryAndSecondary_CallsAssignDriversWithBoth()
     {
-        var (unitOfWork, trucks, drivers) = NewMocks();
-        var truck = Truck.Create("Truck 1", TruckType.BoxVan, TruckSize.Medium);
-        var primary = NewDriver();
-        var secondary = NewDriver();
-
-        trucks.Setup(t => t.GetByIdAsync(truck.Id, It.IsAny<CancellationToken>())).ReturnsAsync(truck);
-        drivers.Setup(d => d.GetByIdAsync(primary.Id, It.IsAny<CancellationToken>())).ReturnsAsync(primary);
-        drivers.Setup(d => d.GetByIdAsync(secondary.Id, It.IsAny<CancellationToken>())).ReturnsAsync(secondary);
+        var truck = Truck.Create(Guid.NewGuid(), "Truck-1", TruckType.Refrigerated, TruckSize.Large);
+        var primary = SomeDriver();
+        var secondary = SomeDriver();
+        var unitOfWork = SetUp(truck, new Dictionary<Guid, Driver> { [primary.Id] = primary, [secondary.Id] = secondary });
 
         var handler = new AssignDriversHandler(unitOfWork.Object);
+        await handler.AssignDriversAsync(new AssignDriversRequest(truck.Id, primary.Id, secondary.Id));
 
-        await Assert.ThrowsAsync<InvalidOperationException>(() =>
-            handler.AssignDriversAsync(new AssignDriversRequest(truck.Id, primary.Id, secondary.Id)));
-
-        unitOfWork.Verify(u => u.SaveChangesAsync(It.IsAny<CancellationToken>()), Times.Never);
+        Assert.Equal(DriverConfigurationType.Team, truck.DriverAssignment!.ConfigurationType);
+        Assert.Same(secondary, truck.DriverAssignment.SecondaryDriver);
+        unitOfWork.Verify(u => u.SaveChangesAsync(It.IsAny<CancellationToken>()), Times.Once);
     }
 
     [Fact]
-    public async Task HandleAsync_UnknownTruckId_Throws()
+    public async Task AssignDriversAsync_UnknownTruckId_Throws_NeverSaves()
     {
-        var (unitOfWork, trucks, _) = NewMocks();
-        trucks.Setup(t => t.GetByIdAsync(It.IsAny<Guid>(), It.IsAny<CancellationToken>())).ReturnsAsync((Truck?)null);
+        var unitOfWork = SetUp(null, []);
 
         var handler = new AssignDriversHandler(unitOfWork.Object);
 
         await Assert.ThrowsAsync<InvalidOperationException>(() =>
             handler.AssignDriversAsync(new AssignDriversRequest(Guid.NewGuid(), Guid.NewGuid(), null)));
+        unitOfWork.Verify(u => u.SaveChangesAsync(It.IsAny<CancellationToken>()), Times.Never);
+    }
+
+    [Fact]
+    public async Task AssignDriversAsync_UnknownPrimaryDriverId_Throws_NeverSaves()
+    {
+        var truck = Truck.Create(Guid.NewGuid(), "Truck-1", TruckType.Refrigerated, TruckSize.Medium);
+        var unitOfWork = SetUp(truck, []);
+
+        var handler = new AssignDriversHandler(unitOfWork.Object);
+
+        await Assert.ThrowsAsync<InvalidOperationException>(() =>
+            handler.AssignDriversAsync(new AssignDriversRequest(truck.Id, Guid.NewGuid(), null)));
+        unitOfWork.Verify(u => u.SaveChangesAsync(It.IsAny<CancellationToken>()), Times.Never);
+        Assert.Null(truck.DriverAssignment);
+    }
+
+    [Fact]
+    public async Task AssignDriversAsync_UnknownSecondaryDriverId_Throws_NeverSaves()
+    {
+        var truck = Truck.Create(Guid.NewGuid(), "Truck-1", TruckType.Refrigerated, TruckSize.Large);
+        var primary = SomeDriver();
+        var unitOfWork = SetUp(truck, new Dictionary<Guid, Driver> { [primary.Id] = primary });
+
+        var handler = new AssignDriversHandler(unitOfWork.Object);
+
+        await Assert.ThrowsAsync<InvalidOperationException>(() =>
+            handler.AssignDriversAsync(new AssignDriversRequest(truck.Id, primary.Id, Guid.NewGuid())));
+        unitOfWork.Verify(u => u.SaveChangesAsync(It.IsAny<CancellationToken>()), Times.Never);
+        Assert.Null(truck.DriverAssignment);
     }
 }
