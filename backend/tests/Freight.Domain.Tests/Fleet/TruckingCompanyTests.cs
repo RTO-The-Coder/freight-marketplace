@@ -1,7 +1,7 @@
 using Freight.Domain.Fleet;
 using Freight.Domain.ValueObjects;
 
-namespace Freight.Domain.Tests;
+namespace Freight.Domain.Tests.Fleet;
 
 public class TruckingCompanyTests
 {
@@ -21,15 +21,17 @@ public class TruckingCompanyTests
     }
 
     [Fact]
-    public void Create_EmptyName_Throws()
-    {
-        Assert.Throws<ArgumentException>(() => TruckingCompany.Create(Guid.NewGuid(), "", SomeLocation()));
-    }
-
-    [Fact]
     public void Create_EmptyId_Throws()
     {
         Assert.Throws<ArgumentException>(() => TruckingCompany.Create(Guid.Empty, "Acme Trucking", SomeLocation()));
+    }
+
+    [Theory]
+    [InlineData("")]
+    [InlineData("   ")]
+    public void Create_BlankName_Throws(string name)
+    {
+        Assert.Throws<ArgumentException>(() => TruckingCompany.Create(Guid.NewGuid(), name, SomeLocation()));
     }
 
     [Fact]
