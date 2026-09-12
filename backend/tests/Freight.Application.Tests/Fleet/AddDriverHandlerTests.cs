@@ -39,6 +39,10 @@ public sealed class AddDriverHandlerTests
         Assert.Equal(addedDriver.Id, response.DriverId);
         Assert.Equal("Jane", response.FirstName);
         Assert.Equal("Doe", response.LastName);
+        Assert.Equal(DrivingBreakRule.SplitBreak, response.BreakRule);
+        Assert.Equal(DailyRestRule.ReducedRest, response.DailyRestRule);
+        Assert.Equal(WeeklyRestRule.ReducedWeeklyRest, response.WeeklyRestRule);
+        Assert.True(response.ExtendDailyDrivingWhenEligible);
         unitOfWork.Verify(u => u.SaveChangesAsync(It.IsAny<CancellationToken>()), Times.Once);
     }
 

@@ -7,7 +7,15 @@ namespace Freight.Application.Fleet;
 
 public sealed record AddTruckRequest(string TruckName, TruckType TruckType, TruckSize TruckSize, Guid? TruckingCompanyId = null);
 
-public sealed record AddTruckResponse(Guid TruckId, string TruckName, TruckType TruckType, TruckSize TruckSize, Capacity TruckCapacity, bool IsActive, Guid? TruckingCompanyId = null);
+public sealed record AddTruckResponse(
+    Guid TruckId,
+    string TruckName,
+    TruckType TruckType,
+    TruckSize TruckSize,
+    double CapacityWeightKg,
+    double CapacityVolumeCubicMeters,
+    bool IsActive,
+    Guid? TruckingCompanyId = null);
 
 public sealed class AddTruckHandler(IUnitOfWork unitOfWork)
 {
@@ -23,6 +31,14 @@ public sealed class AddTruckHandler(IUnitOfWork unitOfWork)
         unitOfWork.Trucks.Add(truck);
         await unitOfWork.SaveChangesAsync(cancellationToken);
 
-        return new AddTruckResponse(truck.Id, truck.TruckName, truck.Type, truck.Size, truck.Capacity, truck.IsActive, truck.TruckingCompanyId);
+        return new AddTruckResponse(
+            truck.Id,
+            truck.TruckName,
+            truck.Type,
+            truck.Size,
+            truck.Capacity.WeightKg,
+            truck.Capacity.VolumeCubicMeters,
+            truck.IsActive,
+            truck.TruckingCompanyId);
     }
 }

@@ -13,7 +13,14 @@ public sealed record AddDriverRequest(
     WeeklyRestRule WeeklyRestRule,
     bool ExtendDailyDrivingWhenEligible);
 
-public sealed record AddDriverResponse(Guid DriverId, string FirstName, string LastName, DrivingRules Rules);
+public sealed record AddDriverResponse(
+    Guid DriverId,
+    string FirstName,
+    string LastName,
+    DrivingBreakRule BreakRule,
+    DailyRestRule DailyRestRule,
+    WeeklyRestRule WeeklyRestRule,
+    bool ExtendDailyDrivingWhenEligible);
 
 public sealed class AddDriverHandler(IUnitOfWork unitOfWork)
 {
@@ -30,6 +37,13 @@ public sealed class AddDriverHandler(IUnitOfWork unitOfWork)
         unitOfWork.Drivers.Add(driver);
         await unitOfWork.SaveChangesAsync(cancellationToken);
 
-        return new AddDriverResponse(driver.Id, driver.FirstName, driver.LastName, driver.Rules);
+        return new AddDriverResponse(
+            driver.Id,
+            driver.FirstName,
+            driver.LastName,
+            driver.Rules.BreakRule,
+            driver.Rules.DailyRestRule,
+            driver.Rules.WeeklyRestRule,
+            driver.Rules.ExtendDailyDrivingWhenEligible);
     }
 }

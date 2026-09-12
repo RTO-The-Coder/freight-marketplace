@@ -28,7 +28,9 @@ public sealed class AddTruckHandlerTests
         Assert.Equal(companyId, addedTruck!.TruckingCompanyId);
         Assert.Equal(companyId, response.TruckingCompanyId);
         Assert.Equal(response.TruckId, addedTruck.Id);
-        Assert.Equal(Capacity.ForTruckSize(TruckSize.Medium), response.TruckCapacity);
+        var expectedCapacity = Capacity.ForTruckSize(TruckSize.Medium);
+        Assert.Equal(expectedCapacity.WeightKg, response.CapacityWeightKg);
+        Assert.Equal(expectedCapacity.VolumeCubicMeters, response.CapacityVolumeCubicMeters);
         Assert.False(response.IsActive);
         unitOfWork.Verify(u => u.SaveChangesAsync(It.IsAny<CancellationToken>()), Times.Once);
     }
