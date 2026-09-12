@@ -110,6 +110,12 @@ public sealed class Shipment
         ArgumentNullException.ThrowIfNull(pickupWindow);
         ArgumentNullException.ThrowIfNull(deliveryWindow);
 
+        if (deliveryWindow.Latest <= pickupWindow.Earliest)
+        {
+            throw new ArgumentException(
+                "The delivery window must allow delivery to happen at or after the pickup window opens.", nameof(deliveryWindow));
+        }
+
         return new Shipment(id, shipperId, pickupLocation, deliveryLocation, load, requiredTruckType, pickupWindow, deliveryWindow, bookedAt);
     }
 
@@ -124,6 +130,12 @@ public sealed class Shipment
         if (Status != ShipmentStatus.Pending)
         {
             throw new InvalidOperationException("The pickup window can only be edited while the shipment is Pending.");
+        }
+
+        if (DeliveryWindow.Latest <= newPickupWindow.Earliest)
+        {
+            throw new ArgumentException(
+                "The delivery window must allow delivery to happen at or after the pickup window opens.", nameof(newPickupWindow));
         }
 
         PickupWindow = newPickupWindow;

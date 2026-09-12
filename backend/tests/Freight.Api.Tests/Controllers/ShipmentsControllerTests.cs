@@ -32,11 +32,10 @@ public sealed class ShipmentsControllerTests : ApiTestBase
     }
 
     [Fact]
-    public async Task BookShipment_DeliveryWindowEntirelyBeforePickupWindow_Returns200RatherThanThrowing()
+    public async Task BookShipment_DeliveryWindowEntirelyBeforePickupWindow_Returns400ViaExceptionMiddleware()
     {
-        // Shipment.Book validates each TimeWindow internally (earliest < latest) but never
-        // cross-checks pickup vs. delivery window ordering against each other - this pins
-        // that (possibly surprising) real behavior rather than assuming validation exists.
+        // Shipment.Book rejects a delivery window that closes at or before the pickup
+        // window even opens - delivering before pickup can happen is impossible.
         var shipper = await Factory.SeedShipperAsync();
         var pickupStart = new DateTimeOffset(2026, 3, 1, 6, 0, 0, TimeSpan.Zero).UtcDateTime;
 
@@ -56,7 +55,7 @@ public sealed class ShipmentsControllerTests : ApiTestBase
             DeliveryWindowLatest = pickupStart.AddDays(-1)
         }, JsonOptions);
 
-        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+        Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
     }
 
     [Fact]
@@ -105,7 +104,9 @@ public sealed class ShipmentsControllerTests : ApiTestBase
     {
         var shipper = await Factory.SeedShipperAsync();
         var bookResponse = await BookShipmentAsync(shipper.Id);
-        var newEarliest = new DateTimeOffset(2026, 3, 5, 6, 0, 0, TimeSpan.Zero).UtcDateTime;
+        // BookShipmentAsync's delivery window closes at pickupStart.AddDays(3) - this stays
+        // inside it, so it's a valid pickup-window edit.
+        var newEarliest = new DateTimeOffset(2026, 3, 2, 6, 0, 0, TimeSpan.Zero).UtcDateTime;
 
         var response = await Client.PatchAsJsonAsync($"/shipments/{bookResponse.ShipmentId}/pickup-window", new
         {
@@ -118,6 +119,24 @@ public sealed class ShipmentsControllerTests : ApiTestBase
         var pending = await Client.GetFromJsonAsync<GetPendingShipmentsResponse>("/shipments/pending", JsonOptions);
         var shipment = pending!.Shipments.Single(s => s.ShipmentId == bookResponse.ShipmentId);
         Assert.Equal(newEarliest, shipment.PickupWindowEarliest);
+    }
+
+    [Fact]
+    public async Task UpdatePickupWindow_PushesPickupPastDeliveryWindow_Returns400ViaExceptionMiddleware()
+    {
+        var shipper = await Factory.SeedShipperAsync();
+        var bookResponse = await BookShipmentAsync(shipper.Id);
+        // BookShipmentAsync's delivery window closes at pickupStart.AddDays(3) - pushing
+        // pickup to open after that makes delivery impossible.
+        var newEarliest = new DateTimeOffset(2026, 3, 10, 6, 0, 0, TimeSpan.Zero).UtcDateTime;
+
+        var response = await Client.PatchAsJsonAsync($"/shipments/{bookResponse.ShipmentId}/pickup-window", new
+        {
+            PickupWindowEarliest = newEarliest,
+            PickupWindowLatest = newEarliest.AddDays(1)
+        }, JsonOptions);
+
+        Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
     }
 
     private async Task<BookShipmentResponse> BookShipmentAsync(Guid shipperId)

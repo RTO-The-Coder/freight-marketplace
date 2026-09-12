@@ -137,6 +137,47 @@ public class ShipmentTests
     }
 
     [Fact]
+    public void Book_DeliveryWindowEntirelyBeforePickupWindow_Throws()
+    {
+        var pickupWindow = SomeWindow(BookedAt.AddHours(5));
+        var deliveryWindow = SomeWindow(BookedAt.AddHours(1));
+
+        Assert.Throws<ArgumentException>(() => Shipment.Book(
+            Guid.NewGuid(), Guid.NewGuid(), SomeLocation(), OtherLocation(), SomeLoad(), TruckType.Refrigerated,
+            pickupWindow, deliveryWindow, BookedAt));
+    }
+
+    [Fact]
+    public void Book_DeliveryWindowLatestEqualsPickupWindowEarliest_Throws()
+    {
+        // Boundary: delivery closing at the exact instant pickup opens still leaves no
+        // room to actually deliver after picking up, so this is rejected too (`<=`, not `<`).
+        var pickupEarliest = BookedAt.AddHours(3);
+        var pickupWindow = TimeWindow.Create(pickupEarliest, pickupEarliest.AddHours(2));
+        var deliveryWindow = TimeWindow.Create(BookedAt, pickupEarliest);
+
+        Assert.Throws<ArgumentException>(() => Shipment.Book(
+            Guid.NewGuid(), Guid.NewGuid(), SomeLocation(), OtherLocation(), SomeLoad(), TruckType.Refrigerated,
+            pickupWindow, deliveryWindow, BookedAt));
+    }
+
+    [Fact]
+    public void Book_DeliveryWindowLatestJustAfterPickupWindowEarliest_Succeeds()
+    {
+        // One tick past the rejection boundary above - there's technically a sliver of
+        // overlap where pickup could happen right as delivery's window is about to close.
+        var pickupEarliest = BookedAt.AddHours(3);
+        var pickupWindow = TimeWindow.Create(pickupEarliest, pickupEarliest.AddHours(2));
+        var deliveryWindow = TimeWindow.Create(BookedAt, pickupEarliest.AddTicks(1));
+
+        var shipment = Shipment.Book(
+            Guid.NewGuid(), Guid.NewGuid(), SomeLocation(), OtherLocation(), SomeLoad(), TruckType.Refrigerated,
+            pickupWindow, deliveryWindow, BookedAt);
+
+        Assert.Same(deliveryWindow, shipment.DeliveryWindow);
+    }
+
+    [Fact]
     public void UpdatePickupWindow_WhilePending_UpdatesWindowAndRecomputesDeadlineFromUpdatedAt()
     {
         var shipment = BookedShipment();
@@ -165,6 +206,28 @@ public class ShipmentTests
         shipment.AssignToCompany(Guid.NewGuid());
 
         Assert.Throws<InvalidOperationException>(() => shipment.UpdatePickupWindow(SomeWindow(BookedAt.AddHours(2)), BookedAt));
+    }
+
+    [Fact]
+    public void UpdatePickupWindow_PushedPastDeliveryWindow_Throws()
+    {
+        // BookedShipment()'s delivery window is [BookedAt+5h, BookedAt+7h] - a new pickup
+        // window opening after that leaves no room to deliver.
+        var shipment = BookedShipment();
+
+        Assert.Throws<ArgumentException>(() =>
+            shipment.UpdatePickupWindow(SomeWindow(BookedAt.AddHours(8)), BookedAt));
+    }
+
+    [Fact]
+    public void UpdatePickupWindow_StillWithinDeliveryWindow_Succeeds()
+    {
+        var shipment = BookedShipment();
+        var newWindow = SomeWindow(BookedAt.AddHours(4));
+
+        shipment.UpdatePickupWindow(newWindow, BookedAt);
+
+        Assert.Same(newWindow, shipment.PickupWindow);
     }
 
     [Fact]
