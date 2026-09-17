@@ -1,23 +1,36 @@
-import { ApiError, type DriverDetailDto, type ShipmentSummaryDto, type TruckDetailDto } from '@freight/api-client'
+import {
+  ApiError,
+  CAPACITY_BY_SIZE,
+  type DriverDetailDto,
+  type TruckDetailDto,
+  type TruckPositionDto,
+} from '@freight/api-client'
 import { useCallback, useEffect, useState } from 'react'
-import { AssignCompanyModal } from '../components/AssignCompanyModal'
+import { ActivationToggle } from '../components/ActivationToggle'
 import { AssignDriversModal } from '../components/AssignDriversModal'
-import { fleetApi, shipmentsApi } from '../apiClient'
+import { RescheduleTripModal } from '../components/RescheduleTripModal'
+import { StatusPill } from '../components/StatusPill'
+import { TripMap } from '../components/TripMap'
+import { fullName } from '../components/driverFormat'
+import { fmtSimDateTime } from '../simTime'
+import { fleetApi } from '../apiClient'
 
 interface TruckDetailScreenProps {
   truckId: string
-  onBack: () => void
+  /** Bumped when the simulation clock advances — triggers a refetch. */
+  simVersion: number
+  onTruckLoaded: (name: string) => void
+  onSelectDriver: (driverId: string, driverName: string) => void
 }
 
-export function TruckDetailScreen({ truckId, onBack }: TruckDetailScreenProps) {
-  const [truck, setTruck] = useState<TruckDetailDto | null>(null)
-  const [error, setError] = useState<string | null>(null)
-  const [modal, setModal] = useState<'assignDrivers' | 'assignCompany' | null>(null)
-  const [isUnassigningCompany, setIsUnassigningCompany] = useState(false)
+const STOP_KIND_LABEL: Record<string, string> = { Pickup: 'Pickup', Delivery: 'Delivery', Office: 'Office' }
 
-  const [pendingShipments, setPendingShipments] = useState<ShipmentSummaryDto[] | null>(null)
-  const [assignError, setAssignError] = useState<string | null>(null)
-  const [assigningShipmentId, setAssigningShipmentId] = useState<string | null>(null)
+export function TruckDetailScreen({ truckId, simVersion, onTruckLoaded, onSelectDriver }: TruckDetailScreenProps) {
+  const [truck, setTruck] = useState<TruckDetailDto | null>(null)
+  const [position, setPosition] = useState<TruckPositionDto | null>(null)
+  const [error, setError] = useState<string | null>(null)
+  const [modal, setModal] = useState<'assignDrivers' | 'rescheduleTrip' | null>(null)
+  const [busyAction, setBusyAction] = useState<'drivers' | null>(null)
 
   const [primaryDriverDetail, setPrimaryDriverDetail] = useState<DriverDetailDto | null>(null)
   const [eligibilityAfterMinutes, setEligibilityAfterMinutes] = useState(60)
@@ -28,25 +41,28 @@ export function TruckDetailScreen({ truckId, onBack }: TruckDetailScreenProps) {
   const load = useCallback(() => {
     fleetApi
       .getTruckDetail(truckId)
-      .then(setTruck)
+      .then((t) => {
+        setTruck(t)
+        onTruckLoaded(t.truckName)
+      })
       .catch((err) => setError(err instanceof Error ? err.message : 'Failed to load truck.'))
-  }, [truckId])
+    // Position is best-effort — the map still draws the route without it.
+    fleetApi
+      .getTruckPosition(truckId)
+      .then(setPosition)
+      .catch(() => setPosition(null))
+  }, [truckId, onTruckLoaded])
 
-  const loadPendingShipments = useCallback(() => {
-    shipmentsApi
-      .getPendingShipments()
-      .then((response) => setPendingShipments(response.shipments))
-      .catch((err) => setAssignError(err instanceof Error ? err.message : 'Failed to load pending shipments.'))
-  }, [])
-
+  // Reload on mount and whenever the simulation clock advances (position,
+  // status and reached stops all change as trips move forward).
   useEffect(() => {
     load()
-    loadPendingShipments()
-  }, [load, loadPendingShipments])
+  }, [load, simVersion])
 
   useEffect(() => {
     const primaryDriverId = truck?.primaryDriver?.driverId
     if (!primaryDriverId) {
+      setPrimaryDriverDetail(null)
       return
     }
     fleetApi
@@ -55,18 +71,16 @@ export function TruckDetailScreen({ truckId, onBack }: TruckDetailScreenProps) {
       .catch(() => setPrimaryDriverDetail(null))
   }, [truck?.primaryDriver?.driverId])
 
-  const handleAssignShipment = async (shipmentId: string) => {
-    setAssignError(null)
-    setEligibilityResult(null)
-    setAssigningShipmentId(shipmentId)
+  const handleRemoveDrivers = async () => {
+    setError(null)
+    setBusyAction('drivers')
     try {
-      await fleetApi.assignShipmentToTruck(truckId, shipmentId)
+      await fleetApi.removeDrivers(truckId)
       load()
-      loadPendingShipments()
     } catch (err) {
-      setAssignError(err instanceof ApiError ? err.message : 'Failed to assign shipment to this truck.')
+      setError(err instanceof ApiError ? `Could not remove drivers: ${err.message}` : 'Could not remove drivers.')
     } finally {
-      setAssigningShipmentId(null)
+      setBusyAction(null)
     }
   }
 
@@ -81,7 +95,7 @@ export function TruckDetailScreen({ truckId, onBack }: TruckDetailScreenProps) {
       setEligibilityResult(
         result.isEligible
           ? `Eligible to drive after ${eligibilityAfterMinutes} minutes.`
-          : `Not eligible after ${eligibilityAfterMinutes} minutes — reason: ${result.reason ?? 'unknown'}.`,
+          : `Not eligible after ${eligibilityAfterMinutes} minutes — ${result.reason ?? 'unknown reason'}.`,
       )
     } catch (err) {
       setEligibilityError(err instanceof ApiError ? err.message : 'Failed to check driver eligibility.')
@@ -90,145 +104,216 @@ export function TruckDetailScreen({ truckId, onBack }: TruckDetailScreenProps) {
     }
   }
 
-  const handleUnassignCompany = async () => {
-    setError(null)
-    setIsUnassigningCompany(true)
-    try {
-      await fleetApi.unassignTruckFromCompany(truckId)
-      load()
-    } catch (err) {
-      setError(err instanceof ApiError ? err.message : 'Failed to unassign trucking company.')
-    } finally {
-      setIsUnassigningCompany(false)
-    }
-  }
+  if (error && !truck) return <p className="alert">{error}</p>
+  if (!truck) return <p className="notice">Loading…</p>
+
+  const capacity = CAPACITY_BY_SIZE[truck.truckSize]
+  const hasOpenTrip = truck.stops.length > 0
+  const ledger = primaryDriverDetail?.complianceState ?? null
+
+  // The trip can still be rescheduled only while the truck hasn't moved: an open
+  // trip, no stop reached, and the truck sitting at 0% of its first leg.
+  const notMovedYet =
+    hasOpenTrip &&
+    truck.stops.every((s) => s.status !== 'Reached') &&
+    (position?.legProgressFraction ?? 0) === 0
+  const openTripId = position?.tripId ?? null
 
   return (
     <div>
-      <button type="button" className="back-button" onClick={onBack}>
-        ← Back to trucks
-      </button>
+      {error && <p className="alert">{error}</p>}
 
-      {error && <p role="alert">{error}</p>}
-      {!error && !truck && <p>Loading…</p>}
-
-      {truck && (
-        <>
+      {/* --- Identity ------------------------------------------------ */}
+      <div className="page-head">
+        <div className="page-head__text">
           <h2>{truck.truckName}</h2>
-          <dl className="detail-list">
-            <dt>Type</dt>
-            <dd>{truck.truckType}</dd>
-            <dt>Size</dt>
-            <dd>{truck.truckSize}</dd>
-            <dt>Status</dt>
-            <dd>{truck.status}</dd>
-            <dt>Active</dt>
-            <dd>{truck.isActive ? 'Yes' : 'No'}</dd>
-          </dl>
+          <p
+            className="page-head__sub"
+            style={{ display: 'flex', gap: 'var(--space-2)', alignItems: 'center', flexWrap: 'wrap' }}
+          >
+            <span className="pill pill--plain">{truck.truckType}</span>
+            <span className="pill pill--plain">{truck.truckSize}</span>
+            <StatusPill status={truck.status} />
+            <span style={{ color: 'var(--c-text-subtle)' }}>
+              {capacity.weightKg.toLocaleString()} kg · {capacity.volumeCubicMeters} m³
+            </span>
+          </p>
+        </div>
+        <ActivationToggle
+          truckId={truck.truckId}
+          isActive={truck.isActive}
+          hasDriver={truck.primaryDriver !== null}
+          onChanged={load}
+          onError={setError}
+        />
+      </div>
 
-          <h3>Trucking Company</h3>
-          {truck.truckingCompanyId === null ? (
-            <button type="button" onClick={() => setModal('assignCompany')}>
-              Assign Trucking Company
-            </button>
-          ) : (
-            <label className="filter-toggle">
-              <input type="checkbox" checked disabled={isUnassigningCompany} onChange={handleUnassignCompany} />
-              Assigned to a trucking company (uncheck to unassign)
-            </label>
-          )}
-
-          <h3>Drivers</h3>
+      {/* Drivers as a compact info line, not a big card. The company is shown
+          in the breadcrumb, so it is not repeated here. */}
+      <dl className="truck-facts">
+        <dt>Drivers</dt>
+        <dd style={{ flexWrap: 'wrap' }}>
           {truck.primaryDriver === null ? (
-            <button type="button" onClick={() => setModal('assignDrivers')}>
-              Assign Drivers
-            </button>
-          ) : (
-            <ul className="driver-list">
-              <li>
-                Primary → {truck.primaryDriver.firstName} {truck.primaryDriver.lastName}
-              </li>
-              {truck.truckSize === 'Large' && (
-                <li>
-                  Secondary →{' '}
-                  {truck.secondaryDriver ? `${truck.secondaryDriver.firstName} ${truck.secondaryDriver.lastName}` : '(none)'}
-                </li>
-              )}
-            </ul>
-          )}
-
-          <h3>Route Stops</h3>
-          {truck.stops.length === 0 ? (
-            <p>No stops on this truck's route yet.</p>
-          ) : (
-            <ol className="stop-list">
-              {truck.stops.map((stop) => (
-                <li key={stop.stopId}>
-                  {stop.kind} (sequence {stop.sequence}) — {stop.latitude.toFixed(4)}, {stop.longitude.toFixed(4)}
-                </li>
-              ))}
-            </ol>
-          )}
-
-          <h3>Assign a Pending Shipment</h3>
-          {assignError && <p role="alert">{assignError}</p>}
-          {!pendingShipments && !assignError && <p>Loading pending shipments…</p>}
-          {pendingShipments && pendingShipments.length === 0 && <p>No pending shipments available.</p>}
-          {pendingShipments && pendingShipments.length > 0 && (
-            <ul className="picker-list">
-              {pendingShipments.map((shipment) => (
-                <li key={shipment.shipmentId}>
-                  {shipment.requiredTruckType} · {shipment.loadWeightKg}kg / {shipment.loadVolumeCubicMeters}m³
-                  <button
-                    type="button"
-                    onClick={() => handleAssignShipment(shipment.shipmentId)}
-                    disabled={assigningShipmentId === shipment.shipmentId}
-                  >
-                    Assign to this truck
-                  </button>
-                </li>
-              ))}
-            </ul>
-          )}
-
-          <h3>Primary Driver Compliance Ledger</h3>
-          {truck.primaryDriver === null && <p>No primary driver assigned.</p>}
-          {truck.primaryDriver !== null && primaryDriverDetail?.complianceState === null && (
-            <p>Driver has not started driving yet — no compliance ledger exists.</p>
-          )}
-          {truck.primaryDriver !== null && primaryDriverDetail?.complianceState && (
             <>
-              <dl className="detail-list">
-                <dt>Current activity</dt>
-                <dd>{primaryDriverDetail.complianceState.currentActivity}</dd>
-                <dt>Continuous driving (min)</dt>
-                <dd>{primaryDriverDetail.complianceState.continuousDrivingMinutesSinceBreak}</dd>
-                <dt>Daily driving (min)</dt>
-                <dd>{primaryDriverDetail.complianceState.dailyDrivingMinutesToday}</dd>
-                <dt>Weekly driving (min)</dt>
-                <dd>{primaryDriverDetail.complianceState.weeklyDrivingMinutesThisWeek}</dd>
-              </dl>
-
-              <label>
-                Check eligibility after (minutes):
-                <input
-                  type="number"
-                  min={0}
-                  value={eligibilityAfterMinutes}
-                  onChange={(e) => setEligibilityAfterMinutes(Number(e.target.value))}
-                />
-              </label>
-              <button type="button" onClick={handleCheckEligibility} disabled={isCheckingEligibility}>
-                Check eligibility
+              <span style={{ color: 'var(--c-status-idle)' }}>None — assign a driver to activate this truck</span>
+              <button type="button" className="btn btn--ghost btn--sm" onClick={() => setModal('assignDrivers')}>
+                Assign
               </button>
-              {eligibilityError && <p role="alert">{eligibilityError}</p>}
-              {eligibilityResult && <p>{eligibilityResult}</p>}
+            </>
+          ) : (
+            <>
+              <span>
+                Primary:{' '}
+                <button
+                  type="button"
+                  className="link"
+                  onClick={() =>
+                    truck.primaryDriver && onSelectDriver(truck.primaryDriver.driverId, fullName(truck.primaryDriver))
+                  }
+                >
+                  {fullName(truck.primaryDriver)}
+                </button>
+                {truck.truckSize === 'Large' && (
+                  <>
+                    {' · Secondary: '}
+                    {truck.secondaryDriver ? fullName(truck.secondaryDriver) : 'none'}
+                  </>
+                )}
+              </span>
+              <button type="button" className="btn btn--ghost btn--sm" onClick={() => setModal('assignDrivers')}>
+                Reassign
+              </button>
+              <button
+                type="button"
+                className="btn btn--ghost btn--sm"
+                onClick={handleRemoveDrivers}
+                disabled={busyAction === 'drivers' || hasOpenTrip}
+                title={hasOpenTrip ? 'A truck with an open trip cannot lose its drivers' : undefined}
+              >
+                {busyAction === 'drivers' ? 'Removing…' : 'Remove'}
+              </button>
             </>
           )}
-        </>
+        </dd>
+      </dl>
+
+      {/* --- Route map (Leaflet + OSRM road geometry) ------------------ */}
+      <section className="section">
+        <div className="section__head">
+          <h3>Route</h3>
+          {hasOpenTrip && (
+            <span className="section__meta">
+              {truck.stops.length} stop{truck.stops.length === 1 ? '' : 's'}
+              {notMovedYet && openTripId && (
+                <>
+                  {' · '}
+                  <button
+                    type="button"
+                    className="link"
+                    onClick={() => setModal('rescheduleTrip')}
+                  >
+                    Change trip start
+                  </button>
+                </>
+              )}
+            </span>
+          )}
+        </div>
+        {hasOpenTrip ? (
+          <TripMap stops={truck.stops} position={position} />
+        ) : (
+          <div className="map-placeholder">
+            <span className="map-placeholder__badge">Map</span>
+            <p>No active trip</p>
+            <p className="map-placeholder__hint">
+              The truck is at its company office. Assign a shipment to give it a route.
+            </p>
+          </div>
+        )}
+      </section>
+
+      {/* --- Route stops -------------------------------------------- */}
+      {hasOpenTrip && (
+        <section className="section">
+          <div className="section__head">
+            <h3>Route stops</h3>
+          </div>
+          <div className="card card--pad">
+            <ol className="stops">
+              {truck.stops.map((stop) => {
+                const reached = stop.status === 'Reached'
+                return (
+                  <li key={stop.stopId} className={`stops__item${reached ? ' stops__item--reached' : ''}`}>
+                    <span className={`stops__index stops__index--${stop.kind.toLowerCase()}`} />
+                    <span className="stops__body">
+                      <span className="stops__kind">{STOP_KIND_LABEL[stop.kind] ?? stop.kind}</span>
+                      <span className="stops__coords">
+                        {stop.latitude.toFixed(4)}, {stop.longitude.toFixed(4)}
+                        {stop.incomingLegDistanceKm > 0 &&
+                          ` · leg ${stop.incomingLegDistanceKm.toFixed(0)} km / ${stop.incomingLegTimeTick * 5} min`}
+                      </span>
+                      <span className="stops__when">
+                        {reached && stop.reachedAt
+                          ? `Reached ${fmtSimDateTime(stop.reachedAt)}`
+                          : 'Pending'}
+                      </span>
+                    </span>
+                  </li>
+                )
+              })}
+            </ol>
+          </div>
+        </section>
       )}
 
-      {modal === 'assignDrivers' && truck && (
+      {/* --- Compliance -------------------------------------------- */}
+      {truck.primaryDriver && (
+        <section className="section">
+          <div className="section__head">
+            <h3>Primary driver compliance</h3>
+          </div>
+          {ledger === null ? (
+            <p className="notice">
+              {primaryDriverDetail === null
+                ? 'Loading…'
+                : 'Driver has not started driving yet — no compliance ledger.'}
+            </p>
+          ) : (
+            <div className="card card--pad stack">
+              <p style={{ fontSize: 'var(--text-base)' }}>
+                <strong>{ledger.currentActivity}</strong> · continuous{' '}
+                {ledger.continuousDrivingMinutesSinceBreak} min · daily {ledger.dailyDrivingMinutesToday} min · weekly{' '}
+                {ledger.weeklyDrivingMinutesThisWeek} min
+              </p>
+              <div style={{ display: 'flex', gap: 'var(--space-3)', alignItems: 'flex-end', flexWrap: 'wrap' }}>
+                <label className="field" style={{ maxWidth: '200px' }}>
+                  <span>Check eligibility after (minutes)</span>
+                  <input
+                    type="number"
+                    min={0}
+                    value={eligibilityAfterMinutes}
+                    onChange={(e) => setEligibilityAfterMinutes(Number(e.target.value))}
+                  />
+                </label>
+                <button
+                  type="button"
+                  className="btn btn--sm"
+                  onClick={handleCheckEligibility}
+                  disabled={isCheckingEligibility}
+                >
+                  {isCheckingEligibility ? 'Checking…' : 'Check'}
+                </button>
+              </div>
+              {eligibilityError && <p className="alert">{eligibilityError}</p>}
+              {eligibilityResult && (
+                <p style={{ fontSize: 'var(--text-sm)', color: 'var(--c-text-muted)' }}>{eligibilityResult}</p>
+              )}
+            </div>
+          )}
+        </section>
+      )}
+
+      {modal === 'assignDrivers' && (
         <AssignDriversModal
           truckId={truckId}
           truckSize={truck.truckSize}
@@ -239,12 +324,12 @@ export function TruckDetailScreen({ truckId, onBack }: TruckDetailScreenProps) {
           }}
         />
       )}
-
-      {modal === 'assignCompany' && (
-        <AssignCompanyModal
-          truckId={truckId}
+      {modal === 'rescheduleTrip' && openTripId && (
+        <RescheduleTripModal
+          tripId={openTripId}
+          currentStart={null}
           onClose={() => setModal(null)}
-          onAssigned={() => {
+          onRescheduled={() => {
             setModal(null)
             load()
           }}

@@ -38,30 +38,42 @@ export function AssignCompanyModal({ truckId, onClose, onAssigned }: AssignCompa
 
   return (
     <Modal title="Assign Trucking Company" onClose={onClose}>
-      {!companies && !error && <p>Loading trucking companies…</p>}
-      {error && <p role="alert">{error}</p>}
+      <div className="stack">
+        {!companies && !error && <p className="notice">Loading trucking companies…</p>}
+        {error && <p className="alert">{error}</p>}
+        {companies && companies.length === 0 && <p className="notice">No trucking companies available.</p>}
 
-      {companies && companies.length === 0 && <p>No trucking companies available.</p>}
-
-      {companies && companies.length > 0 && (
-        <ul className="picker-list">
-          {companies.map((company) => (
-            <li key={company.companyId}>
-              <button
-                type="button"
-                className={company.companyId === selectedCompanyId ? 'selected' : ''}
-                onClick={() => setSelectedCompanyId(company.companyId)}
-              >
-                {company.name}
-              </button>
-            </li>
-          ))}
-        </ul>
-      )}
+        {companies && companies.length > 0 && (
+          <div className="field">
+            <span>Company</span>
+            <ul className="picker">
+              {companies.map((company) => (
+                <li key={company.companyId}>
+                  <button
+                    type="button"
+                    className={`picker__item${company.companyId === selectedCompanyId ? ' picker__item--selected' : ''}`}
+                    onClick={() => setSelectedCompanyId(company.companyId)}
+                  >
+                    {company.name}
+                  </button>
+                </li>
+              ))}
+            </ul>
+          </div>
+        )}
+      </div>
 
       <div className="modal-actions">
-        <button type="button" onClick={handleSave} disabled={!selectedCompanyId || isSubmitting}>
-          Save
+        <button type="button" className="btn" onClick={onClose}>
+          Cancel
+        </button>
+        <button
+          type="button"
+          className="btn btn--primary"
+          onClick={handleSave}
+          disabled={!selectedCompanyId || isSubmitting}
+        >
+          {isSubmitting ? 'Saving…' : 'Assign'}
         </button>
       </div>
     </Modal>

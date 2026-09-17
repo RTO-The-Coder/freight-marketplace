@@ -27,22 +27,31 @@ export type {
   GetTruckForDriverResponse,
   GetTrucksResponse,
   IneligibilityReason,
+  ShipmentFeasibilityResponse,
   StopKind,
   TruckDetailDriverDto,
   TruckDetailDto,
   TruckDetailStopDto,
+  TruckPositionDto,
   TruckSize,
   TruckStatus,
   TruckSummaryDto,
   TruckType,
   WeeklyRestRule,
 } from './fleetTypes'
+export { CAPACITY_BY_SIZE, MAX_CAPACITY } from './fleetConstants'
 export { createTruckingCompaniesApi } from './truckingCompaniesApi'
 export type {
   GetTruckingCompaniesResponse,
   TruckingCompaniesApi,
   TruckingCompanySummaryDto,
 } from './truckingCompaniesApi'
+export { createSimulationApi } from './simulationApi'
+export type { AdvanceSimulationResponse, SimulationApi, SimulationTimeResponse } from './simulationApi'
+export { createRoutingApi } from './routingApi'
+export type { RouteGeometryResponse, RouteLegResponse, RoutePointDto, RoutingApi } from './routingApi'
+export { createTripsApi } from './tripsApi'
+export type { RescheduleTripResponse, TripsApi } from './tripsApi'
 export { createShipmentsApi } from './shipmentsApi'
 export type {
   BookShipmentRequest,

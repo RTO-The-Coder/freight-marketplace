@@ -2,10 +2,11 @@ import { ApiError, type DailyRestRule, type DrivingBreakRule, type WeeklyRestRul
 import { useState } from 'react'
 import { fleetApi } from '../apiClient'
 import { Modal } from './Modal'
+import { Picker } from './Picker'
 
-const breakRules: DrivingBreakRule[] = ['FullBreak', 'SplitBreak']
-const dailyRestRules: DailyRestRule[] = ['FullRest', 'ReducedRest', 'SplitRest']
-const weeklyRestRules: WeeklyRestRule[] = ['FullWeeklyRest', 'ReducedWeeklyRest']
+const BREAK_RULES: readonly DrivingBreakRule[] = ['FullBreak', 'SplitBreak']
+const DAILY_REST_RULES: readonly DailyRestRule[] = ['FullRest', 'ReducedRest', 'SplitRest']
+const WEEKLY_REST_RULES: readonly WeeklyRestRule[] = ['FullWeeklyRest', 'ReducedWeeklyRest']
 
 interface AddDriverModalProps {
   onClose: () => void
@@ -35,8 +36,8 @@ export function AddDriverModal({ onClose, onAdded }: AddDriverModalProps) {
     setIsSubmitting(true)
     try {
       await fleetApi.addDriver({
-        firstName,
-        lastName,
+        firstName: firstName.trim(),
+        lastName: lastName.trim(),
         breakRule,
         dailyRestRule,
         weeklyRestRule,
@@ -52,74 +53,47 @@ export function AddDriverModal({ onClose, onAdded }: AddDriverModalProps) {
 
   return (
     <Modal title="Add Driver" onClose={onClose}>
-      <input
-        type="text"
-        placeholder="First name"
-        value={firstName}
-        onChange={(event) => setFirstName(event.target.value)}
-      />
-      <input
-        type="text"
-        placeholder="Last name"
-        value={lastName}
-        onChange={(event) => setLastName(event.target.value)}
-      />
+      <div className="stack">
+        <label className="field">
+          <span>First name</span>
+          <input type="text" value={firstName} onChange={(event) => setFirstName(event.target.value)} />
+        </label>
+        <label className="field">
+          <span>Last name</span>
+          <input type="text" value={lastName} onChange={(event) => setLastName(event.target.value)} />
+        </label>
 
-      <h4>Break Rule</h4>
-      <ul className="picker-list">
-        {breakRules.map((rule) => (
-          <li key={rule}>
-            <button type="button" className={rule === breakRule ? 'selected' : ''} onClick={() => setBreakRule(rule)}>
-              {rule}
-            </button>
-          </li>
-        ))}
-      </ul>
+        <p style={{ fontSize: 'var(--text-sm)', color: 'var(--c-text-subtle)', margin: 0 }}>
+          Compliance rules are fixed once the driver is created.
+        </p>
 
-      <h4>Daily Rest Rule</h4>
-      <ul className="picker-list">
-        {dailyRestRules.map((rule) => (
-          <li key={rule}>
-            <button
-              type="button"
-              className={rule === dailyRestRule ? 'selected' : ''}
-              onClick={() => setDailyRestRule(rule)}
-            >
-              {rule}
-            </button>
-          </li>
-        ))}
-      </ul>
-
-      <h4>Weekly Rest Rule</h4>
-      <ul className="picker-list">
-        {weeklyRestRules.map((rule) => (
-          <li key={rule}>
-            <button
-              type="button"
-              className={rule === weeklyRestRule ? 'selected' : ''}
-              onClick={() => setWeeklyRestRule(rule)}
-            >
-              {rule}
-            </button>
-          </li>
-        ))}
-      </ul>
-
-      <label className="filter-toggle">
-        <input
-          type="checkbox"
-          checked={extendDailyDrivingWhenEligible}
-          onChange={(event) => setExtendDailyDrivingWhenEligible(event.target.checked)}
+        <Picker label="Break rule" options={BREAK_RULES} value={breakRule} onChange={setBreakRule} />
+        <Picker label="Daily rest rule" options={DAILY_REST_RULES} value={dailyRestRule} onChange={setDailyRestRule} />
+        <Picker
+          label="Weekly rest rule"
+          options={WEEKLY_REST_RULES}
+          value={weeklyRestRule}
+          onChange={setWeeklyRestRule}
         />
-        Extend daily driving when eligible
-      </label>
 
-      {error && <p role="alert">{error}</p>}
+        <label className="check">
+          <input
+            type="checkbox"
+            checked={extendDailyDrivingWhenEligible}
+            onChange={(event) => setExtendDailyDrivingWhenEligible(event.target.checked)}
+          />
+          Extend daily driving when eligible
+        </label>
+
+        {error && <p className="alert">{error}</p>}
+      </div>
 
       <div className="modal-actions">
-        <button type="button" onClick={handleSave} disabled={!canSave || isSubmitting}>
-          Save
+        <button type="button" className="btn" onClick={onClose}>
+          Cancel
+        </button>
+        <button type="button" className="btn btn--primary" onClick={handleSave} disabled={!canSave || isSubmitting}>
+          {isSubmitting ? 'Adding…' : 'Add driver'}
         </button>
       </div>
     </Modal>

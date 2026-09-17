@@ -1,13 +1,16 @@
 import type { DriverDetailDto, TruckSummaryDto } from '@freight/api-client'
 import { useEffect, useState } from 'react'
+import { fullName } from '../components/driverFormat'
 import { fleetApi } from '../apiClient'
 
 interface DriverDetailScreenProps {
   driverId: string
-  onBack: () => void
+  /** Bumped when the simulation clock advances — refetches the compliance ledger. */
+  simVersion: number
+  onDriverLoaded: (name: string) => void
 }
 
-export function DriverDetailScreen({ driverId, onBack }: DriverDetailScreenProps) {
+export function DriverDetailScreen({ driverId, simVersion, onDriverLoaded }: DriverDetailScreenProps) {
   const [driver, setDriver] = useState<DriverDetailDto | null>(null)
   const [truck, setTruck] = useState<TruckSummaryDto | null>(null)
   const [error, setError] = useState<string | null>(null)
@@ -17,16 +20,13 @@ export function DriverDetailScreen({ driverId, onBack }: DriverDetailScreenProps
       .then(([driverDetail, truckForDriver]) => {
         setDriver(driverDetail)
         setTruck(truckForDriver.truck)
+        onDriverLoaded(fullName(driverDetail))
       })
       .catch((err) => setError(err instanceof Error ? err.message : 'Failed to load driver.'))
-  }, [driverId])
+  }, [driverId, simVersion, onDriverLoaded])
 
   return (
     <div>
-      <button type="button" className="back-button" onClick={onBack}>
-        ← Back to drivers
-      </button>
-
       {error && <p role="alert">{error}</p>}
       {!error && !driver && <p>Loading…</p>}
 

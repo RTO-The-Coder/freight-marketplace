@@ -1,17 +1,20 @@
-import { ApiError, type TruckSize, type TruckType } from '@freight/api-client'
+import { ApiError, CAPACITY_BY_SIZE, type TruckSize, type TruckType } from '@freight/api-client'
 import { useState } from 'react'
 import { fleetApi } from '../apiClient'
 import { Modal } from './Modal'
+import { Picker } from './Picker'
 
-const truckTypes: TruckType[] = ['BoxVan', 'Flatbed', 'Refrigerated', 'Tanker']
-const truckSizes: TruckSize[] = ['Small', 'Medium', 'Large']
+const TRUCK_TYPES: readonly TruckType[] = ['BoxVan', 'Flatbed', 'Refrigerated', 'Tanker']
+const TRUCK_SIZES: readonly TruckSize[] = ['Small', 'Medium', 'Large']
 
 interface AddTruckModalProps {
+  /** New truck is created then assigned to this company. */
+  companyId: string
   onClose: () => void
   onAdded: () => void
 }
 
-export function AddTruckModal({ onClose, onAdded }: AddTruckModalProps) {
+export function AddTruckModal({ companyId, onClose, onAdded }: AddTruckModalProps) {
   const [truckName, setTruckName] = useState('')
   const [truckType, setTruckType] = useState<TruckType | null>(null)
   const [truckSize, setTruckSize] = useState<TruckSize | null>(null)
@@ -25,7 +28,8 @@ export function AddTruckModal({ onClose, onAdded }: AddTruckModalProps) {
     setError(null)
     setIsSubmitting(true)
     try {
-      await fleetApi.addTruck({ truckName, truckType, truckSize })
+      const { truckId } = await fleetApi.addTruck({ truckName: truckName.trim(), truckType, truckSize })
+      await fleetApi.assignTruckToCompany(truckId, companyId)
       onAdded()
     } catch (err) {
       setError(err instanceof ApiError ? err.message : 'Failed to add truck.')
@@ -36,48 +40,38 @@ export function AddTruckModal({ onClose, onAdded }: AddTruckModalProps) {
 
   return (
     <Modal title="Add Truck" onClose={onClose}>
-      <input
-        type="text"
-        placeholder="Truck name"
-        value={truckName}
-        onChange={(event) => setTruckName(event.target.value)}
-      />
+      <div className="stack">
+        <label className="field">
+          <span>Truck name</span>
+          <input
+            type="text"
+            placeholder="e.g. FL-14"
+            value={truckName}
+            onChange={(event) => setTruckName(event.target.value)}
+          />
+        </label>
 
-      <h4>Type</h4>
-      <ul className="picker-list">
-        {truckTypes.map((type) => (
-          <li key={type}>
-            <button
-              type="button"
-              className={type === truckType ? 'selected' : ''}
-              onClick={() => setTruckType(type)}
-            >
-              {type}
-            </button>
-          </li>
-        ))}
-      </ul>
+        <Picker label="Type" options={TRUCK_TYPES} value={truckType} onChange={setTruckType} />
 
-      <h4>Size</h4>
-      <ul className="picker-list">
-        {truckSizes.map((size) => (
-          <li key={size}>
-            <button
-              type="button"
-              className={size === truckSize ? 'selected' : ''}
-              onClick={() => setTruckSize(size)}
-            >
-              {size}
-            </button>
-          </li>
-        ))}
-      </ul>
+        <Picker
+          label="Size"
+          options={TRUCK_SIZES}
+          value={truckSize}
+          onChange={setTruckSize}
+          hint={(size) =>
+            `Capacity ${CAPACITY_BY_SIZE[size].weightKg.toLocaleString()} kg · ${CAPACITY_BY_SIZE[size].volumeCubicMeters} m³`
+          }
+        />
 
-      {error && <p role="alert">{error}</p>}
+        {error && <p className="alert">{error}</p>}
+      </div>
 
       <div className="modal-actions">
-        <button type="button" onClick={handleSave} disabled={!canSave || isSubmitting}>
-          Save
+        <button type="button" className="btn" onClick={onClose}>
+          Cancel
+        </button>
+        <button type="button" className="btn btn--primary" onClick={handleSave} disabled={!canSave || isSubmitting}>
+          {isSubmitting ? 'Adding…' : 'Add truck'}
         </button>
       </div>
     </Modal>

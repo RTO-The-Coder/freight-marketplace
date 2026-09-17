@@ -77,14 +77,19 @@ export interface TruckDetailDriverDto {
 
 export type StopKind = 'Pickup' | 'Delivery' | 'Office'
 
+export type StopStatus = 'Pending' | 'Reached'
+
 export interface TruckDetailStopDto {
   stopId: string
   shipmentId: string | null
   kind: StopKind
+  status: StopStatus
   sequence: number
   latitude: number
   longitude: number
-  expectedArrivalTime: string
+  incomingLegDistanceKm: number
+  incomingLegTimeTick: number
+  reachedAt: string | null
 }
 
 export interface TruckDetailDto {
@@ -127,6 +132,26 @@ export interface DriverDetailDto {
 
 export interface AssignShipmentToTruckResponse {
   stopCount: number
+}
+
+export interface ShipmentFeasibilityResponse {
+  isFeasible: boolean
+  violatingStopId: string | null
+  reason: string | null
+}
+
+/**
+ * Q1 — where a truck is right now. A truck with no open trip sits at its
+ * company office ({@link tripId} null, {@link legProgressFraction} 0). A truck
+ * on a trip is interpolated along the leg toward {@link headingToStopId}.
+ */
+export interface TruckPositionDto {
+  truckId: string
+  tripId: string | null
+  latitude: number
+  longitude: number
+  headingToStopId: string | null
+  legProgressFraction: number
 }
 
 export type IneligibilityReason =
