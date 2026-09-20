@@ -9,6 +9,7 @@ import { useEffect, useMemo, useState } from 'react'
 import { fleetApi, shipmentsApi } from '../apiClient'
 import { useSimClock } from '../SimClock'
 import { datetimeLocalToIso, isoToDatetimeLocal } from '../simTime'
+import { resolveInsertionIndices } from './insertionIndex'
 import { Modal } from './Modal'
 import { ShipmentRouteMap } from './ShipmentRouteMap'
 import { capacityFill, fmtWindow } from './shipmentFormat'
@@ -100,10 +101,8 @@ export function AssignShipmentModal({ trucks, truckDetails, onClose, onAssigned 
     setDeliveryRaw(null)
   }, [truckId])
 
-  // Resolve + clamp every render, so a stale pair can never be sent: pickup in
-  // [0, N]; delivery in [pickup, N].
-  const pickupIndex = Math.min(Math.max(pickupRaw ?? pendingStopCount, 0), pendingStopCount)
-  const deliveryIndex = Math.min(Math.max(deliveryRaw ?? pendingStopCount, pickupIndex), pendingStopCount)
+  // Resolve + clamp every render, so a stale pair can never be sent.
+  const { pickupIndex, deliveryIndex } = resolveInsertionIndices(pickupRaw, deliveryRaw, pendingStopCount)
 
   /** The route order that results from inserting at the current indices. */
   const previewOrder = useMemo(() => {
