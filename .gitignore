@@ -12,6 +12,12 @@ build/
 .expo/
 *.tsbuildinfo
 
+# Playwright
+/packages/web/test-results/
+/packages/web/playwright-report/
+/packages/web/blob-report/
+/packages/web/playwright/.cache/
+
 # Env / secrets
 .env
 .env.local
@@ -21,6 +27,7 @@ appsettings.Local.json
 google-services.json
 GoogleService-Info.plist
 firebase-service-account*.json
+FCM-token.json
 
 # OS / editor
 .DS_Store
@@ -31,3 +38,6 @@ Thumbs.db
 # Logs
 *.log
 npm-debug.log*
+
+# Local-only scratch content
+/blog/
