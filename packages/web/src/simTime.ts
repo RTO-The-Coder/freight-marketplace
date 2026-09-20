@@ -27,6 +27,7 @@ export function fmtSimDateTime(iso: string | null): string {
     year: 'numeric',
     hour: '2-digit',
     minute: '2-digit',
+    hour12: false,
   })
 }
 
@@ -40,6 +41,7 @@ export function fmtSimShort(iso: string): string {
     day: 'numeric',
     hour: '2-digit',
     minute: '2-digit',
+    hour12: false,
   })
 }
 
@@ -47,7 +49,7 @@ export function fmtSimShort(iso: string): string {
 export function fmtSimTimeOnly(iso: string): string {
   const d = parse(iso)
   if (!d) return iso
-  return d.toLocaleTimeString(undefined, { timeZone: 'UTC', hour: '2-digit', minute: '2-digit' })
+  return d.toLocaleTimeString(undefined, { timeZone: 'UTC', hour: '2-digit', minute: '2-digit', hour12: false })
 }
 
 /** "Aug 1, 05:00 – 09:00", collapsing the date when both ends share a UTC day. */
