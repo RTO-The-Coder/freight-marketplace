@@ -1,23 +1,45 @@
-import type { ShipmentSummaryDto } from '@freight/api-client'
+import type { ShipmentSummaryDto, TruckEvaluationResultDto } from '@freight/api-client'
 import { useEffect, useState } from 'react'
-import { shipmentsApi } from '../apiClient'
+import { shipmentsApi, truckingCompaniesApi } from '../apiClient'
 import { useSimClock } from '../SimClock'
 import { Modal } from './Modal'
 import { ShipmentRouteMap } from './ShipmentRouteMap'
 import { capacityFill, fmtRelative, fmtWindow } from './shipmentFormat'
 
 interface OpenShipmentsPanelProps {
+  /** Which company's fleet "Check eligibility" evaluates against. */
+  companyId: string
   onClose: () => void
   /** Jump to the assign-shipment flow. */
   onAssign: () => void
 }
 
+type EligibilityState =
+  | { status: 'idle' }
+  | { status: 'loading' }
+  | { status: 'loaded'; trucks: TruckEvaluationResultDto[] }
+  | { status: 'error'; message: string }
+
 /** Screen 4 — pending shipments awaiting a carrier. Route line per card. */
-export function OpenShipmentsPanel({ onClose, onAssign }: OpenShipmentsPanelProps) {
+export function OpenShipmentsPanel({ companyId, onClose, onAssign }: OpenShipmentsPanelProps) {
   const { currentTime } = useSimClock()
   const [shipments, setShipments] = useState<ShipmentSummaryDto[] | null>(null)
   const [error, setError] = useState<string | null>(null)
   const [expanded, setExpanded] = useState<string | null>(null)
+  const [eligibility, setEligibility] = useState<Record<string, EligibilityState>>({})
+
+  const checkEligibility = (shipmentId: string) => {
+    setEligibility((prev) => ({ ...prev, [shipmentId]: { status: 'loading' } }))
+    truckingCompaniesApi
+      .evaluateShipment(companyId, shipmentId)
+      .then((r) => setEligibility((prev) => ({ ...prev, [shipmentId]: { status: 'loaded', trucks: r.trucks } })))
+      .catch((err) =>
+        setEligibility((prev) => ({
+          ...prev,
+          [shipmentId]: { status: 'error', message: err instanceof Error ? err.message : 'Evaluation failed.' },
+        })),
+      )
+  }
 
   useEffect(() => {
     shipmentsApi
@@ -95,9 +117,21 @@ export function OpenShipmentsPanel({ onClose, onAssign }: OpenShipmentsPanelProp
                       <dd>{fmtWindow(s.deliveryWindowEarliest, s.deliveryWindowLatest)}</dd>
                     </dl>
 
-                    <button type="button" className="btn btn--sm btn--primary" onClick={onAssign}>
-                      Assign to a truck →
-                    </button>
+                    <div className="shipment-card__actions">
+                      <button type="button" className="btn btn--sm btn--primary" onClick={onAssign}>
+                        Assign to a truck →
+                      </button>
+                      <button
+                        type="button"
+                        className="btn btn--sm"
+                        onClick={() => checkEligibility(s.shipmentId)}
+                        disabled={eligibility[s.shipmentId]?.status === 'loading'}
+                      >
+                        {eligibility[s.shipmentId]?.status === 'loading' ? 'Checking…' : 'Check eligibility'}
+                      </button>
+                    </div>
+
+                    <EligibilityResult state={eligibility[s.shipmentId]} />
                   </div>
                 )}
               </li>
@@ -118,5 +152,34 @@ export function OpenShipmentsPanel({ onClose, onAssign }: OpenShipmentsPanelProp
         </button>
       </div>
     </Modal>
+  )
+}
+
+function EligibilityResult({ state }: { state: EligibilityState | undefined }) {
+  if (!state || state.status === 'idle' || state.status === 'loading') {
+    return null
+  }
+
+  if (state.status === 'error') {
+    return <p className="alert">{state.message}</p>
+  }
+
+  const feasible = state.trucks.filter((t) => t.isFeasible)
+
+  if (feasible.length === 0) {
+    return <p className="notice">No truck in your fleet can currently take this shipment.</p>
+  }
+
+  return (
+    <ul className="eligibility-list">
+      {feasible.map((t) => (
+        <li key={t.truckId}>
+          Truck {t.truckId.slice(0, 8)} — feasible
+          {t.addedDistanceKm !== undefined && (
+            <span className="muted"> (+{t.addedDistanceKm.toFixed(1)} km to route)</span>
+          )}
+        </li>
+      ))}
+    </ul>
   )
 }

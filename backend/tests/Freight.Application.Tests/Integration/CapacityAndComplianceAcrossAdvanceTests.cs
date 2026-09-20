@@ -60,7 +60,7 @@ public sealed class CapacityAndComplianceAcrossAdvanceTests
 
         var routingService = new FakeRoutingService { DefaultLeg = new Domain.Routing.Abstractions.RouteLeg(20, 2) };
         var evaluator = new ShipmentInsertionEvaluator(new RouteEtaCalculator(new DriverRuleEngine()));
-        var assignHandler = new AssignShipmentToTruckHandler(unitOfWork, evaluator, routingService, timeProvider);
+        var assignHandler = new AssignShipmentToTruckHandler(unitOfWork, new ShipmentInsertionPlanner(unitOfWork, evaluator, routingService, timeProvider));
         await assignHandler.AssignShipmentAsync(new AssignShipmentToTruckRequest(truckResponse.TruckId, shipmentA.ShipmentId, 0, 0));
 
         var shipmentB = await bookHandler.BookShipmentAsync(new BookShipmentRequest(

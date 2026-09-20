@@ -251,6 +251,7 @@ export function TruckingCompanyDetailScreen({
 
       {modal === 'openShipments' && (
         <OpenShipmentsPanel
+          companyId={companyId}
           onClose={() => setModal(null)}
           onAssign={() => setModal('assignShipment')}
         />

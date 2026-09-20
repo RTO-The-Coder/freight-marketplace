@@ -14,6 +14,21 @@ export interface GetTruckingCompaniesResponse {
   companies: TruckingCompanySummaryDto[]
 }
 
+// See docs/adr/0012-shipment-evaluation-insertion-search.md — per-truck feasibility for
+// one company's fleet, evaluated on demand (not automatically at booking time).
+export interface TruckEvaluationResultDto {
+  truckId: string
+  isFeasible: boolean
+  pickupInsertIndex?: number
+  deliveryInsertIndex?: number
+  addedDistanceKm?: number
+  addedTimeTick?: number
+}
+
+export interface EvaluateShipmentForCompanyResponse {
+  trucks: TruckEvaluationResultDto[]
+}
+
 export function createTruckingCompaniesApi(client: ApiClient) {
   return {
     getTruckingCompanies: () => client.get<GetTruckingCompaniesResponse>('/companies'),
@@ -28,6 +43,9 @@ export function createTruckingCompaniesApi(client: ApiClient) {
         return list.companies.find((c) => c.companyId === companyId) ?? null
       }
     },
+
+    evaluateShipment: (companyId: string, shipmentId: string) =>
+      client.get<EvaluateShipmentForCompanyResponse>(`/companies/${companyId}/shipments/${shipmentId}/evaluate`),
   }
 }
 

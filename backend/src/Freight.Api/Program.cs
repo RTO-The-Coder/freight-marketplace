@@ -1,5 +1,7 @@
 using System.Text.Json.Serialization;
 using Freight.Application;
+using Freight.Application.Evaluation;
+using Freight.Application.Fleet;
 using Freight.Domain.Common;
 using Freight.Domain.Fleet.Abstractions;
 using Freight.Domain.Fleet.Services;
@@ -28,6 +30,8 @@ builder.Services.AddSingleton(TimeProvider.System);
 builder.Services.AddScoped<IDriverRuleEngine, DriverRuleEngine>();
 builder.Services.AddScoped<RouteEtaCalculator>();
 builder.Services.AddScoped<IShipmentInsertionEvaluator, ShipmentInsertionEvaluator>();
+builder.Services.AddScoped<ShipmentInsertionPlanner>();
+builder.Services.AddScoped<ShipmentEvaluationEngine>();
 
 // OSRM routing (ADR 0011): a typed HttpClient for the raw calls, wrapped by a
 // process-wide throttle so several concurrent assignments don't burst past the public

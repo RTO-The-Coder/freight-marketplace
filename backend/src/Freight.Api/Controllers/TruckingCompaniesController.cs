@@ -1,3 +1,4 @@
+using Freight.Application.Evaluation;
 using Freight.Application.Fleet;
 using Microsoft.AspNetCore.Mvc;
 
@@ -8,7 +9,8 @@ namespace Freight.Api.Controllers;
 public sealed class TruckingCompaniesController(
     GetTruckingCompaniesHandler getTruckingCompaniesHandler,
     GetTruckingCompanyByIdHandler getTruckingCompanyByIdHandler,
-    GetFleetTreeHandler getFleetTreeHandler) : ControllerBase
+    GetFleetTreeHandler getFleetTreeHandler,
+    EvaluateShipmentForCompanyHandler evaluateShipmentForCompanyHandler) : ControllerBase
 {
     [HttpGet]
     public async Task<ActionResult<GetTruckingCompaniesResponse>> GetTruckingCompanies(CancellationToken cancellationToken)
@@ -29,6 +31,15 @@ public sealed class TruckingCompaniesController(
     public async Task<ActionResult<GetFleetTreeResponse>> GetFleetTree(Guid companyId, CancellationToken cancellationToken)
     {
         var response = await getFleetTreeHandler.HandleAsync(new GetFleetTreeRequest(companyId), cancellationToken);
+        return Ok(response);
+    }
+
+    [HttpGet("{companyId:guid}/shipments/{shipmentId:guid}/evaluate")]
+    public async Task<ActionResult<EvaluateShipmentForCompanyResponse>> EvaluateShipment(
+        Guid companyId, Guid shipmentId, CancellationToken cancellationToken)
+    {
+        var response = await evaluateShipmentForCompanyHandler.EvaluateAsync(
+            new EvaluateShipmentForCompanyRequest(shipmentId, companyId), cancellationToken);
         return Ok(response);
     }
 }

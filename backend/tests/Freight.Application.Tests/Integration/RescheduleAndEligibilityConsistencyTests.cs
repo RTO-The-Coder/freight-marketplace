@@ -51,7 +51,7 @@ public sealed class RescheduleAndEligibilityConsistencyTests
         var farFutureStart = ClockStart.AddHours(2);
         var routingService = new FakeRoutingService { DefaultLeg = new Domain.Routing.Abstractions.RouteLeg(20, 6) };
         var evaluator = new ShipmentInsertionEvaluator(new RouteEtaCalculator(new DriverRuleEngine()));
-        var assignHandler = new AssignShipmentToTruckHandler(unitOfWork, evaluator, routingService, timeProvider);
+        var assignHandler = new AssignShipmentToTruckHandler(unitOfWork, new ShipmentInsertionPlanner(unitOfWork, evaluator, routingService, timeProvider));
         await assignHandler.AssignShipmentAsync(new AssignShipmentToTruckRequest(truckResponse.TruckId, bookResponse.ShipmentId, 0, 0, farFutureStart));
 
         var trip = (await unitOfWork.TripsRepo.GetOpenTripByTruckIdAsync(truckResponse.TruckId))!;

@@ -67,7 +67,11 @@ public sealed class AssignShipmentToTruckHandlerTests
         }
 
         public AssignShipmentToTruckHandler NewHandler() =>
-            new(UnitOfWork.Object, new ShipmentInsertionEvaluator(new RouteEtaCalculator(new DriverRuleEngine())), RoutingService, new FakeTimeProvider(StartedAt));
+            new(UnitOfWork.Object, new ShipmentInsertionPlanner(
+                UnitOfWork.Object,
+                new ShipmentInsertionEvaluator(new RouteEtaCalculator(new DriverRuleEngine())),
+                RoutingService,
+                new FakeTimeProvider(StartedAt)));
     }
 
     // --- Happy path: new trip ---

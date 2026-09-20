@@ -55,7 +55,7 @@ public sealed class TeamDriverSwapEtaConsistencyTests
         // rest, forcing a swap under real HOS rules.
         var routingService = new FakeRoutingService { DefaultLeg = new Domain.Routing.Abstractions.RouteLeg(2400, 288) };
         var evaluator = new ShipmentInsertionEvaluator(new RouteEtaCalculator(_engine));
-        var assignHandler = new AssignShipmentToTruckHandler(unitOfWork, evaluator, routingService, timeProvider);
+        var assignHandler = new AssignShipmentToTruckHandler(unitOfWork, new ShipmentInsertionPlanner(unitOfWork, evaluator, routingService, timeProvider));
         await assignHandler.AssignShipmentAsync(new AssignShipmentToTruckRequest(truckResponse.TruckId, bookResponse.ShipmentId, 0, 0));
 
         // Advance far enough into the leg that primary must have hit a hard cap and the

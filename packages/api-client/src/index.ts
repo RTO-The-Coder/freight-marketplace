@@ -42,7 +42,9 @@ export type {
 export { CAPACITY_BY_SIZE, MAX_CAPACITY } from './fleetConstants'
 export { createTruckingCompaniesApi } from './truckingCompaniesApi'
 export type {
+  EvaluateShipmentForCompanyResponse,
   GetTruckingCompaniesResponse,
+  TruckEvaluationResultDto,
   TruckingCompaniesApi,
   TruckingCompanySummaryDto,
 } from './truckingCompaniesApi'

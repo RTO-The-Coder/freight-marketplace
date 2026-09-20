@@ -204,7 +204,7 @@ namespace Freight.Infrastructure.Persistence.Migrations
 
                             b1.HasKey("ShipmentId");
 
-                            b1.ToTable("Shipments");
+                            b1.ToTable("Shipments", (string)null);
 
                             b1.WithOwner()
                                 .HasForeignKey("ShipmentId");
@@ -225,7 +225,7 @@ namespace Freight.Infrastructure.Persistence.Migrations
 
                             b1.HasKey("ShipmentId");
 
-                            b1.ToTable("Shipments");
+                            b1.ToTable("Shipments", (string)null);
 
                             b1.WithOwner()
                                 .HasForeignKey("ShipmentId");
@@ -246,7 +246,7 @@ namespace Freight.Infrastructure.Persistence.Migrations
 
                             b1.HasKey("ShipmentId");
 
-                            b1.ToTable("Shipments");
+                            b1.ToTable("Shipments", (string)null);
 
                             b1.WithOwner()
                                 .HasForeignKey("ShipmentId");
@@ -267,7 +267,7 @@ namespace Freight.Infrastructure.Persistence.Migrations
 
                             b1.HasKey("ShipmentId");
 
-                            b1.ToTable("Shipments");
+                            b1.ToTable("Shipments", (string)null);
 
                             b1.WithOwner()
                                 .HasForeignKey("ShipmentId");
@@ -288,7 +288,7 @@ namespace Freight.Infrastructure.Persistence.Migrations
 
                             b1.HasKey("ShipmentId");
 
-                            b1.ToTable("Shipments");
+                            b1.ToTable("Shipments", (string)null);
 
                             b1.WithOwner()
                                 .HasForeignKey("ShipmentId");
@@ -309,7 +309,7 @@ namespace Freight.Infrastructure.Persistence.Migrations
 
                             b1.HasKey("ShipmentId");
 
-                            b1.ToTable("Shipments");
+                            b1.ToTable("Shipments", (string)null);
 
                             b1.WithOwner()
                                 .HasForeignKey("ShipmentId");
@@ -330,7 +330,7 @@ namespace Freight.Infrastructure.Persistence.Migrations
 
                             b1.HasKey("ShipmentId");
 
-                            b1.ToTable("Shipments");
+                            b1.ToTable("Shipments", (string)null);
 
                             b1.WithOwner()
                                 .HasForeignKey("ShipmentId");
@@ -446,7 +446,7 @@ namespace Freight.Infrastructure.Persistence.Migrations
 
                             b1.HasKey("DriverId");
 
-                            b1.ToTable("Drivers");
+                            b1.ToTable("Drivers", (string)null);
 
                             b1.WithOwner()
                                 .HasForeignKey("DriverId");
@@ -528,7 +528,7 @@ namespace Freight.Infrastructure.Persistence.Migrations
 
                                     b2.HasKey("StopId");
 
-                                    b2.ToTable("TripStops");
+                                    b2.ToTable("TripStops", (string)null);
 
                                     b2.WithOwner()
                                         .HasForeignKey("StopId");
@@ -549,7 +549,7 @@ namespace Freight.Infrastructure.Persistence.Migrations
 
                                     b2.HasKey("StopId");
 
-                                    b2.ToTable("TripStops");
+                                    b2.ToTable("TripStops", (string)null);
 
                                     b2.WithOwner()
                                         .HasForeignKey("StopId");
@@ -566,53 +566,6 @@ namespace Freight.Infrastructure.Persistence.Migrations
 
             modelBuilder.Entity("Freight.Domain.Fleet.Truck", b =>
                 {
-                    b.OwnsOne("Freight.Domain.Fleet.DriverAssignment", "DriverAssignment", b1 =>
-                        {
-                            b1.Property<Guid>("TruckId")
-                                .HasColumnType("uuid");
-
-                            b1.Property<Guid?>("ActiveDriverId")
-                                .HasColumnType("uuid")
-                                .HasColumnName("ActiveDriverId");
-
-                            b1.Property<string>("ConfigurationType")
-                                .IsRequired()
-                                .HasColumnType("text")
-                                .HasColumnName("DriverConfigurationType");
-
-                            b1.Property<Guid>("PrimaryDriverId")
-                                .HasColumnType("uuid");
-
-                            b1.Property<Guid?>("SecondaryDriverId")
-                                .HasColumnType("uuid");
-
-                            b1.HasKey("TruckId");
-
-                            b1.HasIndex("PrimaryDriverId");
-
-                            b1.HasIndex("SecondaryDriverId");
-
-                            b1.ToTable("Trucks");
-
-                            b1.HasOne("Freight.Domain.Fleet.Driver", "PrimaryDriver")
-                                .WithMany()
-                                .HasForeignKey("PrimaryDriverId")
-                                .OnDelete(DeleteBehavior.Restrict)
-                                .IsRequired();
-
-                            b1.HasOne("Freight.Domain.Fleet.Driver", "SecondaryDriver")
-                                .WithMany()
-                                .HasForeignKey("SecondaryDriverId")
-                                .OnDelete(DeleteBehavior.Restrict);
-
-                            b1.WithOwner()
-                                .HasForeignKey("TruckId");
-
-                            b1.Navigation("PrimaryDriver");
-
-                            b1.Navigation("SecondaryDriver");
-                        });
-
                     b.OwnsOne("Freight.Domain.ValueObjects.Capacity", "Capacity", b1 =>
                         {
                             b1.Property<Guid>("TruckId")
@@ -628,7 +581,7 @@ namespace Freight.Infrastructure.Persistence.Migrations
 
                             b1.HasKey("TruckId");
 
-                            b1.ToTable("Trucks");
+                            b1.ToTable("Trucks", (string)null);
 
                             b1.WithOwner()
                                 .HasForeignKey("TruckId");
@@ -659,6 +612,53 @@ namespace Freight.Infrastructure.Persistence.Migrations
                                 .HasForeignKey("TruckId");
                         });
 
+                    b.OwnsOne("Freight.Domain.Fleet.DriverAssignment", "DriverAssignment", b1 =>
+                        {
+                            b1.Property<Guid>("TruckId")
+                                .HasColumnType("uuid");
+
+                            b1.Property<Guid?>("ActiveDriverId")
+                                .HasColumnType("uuid")
+                                .HasColumnName("ActiveDriverId");
+
+                            b1.Property<string>("ConfigurationType")
+                                .IsRequired()
+                                .HasColumnType("text")
+                                .HasColumnName("DriverConfigurationType");
+
+                            b1.Property<Guid>("PrimaryDriverId")
+                                .HasColumnType("uuid");
+
+                            b1.Property<Guid?>("SecondaryDriverId")
+                                .HasColumnType("uuid");
+
+                            b1.HasKey("TruckId");
+
+                            b1.HasIndex("PrimaryDriverId");
+
+                            b1.HasIndex("SecondaryDriverId");
+
+                            b1.ToTable("Trucks", (string)null);
+
+                            b1.HasOne("Freight.Domain.Fleet.Driver", "PrimaryDriver")
+                                .WithMany()
+                                .HasForeignKey("PrimaryDriverId")
+                                .OnDelete(DeleteBehavior.Restrict)
+                                .IsRequired();
+
+                            b1.HasOne("Freight.Domain.Fleet.Driver", "SecondaryDriver")
+                                .WithMany()
+                                .HasForeignKey("SecondaryDriverId")
+                                .OnDelete(DeleteBehavior.Restrict);
+
+                            b1.WithOwner()
+                                .HasForeignKey("TruckId");
+
+                            b1.Navigation("PrimaryDriver");
+
+                            b1.Navigation("SecondaryDriver");
+                        });
+
                     b.Navigation("Capacity")
                         .IsRequired();
 
@@ -684,7 +684,7 @@ namespace Freight.Infrastructure.Persistence.Migrations
 
                             b1.HasKey("TruckingCompanyId");
 
-                            b1.ToTable("TruckingCompanies");
+                            b1.ToTable("TruckingCompanies", (string)null);
 
                             b1.WithOwner()
                                 .HasForeignKey("TruckingCompanyId");
