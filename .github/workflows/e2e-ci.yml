@@ -57,11 +57,15 @@ jobs:
       - name: Install dotnet-ef
         run: dotnet tool install --global dotnet-ef
 
-      - name: Restore & build backend
+      # Scoped to Freight.Api and its own dependency graph only — NOT the whole
+      # backend/ directory. A broken, unrelated test project elsewhere in the
+      # solution (e.g. mid-flight work on another feature) must never be able
+      # to block e2e CI from building/starting the one thing it actually needs.
+      - name: Restore & build the API
         working-directory: backend
         run: |
-          dotnet restore
-          dotnet build --no-restore --configuration Release
+          dotnet restore src/Freight.Api
+          dotnet build src/Freight.Api --no-restore --configuration Release
 
       - name: Apply database migrations
         working-directory: backend
