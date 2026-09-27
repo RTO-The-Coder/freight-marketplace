@@ -62,15 +62,15 @@ These describe the target design for the next phase of work. None of FR3/FR4 bel
 
 ### FR3 — Shipment Matching & Notification (not built)
 
-See `docs/adr/0012-shipment-evaluation-insertion-search.md` for the notification and on-demand insertion-search design behind this section.
+See `docs/adr/0007-shipment-evaluation-insertion-search.md` for the notification and on-demand insertion-search design behind this section.
 
-- FR3.1: When a Shipment is created (or its window is edited), every TruckingCompany is notified unconditionally — no automatic eligibility filtering happens at booking time (revised; see `docs/adr/0012-shipment-evaluation-insertion-search.md`). A dispatcher who wants to know whether the shipment fits their own fleet calls an on-demand, per-company evaluation (FR4.1) that runs the same feasibility engine Track A already built (FR6.3) against just their own trucks — not the whole fleet, and not automatically.
+- FR3.1: When a Shipment is created (or its window is edited), every TruckingCompany is notified unconditionally — no automatic eligibility filtering happens at booking time (revised; see `docs/adr/0007-shipment-evaluation-insertion-search.md`). A dispatcher who wants to know whether the shipment fits their own fleet calls an on-demand, per-company evaluation (FR4.1) that runs the same feasibility engine Track A already built (FR6.3) against just their own trucks — not the whole fleet, and not automatically.
 - FR3.2: Every TruckingCompany receives a push notification about every new (or updated) Shipment — not gated by eligibility (revised; see the ADR above).
 - FR3.3/FR3.4: Feasibility for the on-demand, per-company evaluation (FR4.1) should use the exact same EU driving-time and two-driver-relay rules already implemented for Track A (FR7).
 - FR3.5: Each eligible TruckingCompany should get a fixed 30-minute submission window from the moment they are notified to submit an offer (FR4.2) — independent of any other company's window and of the Shipment's own `OfferDeadline`.
 
 ### FR4 — Offers (not built)
-- FR4.1: A TruckingCompany dispatcher, upon notification, should be able to view Shipment details and run an on-demand evaluation against their own fleet — for every truck they own, whether it's feasible, where the Shipment's pickup/delivery would fall within that Truck's current route, and how much additional distance/time the insertion would add (revised; see `docs/adr/0012-shipment-evaluation-insertion-search.md` — this is no longer computed automatically at booking time).
+- FR4.1: A TruckingCompany dispatcher, upon notification, should be able to view Shipment details and run an on-demand evaluation against their own fleet — for every truck they own, whether it's feasible, where the Shipment's pickup/delivery would fall within that Truck's current route, and how much additional distance/time the insertion would add (revised; see `docs/adr/0007-shipment-evaluation-insertion-search.md` — this is no longer computed automatically at booking time).
 - FR4.2: A dispatcher should be able to submit an offer for a specific Truck, specifying their offered pickup time and an expiry time for the offer, only before their FR3.5 submission window closes.
 - FR4.3: A TruckingCompany should not be able to submit more than one active (Pending) offer for the same Shipment. Resubmission should be allowed after an earlier offer of theirs has expired or been rejected.
 - FR4.4: A Shipper should be able to view all offers submitted for their Shipment (Pending, Approved, Rejected, Expired) and approve exactly one.
