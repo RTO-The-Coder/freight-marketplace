@@ -11,7 +11,18 @@ namespace Freight.Application.Simulation;
 
 public sealed record AdvanceSimulationRequest(int Ticks);
 
-public sealed record AdvanceSimulationResponse(DateTime CurrentTime, int TripsAdvanced, int TripsCompleted);
+public sealed record AdvanceSimulationResponse(
+    DateTime CurrentTime,
+    int TripsAdvanced,
+    int TripsCompleted,
+    IReadOnlyList<TripAdvanceFailure> Failures);
+
+/// <summary>
+/// One trip whose tick processing threw and was skipped for this advance - the truck's
+/// state is left exactly as it was before this call (nothing partial is saved for that
+/// trip), so it is retried on the next advance rather than staying stuck.
+/// </summary>
+public sealed record TripAdvanceFailure(Guid TripId, Guid TruckId, string Reason);
 
 /// <summary>
 /// Moves simulated time forward by <see cref="AdvanceSimulationRequest.Ticks"/> and, in
@@ -23,9 +34,10 @@ public sealed record AdvanceSimulationResponse(DateTime CurrentTime, int TripsAd
 /// driving tick advances the current leg, a rest/break tick only passes the clock. When a
 /// leg completes, if the stop it leads to has a planned wait-for-window
 /// (<see cref="Stop.WaitTimeTick"/>) the truck parks there: it serves the wait one tick at
-/// a time (crediting the driver ledger via
-/// <see cref="IDriverRuleEngine.RecordVoluntaryStop"/>) before the stop is marked reached
-/// and the next leg begins. The stop's <c>ReachedAt</c> is stamped with the real per-tick
+/// a time, and when the wait is complete credits it to the driver ledger(s) <b>once, as a
+/// whole</b> via <see cref="IDriverRuleEngine.RecordVoluntaryStop"/> - exactly as the ETA
+/// forecast does, so a wait counts as a break or rest by its full length - before the
+/// stop is marked reached and the next leg begins. The stop's <c>ReachedAt</c> is stamped with the real per-tick
 /// clock, not the end of the whole advance window.
 /// </summary>
 public sealed class SimulationAdvanceHandler(
@@ -51,11 +63,22 @@ public sealed class SimulationAdvanceHandler(
 
         var advanced = 0;
         var completed = 0;
+        var failures = new List<TripAdvanceFailure>();
 
         foreach (var trip in openTrips)
         {
-            var moved = await AdvanceTripAsync(trip, windowStart, request.Ticks, cancellationToken);
-            if (moved)
+            var result = await AdvanceTripAsync(trip, windowStart, request.Ticks, cancellationToken);
+
+            if (result.FailureReason is { } reason)
+            {
+                // Failed before any tick mutated this trip/truck - nothing to roll back,
+                // safe to skip and retry on the next advance rather than aborting every
+                // other trip's tick along with it.
+                failures.Add(new TripAdvanceFailure(trip.Id, trip.TruckId, reason));
+                continue;
+            }
+
+            if (result.Moved)
             {
                 advanced++;
             }
@@ -70,32 +93,48 @@ public sealed class SimulationAdvanceHandler(
 
         await unitOfWork.SaveChangesAsync(cancellationToken);
 
-        return new AdvanceSimulationResponse(clock.CurrentTime, advanced, completed);
+        return new AdvanceSimulationResponse(clock.CurrentTime, advanced, completed, failures);
+    }
+
+    /// <summary>Outcome of <see cref="AdvanceTripAsync"/> - see that method.</summary>
+    private sealed record TripAdvanceResult(bool Moved, string? FailureReason)
+    {
+        public static readonly TripAdvanceResult NotMoved = new(false, null);
+        public static TripAdvanceResult Failed(string reason) => new(false, reason);
     }
 
     /// <summary>
     /// Steps <paramref name="trip"/> one tick at a time across the whole advance window,
     /// interleaving the driver ledger(s), the route walk, and any wait-for-window at a
-    /// reached stop. Returns true if the truck moved or served wait time.
+    /// reached stop. A precondition failing (truck/driver-assignment/route-progress
+    /// missing) is reported via <see cref="TripAdvanceResult.FailureReason"/> rather than
+    /// thrown - every check below runs before any tick mutates trip/truck state, so
+    /// failing here is always safe to skip without partial, uncommitted changes for this
+    /// trip. A failure inside the tick loop itself (e.g. a referenced shipment vanishing
+    /// mid-walk) is NOT covered by this - it still throws and aborts the batch, since by
+    /// then this trip may already be partially mutated and there is no per-trip rollback.
     /// </summary>
-    private async Task<bool> AdvanceTripAsync(Trip trip, DateTime windowStart, int windowTicks, CancellationToken cancellationToken)
+    private async Task<TripAdvanceResult> AdvanceTripAsync(Trip trip, DateTime windowStart, int windowTicks, CancellationToken cancellationToken)
     {
         if (windowTicks == 0 || trip.NextStop is null)
         {
-            return false;
+            return TripAdvanceResult.NotMoved;
         }
 
-        var truck = await unitOfWork.Trucks.GetByIdAsync(trip.TruckId, cancellationToken)
-            ?? throw new InvalidOperationException($"Truck '{trip.TruckId}' for trip '{trip.Id}' was not found.");
+        var truck = await unitOfWork.Trucks.GetByIdAsync(trip.TruckId, cancellationToken);
+        if (truck is null)
+        {
+            return TripAdvanceResult.Failed($"Truck '{trip.TruckId}' for trip '{trip.Id}' was not found.");
+        }
 
         if (truck.DriverAssignment is null)
         {
-            throw new InvalidOperationException($"Truck '{truck.Id}' has no driver assignment - cannot advance its trip.");
+            return TripAdvanceResult.Failed($"Truck '{truck.Id}' has no driver assignment - cannot advance its trip.");
         }
 
         if (truck.CurrentProgress is null)
         {
-            throw new InvalidOperationException($"Truck '{truck.Id}' has no route progress - assign-shipment should have set it.");
+            return TripAdvanceResult.Failed($"Truck '{truck.Id}' has no route progress - assign-shipment should have set it.");
         }
 
         var isTeam = truck.DriverAssignment.ConfigurationType == DriverConfigurationType.Team;
@@ -126,11 +165,13 @@ public sealed class SimulationAdvanceHandler(
             if (progress.IsLegComplete() && !stop.IsWaitComplete)
             {
                 trip.AccrueStopWait(stop.Id, 1);
-                mover.RecordWaitTick(tickNow);
                 moved = true;
 
                 if (stop.IsWaitComplete)
                 {
+                    // Credited whole, not tick by tick: a 5-minute slice never reaches any
+                    // break/rest threshold, so a per-tick credit would never count the wait.
+                    mover.RecordWait(stop.WaitTimeTick * TickMinutes, tickNow);
                     await ReachStopAsync(trip, truck, stop, tickNow, cancellationToken);
                 }
 
@@ -168,7 +209,7 @@ public sealed class SimulationAdvanceHandler(
         }
 
         mover.PersistActiveDriver();
-        return moved;
+        return new TripAdvanceResult(moved, null);
     }
 
     /// <summary>
@@ -211,13 +252,13 @@ public sealed class SimulationAdvanceHandler(
     /// <summary>
     /// Per-tick driver mechanics, hiding the single-vs-team difference from the walk:
     /// <see cref="DriveTick"/> advances the ledger(s) one tick and answers "is the truck
-    /// driving this tick"; <see cref="RecordWaitTick"/> credits a parked tick;
+    /// driving this tick"; <see cref="RecordWait"/> credits a completed wait as a whole;
     /// <see cref="PersistActiveDriver"/> writes back a team's active-driver pointer.
     /// </summary>
     private interface ITickMover
     {
         bool DriveTick(DateTime tickNow);
-        void RecordWaitTick(DateTime tickNow);
+        void RecordWait(int waitMinutes, DateTime waitEnd);
         void PersistActiveDriver();
     }
 
@@ -233,8 +274,8 @@ public sealed class SimulationAdvanceHandler(
             return _ledger.DailyDrivingMinutesToday > before;
         }
 
-        public void RecordWaitTick(DateTime tickNow) =>
-            engine.RecordVoluntaryStop(_ledger, TickMinutes, tickNow, driver.Rules, RestRuleLimits.Default);
+        public void RecordWait(int waitMinutes, DateTime waitEnd) =>
+            engine.RecordVoluntaryStop(_ledger, waitMinutes, waitEnd, driver.Rules, RestRuleLimits.Default);
 
         public void PersistActiveDriver()
         {
@@ -276,17 +317,16 @@ public sealed class SimulationAdvanceHandler(
             return outcome.ResultingMovementState == MovementState.Driving;
         }
 
-        public void RecordWaitTick(DateTime tickNow)
+        public void RecordWait(int waitMinutes, DateTime waitEnd)
         {
-            _engine.RecordVoluntaryStop(_primaryLedger, TickMinutes, tickNow, _primary.Rules, RestRuleLimits.Default);
-            _engine.RecordVoluntaryStop(_secondaryLedger, TickMinutes, tickNow, _secondary.Rules, RestRuleLimits.Default);
+            _engine.RecordVoluntaryStop(_primaryLedger, waitMinutes, waitEnd, _primary.Rules, RestRuleLimits.Default, isTeamDriver: true);
+            _engine.RecordVoluntaryStop(_secondaryLedger, waitMinutes, waitEnd, _secondary.Rules, RestRuleLimits.Default, isTeamDriver: true);
         }
 
         public void PersistActiveDriver()
         {
-            // The active-driver pointer moves one-directionally (primary -> secondary ->
-            // null); only push it when it actually changed, since re-setting the primary
-            // after a swap would throw.
+            // Only push it when it actually changed - a same-value write is harmless but
+            // unnecessary.
             if (_activeId != _truck.DriverAssignment!.ActiveDriverId)
             {
                 _truck.SetActiveDriver(_activeId);

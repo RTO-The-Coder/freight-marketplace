@@ -58,10 +58,10 @@ public sealed class TeamDriverSwapEtaConsistencyTests
         var assignHandler = new AssignShipmentToTruckHandler(unitOfWork, new ShipmentInsertionPlanner(unitOfWork, evaluator, routingService, timeProvider));
         await assignHandler.AssignShipmentAsync(new AssignShipmentToTruckRequest(truckResponse.TruckId, bookResponse.ShipmentId, 0, 0));
 
-        // Advance far enough into the leg that primary must have hit a hard cap and the
-        // team swapped to secondary (well past a single 9h/10h driving day in ticks).
+        // Advance 5h into the leg: primary reached 4.5h and, under the EU 561 team rules,
+        // handed the wheel to secondary (who drives 4.5h-9h) instead of taking a break.
         var advanceHandler = new SimulationAdvanceHandler(unitOfWork, _engine, timeProvider);
-        await advanceHandler.AdvanceSimulationAsync(new AdvanceSimulationRequest(150));
+        await advanceHandler.AdvanceSimulationAsync(new AdvanceSimulationRequest(60));
 
         var truck = await unitOfWork.TrucksRepo.GetByIdAsync(truckResponse.TruckId);
         var actualActiveDriverId = truck!.DriverAssignment!.ActiveDriverId;

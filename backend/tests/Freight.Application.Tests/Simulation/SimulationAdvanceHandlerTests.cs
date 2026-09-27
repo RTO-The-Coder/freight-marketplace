@@ -206,6 +206,32 @@ public sealed class SimulationAdvanceHandlerTests
         Assert.Equal(1, response.TripsAdvanced);
     }
 
+    [Fact]
+    public async Task AdvanceSimulationAsync_OneHourWaitInOneAdvance_CountsAsTheBreak()
+    {
+        // 30 min of driving, then a 1h wait for the pickup window. Credited as one 60-min
+        // stop (not twelve 5-min ones), the wait is a full break: the 4.5h count is 0.
+        var fixture = SingleDriverFixture(pickupIncomingTicks: 6);
+        fixture.Trip.SetPlannedWaits(new Dictionary<StopRef, int>
+        {
+            [StopRef.For(fixture.PickupStop)] = 12,
+        });
+        var harness = new Harness(
+            [fixture.Trip],
+            new Dictionary<Guid, Truck> { [fixture.Truck.Id] = fixture.Truck },
+            new Dictionary<Guid, Shipment> { [fixture.Shipment.Id] = fixture.Shipment },
+            StartedAt);
+        var handler = harness.NewHandler();
+
+        await handler.AdvanceSimulationAsync(new AdvanceSimulationRequest(6 + 12));
+
+        var ledger = fixture.Truck.DriverAssignment!.PrimaryDriver.ComplianceState!;
+        Assert.Equal(StopStatus.Reached, fixture.PickupStop.Status);
+        Assert.Equal(0, ledger.ContinuousDrivingMinutesSinceBreak);
+        Assert.Equal(30, ledger.DailyDrivingMinutesToday);
+        Assert.Equal(StartedAt.AddMinutes(90), ledger.LastEvaluatedSimulatedTime);
+    }
+
     // --- Capacity violation at pickup ---
 
     [Fact]

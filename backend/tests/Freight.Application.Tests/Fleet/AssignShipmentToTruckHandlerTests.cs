@@ -8,6 +8,7 @@ using Freight.Domain.Fleet.Abstractions;
 using Freight.Domain.Fleet.Enums;
 using Freight.Domain.Fleet.Services;
 using Freight.Domain.Tracking.Services;
+using Freight.Domain.Routing.Abstractions;
 using Freight.Domain.ValueObjects;
 using Freight.Domain.ValueObjects.RuleVariants;
 using Moq;
@@ -299,6 +300,38 @@ public sealed class AssignShipmentToTruckHandlerTests
     }
 
     [Fact]
+    public async Task CheckFeasibilityAsync_PickupInsertedAheadOfMovingTruck_PreviewDrivesTheNewLegNotTheOldLegsRemainder()
+    {
+        // The truck is 3 of 120 ticks (10h) into its first leg. A pickup inserted ahead of
+        // it is 6 ticks (30 min) from the live position and must be picked up within 1h.
+        // The preview must drive that fresh 30-min leg - not the 117 ticks left on the old
+        // leg, which would push the pickup past its window.
+        var (truck, company) = ReadyTruck();
+        var firstShipment = SomeShipment();
+        var harness1 = new Harness(truck, firstShipment, company, null);
+        harness1.RoutingService.DefaultLeg = new RouteLeg(DistanceKm: 1000, TimeTicks: 120);
+        await harness1.NewHandler().AssignShipmentAsync(new AssignShipmentToTruckRequest(truck.Id, firstShipment.Id, 0, 0));
+        var openTrip = harness1.AddedTrip!;
+        truck.CurrentProgress!.AdvanceByTicks(3);
+
+        var urgentShipment = Shipment.Book(
+            Guid.NewGuid(), Guid.NewGuid(), Pickup, Delivery,
+            Capacity.Create(100, 1), TruckType.Refrigerated,
+            TimeWindow.Create(StartedAt, StartedAt.AddHours(1)),
+            TimeWindow.Create(StartedAt, StartedAt.AddDays(2)),
+            StartedAt);
+        var harness2 = new Harness(truck, urgentShipment, company, openTrip);
+        harness2.RoutingService.DefaultLeg = new RouteLeg(DistanceKm: 25, TimeTicks: 6);
+        // The first shipment keeps its own (wide) windows in the preview.
+        harness2.Shipments.Setup(sh => sh.GetByIdAsync(firstShipment.Id, It.IsAny<CancellationToken>())).ReturnsAsync(firstShipment);
+
+        var response = await harness2.NewHandler().CheckFeasibilityAsync(
+            new AssignShipmentToTruckRequest(truck.Id, urgentShipment.Id, 0, 0));
+
+        Assert.True(response.IsFeasible, response.Reason);
+    }
+
+    [Fact]
     public async Task AssignShipmentAsync_NewTrip_RouteStartsFromOffice()
     {
         var (truck, company) = ReadyTruck();
@@ -331,10 +364,10 @@ public sealed class AssignShipmentToTruckHandlerTests
         // Insert appended at the end (index 2 = after existing pickup+delivery).
         await handler2.AssignShipmentAsync(new AssignShipmentToTruckRequest(truck.Id, secondShipment.Id, 2, 2));
 
-        // No leg call whose "from" is the new pickup/delivery location targeting an
-        // EXISTING stop (i.e. no "PickupToFollower"/"DeliveryToFollower" leg) - only
-        // incoming legs + the (already-existing) office leg get skipped too since the
-        // Office stop already exists on this trip.
+        // Appended stops displace nothing, so no follower leg is measured: the new pickup
+        // is followed by the new delivery, never by an existing stop or the office. (The
+        // office return leg IS re-measured, from the new delivery - see
+        // AssignShipmentAsync_SecondShipmentAppendedAtEnd_RemeasuresOfficeLegFromNewLastStop.)
         Assert.DoesNotContain(harness2.RoutingService.Requests, c => c.From == Pickup && c.To == Office);
     }
 
@@ -360,24 +393,40 @@ public sealed class AssignShipmentToTruckHandlerTests
         Assert.Contains(harness2.RoutingService.Requests, c => c.From == Pickup && c.To == firstPickup.Location);
     }
 
-    // --- Office leg requested only on first shipment ---
+    // --- Office return leg follows the trip's last stop ---
 
     [Fact]
-    public async Task AssignShipmentAsync_SecondShipmentOnOpenTrip_DoesNotRequestOfficeLegAgain()
+    public async Task AssignShipmentAsync_SecondShipmentAppendedAtEnd_RemeasuresOfficeLegFromNewLastStop()
     {
         var (truck, company) = ReadyTruck();
         var firstShipment = SomeShipment();
         var harness1 = new Harness(truck, firstShipment, company, null);
-        var handler1 = harness1.NewHandler();
-        await handler1.AssignShipmentAsync(new AssignShipmentToTruckRequest(truck.Id, firstShipment.Id, 0, 0));
+        await harness1.NewHandler().AssignShipmentAsync(new AssignShipmentToTruckRequest(truck.Id, firstShipment.Id, 0, 0));
         var openTrip = harness1.AddedTrip!;
-        Assert.Single(harness1.RoutingService.Requests, c => c.To == Office);
 
-        var secondShipment = SomeShipment();
+        // Second shipment at its own locations, so its delivery becomes a new last stop.
+        var secondPickup = GeoLocation.Create(51.05, 13.74);
+        var secondDelivery = GeoLocation.Create(53.55, 9.99);
+        var secondShipment = Shipment.Book(
+            Guid.NewGuid(), Guid.NewGuid(), secondPickup, secondDelivery,
+            Capacity.Create(100, 1), TruckType.Refrigerated,
+            TimeWindow.Create(StartedAt, StartedAt.AddDays(1)),
+            TimeWindow.Create(StartedAt, StartedAt.AddDays(2)),
+            StartedAt);
+
         var harness2 = new Harness(truck, secondShipment, company, openTrip);
-        var handler2 = harness2.NewHandler();
-        await handler2.AssignShipmentAsync(new AssignShipmentToTruckRequest(truck.Id, secondShipment.Id, 2, 2));
+        var returnFromNewLastStop = new RouteLeg(DistanceKm: 90, TimeTicks: 11);
+        harness2.RoutingService.LegFor[(secondDelivery, Office)] = returnFromNewLastStop;
 
-        Assert.DoesNotContain(harness2.RoutingService.Requests, c => c.To == Office);
+        // Appended after the first shipment's pickup and delivery.
+        await harness2.NewHandler().AssignShipmentAsync(new AssignShipmentToTruckRequest(truck.Id, secondShipment.Id, 2, 2));
+
+        // The planner measured the return from the new last stop...
+        Assert.Contains(harness2.RoutingService.Requests, c => c.From == secondDelivery && c.To == Office);
+
+        // ...and the trip now returns to the office on that leg, not the first shipment's.
+        var officeStop = openTrip.Stops.Single(stop => stop.Kind == StopKind.Office);
+        Assert.Equal(returnFromNewLastStop.DistanceKm, officeStop.IncomingLegDistanceKm);
+        Assert.Equal(returnFromNewLastStop.TimeTicks, officeStop.IncomingLegTimeTick);
     }
 }

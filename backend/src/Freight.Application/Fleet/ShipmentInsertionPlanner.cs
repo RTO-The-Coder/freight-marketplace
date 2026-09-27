@@ -128,7 +128,7 @@ public sealed class ShipmentInsertionPlanner(
             pickupInsertIndex, deliveryInsertIndex, legPlan);
 
         var windows = await BuildShipmentWindowsAsync(preview, shipment, cancellationToken);
-        var windowProjection = BuildWindowProjection(truck, trip, isNewTrip, windows);
+        var windowProjection = BuildWindowProjection(truck, trip, preview, isNewTrip, windows);
 
         var feasibility = insertionEvaluator.Evaluate(
             new InsertionContext(preview, truck.Capacity, windowProjection));
@@ -146,7 +146,8 @@ public sealed class ShipmentInsertionPlanner(
     ///     the pickup is inserted ahead of a moving truck) to the pickup;</item>
     ///   <item>the rewritten incoming leg of whatever stop then follows the pickup;</item>
     ///   <item>the same pair for the delivery;</item>
-    ///   <item>the Office(return) leg, used only when this is the trip's first shipment.</item>
+    ///   <item>the Office(return) leg from the delivery, whenever the delivery is appended
+    ///     last (it becomes the office's new predecessor).</item>
     /// </list>
     /// </summary>
     private async Task<LegPlan> ResolveLegPlanAsync(
@@ -201,17 +202,12 @@ public sealed class ShipmentInsertionPlanner(
             ? await GetLegAsync(deliveryLocation, pendingWithPickup[deliveryFinalIndex], cancellationToken)
             : null;
 
-        // The Office(return) leg is only written the first time this trip receives a
-        // shipment; EnsureOfficeStop ignores it once an Office stop exists.
-        RouteSegment toOffice;
-        if (trip.Stops.Any(stop => stop.Kind == StopKind.Office))
-        {
-            toOffice = new RouteSegment(0, 0);
-        }
-        else
-        {
-            toOffice = await GetLegAsync(finalRoute[^1], officeLocation, cancellationToken);
-        }
+        // When the delivery is appended last it becomes the Office(return) stop's new
+        // predecessor - on any shipment, not just the trip's first - so the return leg is
+        // re-measured from it. Otherwise the office keeps its existing incoming leg.
+        RouteSegment? toOffice = deliveryInsertIndex == pendingLocations.Count
+            ? await GetLegAsync(deliveryLocation, officeLocation, cancellationToken)
+            : null;
 
         return new LegPlan(pickupIncoming, pickupToFollower, deliveryIncoming, deliveryToFollower, toOffice);
     }
@@ -257,7 +253,7 @@ public sealed class ShipmentInsertionPlanner(
     /// active-driver pointer.
     /// </summary>
     private static WindowProjection BuildWindowProjection(
-        Truck truck, Trip trip, bool isNewTrip, IReadOnlyDictionary<Guid, TimeWindow> windows)
+        Truck truck, Trip trip, Trip preview, bool isNewTrip, IReadOnlyDictionary<Guid, TimeWindow> windows)
     {
         var assignment = truck.DriverAssignment
             ?? throw new InvalidOperationException($"Truck '{truck.Id}' has no driver assignment.");
@@ -284,7 +280,14 @@ public sealed class ShipmentInsertionPlanner(
             // Both ledgers share LastEvaluatedSimulatedTime (EvaluateTeam sets both), so
             // the primary's is the projection start for a team too.
             projectionStart = primaryLedger.LastEvaluatedSimulatedTime;
-            currentLegProgress = truck.CurrentProgress;
+
+            // The live progress belongs to the leg toward the truck's current next stop. If
+            // the insertion puts a new stop ahead of it, the preview's first leg is that new
+            // stop's fresh leg from the live position (0 driven) - the same thing
+            // Truck.SyncProgressToNextStop does to the real truck after assignment.
+            currentLegProgress = preview.NextStop?.Id == trip.NextStop?.Id
+                ? truck.CurrentProgress
+                : null;
             secondaryLedger = secondary is null
                 ? null
                 : secondary.ComplianceState
