@@ -76,9 +76,18 @@ jobs:
           --configuration Release
           --no-build
 
+      # setsid + disown fully detaches the API from this step's shell, in its
+      # own session — a plain `nohup ... &` can still be torn down by the
+      # runner when the step's shell exits, since GitHub Actions may kill the
+      # whole process group between steps. Without this the API could exit
+      # right after the health check passes, and every Playwright test then
+      # gets a browser-level "Failed to fetch" (not an HTTP error — the
+      # backend is simply gone) instead of real JSON.
       - name: Start API
         working-directory: backend/src/Freight.Api
-        run: nohup dotnet run --no-build --configuration Release --urls http://localhost:5017 > api.log 2>&1 &
+        run: |
+          setsid nohup dotnet run --no-build --configuration Release --urls http://localhost:5017 > api.log 2>&1 < /dev/null &
+          disown
 
       - name: Wait for API health
         run: |
@@ -92,6 +101,15 @@ jobs:
           echo "API did not become healthy in time."
           cat backend/src/Freight.Api/api.log || true
           exit 1
+
+      - name: Confirm API is still up right before the test run
+        run: |
+          if ! curl -sf http://localhost:5017/health > /dev/null; then
+            echo "API died between the health check and the test run."
+            cat backend/src/Freight.Api/api.log || true
+            exit 1
+          fi
+          echo "API still up."
 
       - name: Install frontend dependencies
         run: npm ci
@@ -122,5 +140,14 @@ jobs:
         with:
           name: playwright-test-results
           path: packages/web/test-results/
+          retention-days: 14
+          if-no-files-found: ignore
+
+      - name: Upload API log
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: api-log
+          path: backend/src/Freight.Api/api.log
           retention-days: 14
           if-no-files-found: ignore
