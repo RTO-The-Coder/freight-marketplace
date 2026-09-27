@@ -65,3 +65,9 @@ jobs:
       - name: Test (Freight.Api.Tests)
         working-directory: backend
         run: dotnet test tests/Freight.Api.Tests --no-build --configuration Release
+
+      # Multi-day EU 561 trip scenarios through the real API; each test creates and
+      # drops its own freight_integrationtests_<guid> database on the same service.
+      - name: Test (Freight.Integration.Tests)
+        working-directory: backend
+        run: dotnet test tests/Freight.Integration.Tests --no-build --configuration Release
