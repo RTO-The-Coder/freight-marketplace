@@ -136,7 +136,17 @@ async function assignShipment(
   await expect(page.getByRole('heading', { name: 'Assign a shipment' })).not.toBeVisible()
 }
 
-test('interleave 3 corridor shipments onto one Flatbed truck via the insert-index picker', async ({
+// SKIPPED 2026-09-27: the seeded corridor windows were designed against the
+// pre-EU-561 ETA model (driving time only). Now that mandatory breaks/rests
+// are correctly enforced, the same route takes ~3h longer, so corridor-3's
+// insertion (index 3) no longer fits corridor-1's delivery window — the app
+// correctly reports "Cannot assign: ... after its window closes" where it
+// used to succeed. This is fallout from the EU-561 work being correct, not a
+// UI/backend regression. Decided with the user not to patch the seed data or
+// the test's own assertions piecemeal; instead these will be redesigned as
+// part of a broader pass bringing the same hand-worked-checkpoint discipline
+// used in backend/tests/Freight.Integration.Tests to the UI e2e suite.
+test.skip('interleave 3 corridor shipments onto one Flatbed truck via the insert-index picker', async ({
   page,
 }) => {
   const { corridor1, corridor2, corridor3 } = await findCorridorShipments()
@@ -202,7 +212,13 @@ test('interleave 3 corridor shipments onto one Flatbed truck via the insert-inde
   })
 })
 
-test('regression: the corridor-3 insertion that used to hang (G15) now resolves', async ({ page }) => {
+// SKIPPED 2026-09-27: same root cause as the test above — the seeded corridor
+// windows predate the EU-561 rest/break rules, and this insertion no longer
+// fits the (now correctly enforced) real timing. See the note above for the
+// full explanation and the plan to redesign these as part of a broader UI
+// e2e pass. G15 itself (the non-termination bug) is still fixed; only this
+// specific seed-data scenario needs new numbers.
+test.skip('regression: the corridor-3 insertion that used to hang (G15) now resolves', async ({ page }) => {
   // G15 (docs/design/ui-redesign-plan.md) was found by this exact scenario:
   // RouteEtaCalculator.CalculateEtas never terminated for this specific
   // insertion, hitting its own 10,000-iteration bail-out. Fixed; this pins the
