@@ -106,7 +106,7 @@ export interface TruckDetailDto {
   stops: TruckDetailStopDto[]
 }
 
-export type DriverActivity = 'Driving' | 'OnBreak' | 'OnDailyRest' | 'OnWeeklyRest'
+export type DriverActivity = 'Driving' | 'OnBreak' | 'OnDailyRest' | 'OnWeeklyRest' | 'Passenger'
 
 export interface DriverComplianceStateDto {
   currentActivity: DriverActivity
@@ -161,6 +161,8 @@ export type IneligibilityReason =
   | 'DailyCapReached'
   | 'WeeklyCapReached'
   | 'TwoWeekCapReached'
+  | 'DailyRestDue'
+  | 'WeeklyRestDue'
 
 export interface CheckDriverEligibilityResponse {
   isEligible: boolean
