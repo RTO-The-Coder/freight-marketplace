@@ -47,6 +47,33 @@ public class RouteEtaCalculatorTests
         Assert.Equal(expectedArrival, projection.Etas[pickup.Id]);
     }
 
+    /// <summary>
+    /// Regression test: a zero-length leg (two stops effectively co-located, or a rounded
+    /// leg time of 0 ticks) used to loop forever. minutesToFinishLeg == 0 makes
+    /// legWillFinish true on every iteration, but the old guard required advanceMinutes > 0
+    /// before treating the leg as complete - so it never advanced past the zero-length leg
+    /// and hit RouteEtaCalculator's MaxProjectionIterations bail-out instead of completing.
+    /// </summary>
+    [Fact]
+    public void CalculateEtas_ZeroLengthLeg_CompletesImmediatelyInsteadOfLooping()
+    {
+        var trip = OpenTrip();
+        var zeroLegPlan = AppendLegPlan(
+            pickupIncomingKm: 0, pickupIncomingTicks: 0,
+            deliveryIncomingKm: 20, deliveryIncomingTicks: 6,
+            toOfficeKm: 20, toOfficeTicks: 6);
+        trip.AssignShipment(
+            Guid.NewGuid(), SomeLoad(), SomeLocation(), OtherLocation(), OfficeLocation(),
+            pickupInsertIndex: 0, deliveryInsertIndex: 0, zeroLegPlan);
+        var ledger = FreshLedger(StartFrom);
+
+        var projection = _calculator.CalculateEtas(trip, null, ledger, FullRules(), StartFrom);
+
+        var pickup = trip.Stops.First(s => s.Kind == StopKind.Pickup);
+        // The zero-length leg completes with zero elapsed time - arrival equals StartFrom.
+        Assert.Equal(StartFrom, projection.Etas[pickup.Id]);
+    }
+
     [Fact]
     public void CalculateEtas_AllStopsGetAnEta()
     {
@@ -95,6 +122,45 @@ public class RouteEtaCalculatorTests
         // i.e. later than a naive "300 minutes after start" would suggest.
         var expectedArrival = StartFrom.AddMinutes(270).AddMinutes(45).AddMinutes(30);
         Assert.Equal(expectedArrival, projection.Etas[pickup.Id]);
+    }
+
+    [Fact]
+    public void CalculateEtas_SplitBreakLegLongerThanTwoHours_ArrivalIncludesFifteenMinuteFirstBlock()
+    {
+        // A 150-min pickup leg (30 ticks) for a split-break driver: the 15-min first block is
+        // due at the 2h mark (freight-driving-rules.md 4.1), so the forecast must stop
+        // there too - drive 120, break 15, drive 30. A forecast that jumps straight to the
+        // 4.5h mark would stamp the arrival at 150 min instead.
+        var trip = OpenTrip();
+        trip.AssignShipment(
+            Guid.NewGuid(), SomeLoad(), SomeLocation(), OtherLocation(), OfficeLocation(),
+            pickupInsertIndex: 0, deliveryInsertIndex: 0,
+            AppendLegPlan(pickupIncomingKm: 200, pickupIncomingTicks: 30, deliveryIncomingKm: 20, deliveryIncomingTicks: 6, toOfficeKm: 20, toOfficeTicks: 6));
+        var ledger = FreshLedger(StartFrom);
+
+        var projection = _calculator.CalculateEtas(trip, null, ledger, SplitBreakRules(), StartFrom);
+
+        var pickup = trip.Stops.First(s => s.Kind == StopKind.Pickup);
+        Assert.Equal(StartFrom.AddMinutes(120 + 15 + 30), projection.Etas[pickup.Id]);
+    }
+
+    [Fact]
+    public void CalculateEtas_SplitRestLegLongerThanFourAndAHalfHours_ArrivalIncludesThreeHourFirstBlock()
+    {
+        // A 300-min pickup leg (60 ticks) for a split-rest driver: at the 4.5h mark the 3h
+        // first block replaces the 45-min break (freight-driving-rules.md 4.3) -
+        // drive 270, rest 180, drive 30.
+        var trip = OpenTrip();
+        trip.AssignShipment(
+            Guid.NewGuid(), SomeLoad(), SomeLocation(), OtherLocation(), OfficeLocation(),
+            pickupInsertIndex: 0, deliveryInsertIndex: 0,
+            AppendLegPlan(pickupIncomingKm: 400, pickupIncomingTicks: 60, deliveryIncomingKm: 20, deliveryIncomingTicks: 6, toOfficeKm: 20, toOfficeTicks: 6));
+        var ledger = FreshLedger(StartFrom);
+
+        var projection = _calculator.CalculateEtas(trip, null, ledger, SplitRestRules(), StartFrom);
+
+        var pickup = trip.Stops.First(s => s.Kind == StopKind.Pickup);
+        Assert.Equal(StartFrom.AddMinutes(270 + 180 + 30), projection.Etas[pickup.Id]);
     }
 
     [Fact]
@@ -230,6 +296,26 @@ public class RouteEtaCalculatorTests
         // whole 60-minute leg completes with no rest-induced delay.
         var pickup = trip.Stops.First(s => s.Kind == StopKind.Pickup);
         Assert.Equal(StartFrom.AddMinutes(60), projection.Etas[pickup.Id]);
+    }
+
+    [Fact]
+    public void CalculateEtasForTeam_TwentyHourLeg_EighteenHoursDrivingThenNineHourSharedStop()
+    {
+        // freight-driving-rules.md section 6: two Full-rules drivers swap every 4.5h without
+        // stopping (18h), then the truck stops for a shared 9h rest, then 2h more.
+        var trip = OpenTrip();
+        trip.AssignShipment(
+            Guid.NewGuid(), SomeLoad(), SomeLocation(), OtherLocation(), OfficeLocation(),
+            pickupInsertIndex: 0, deliveryInsertIndex: 0,
+            AppendLegPlan(pickupIncomingKm: 1600, pickupIncomingTicks: 240, deliveryIncomingKm: 20, deliveryIncomingTicks: 6, toOfficeKm: 20, toOfficeTicks: 6));
+        var primary = FreshLedger(StartFrom);
+        var secondary = FreshLedger(StartFrom);
+
+        var projection = _calculator.CalculateEtasForTeam(
+            trip, null, primary, FullRules(), secondary, FullRules(), primary.DriverId, StartFrom);
+
+        var pickup = trip.Stops.First(s => s.Kind == StopKind.Pickup);
+        Assert.Equal(StartFrom.AddHours(18 + 9 + 2), projection.Etas[pickup.Id]);
     }
 
     [Fact]

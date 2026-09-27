@@ -81,6 +81,10 @@ public sealed class RouteEtaCalculator
         var ledger = driverLedger.Clone();
         var route = trip.Clone();
 
+        // The rule engine reads the time from the ledger (wall-clock deadlines), so the
+        // private copy starts exactly where the walk does.
+        ledger.LastEvaluatedSimulatedTime = startFrom;
+
         var etas = new Dictionary<Guid, DateTime>();
         var waitTicks = new Dictionary<Guid, int>();
 
@@ -96,7 +100,7 @@ public sealed class RouteEtaCalculator
         for (var iteration = 0; iteration < MaxProjectionIterations; iteration++)
         {
             var isDriving = ledger.CurrentActivity == DriverActivity.Driving;
-            var driverBoundaryMinutes = _driverRuleEngine.MinutesUntilNextStateChange(ledger, RestRuleLimits.Default);
+            var driverBoundaryMinutes = _driverRuleEngine.MinutesUntilNextStateChange(ledger, driverRules, RestRuleLimits.Default);
 
             // While driving, a jump is bounded by whichever comes first: the driver's
             // next boundary (a break trigger, a daily/weekly cap) or the end of the
@@ -122,6 +126,9 @@ public sealed class RouteEtaCalculator
             // (begins the required break/rest), then re-evaluate on the next iteration.
             var advanceMinutes = Math.Max(jumpMinutes, 0);
 
+            // simulatedNow is the END of the step, as for every Advance caller.
+            currentTime = currentTime.AddMinutes(advanceMinutes);
+
             _driverRuleEngine.Advance(
                 ledger,
                 TimeSpan.FromMinutes(advanceMinutes),
@@ -129,17 +136,24 @@ public sealed class RouteEtaCalculator
                 driverRules,
                 RestRuleLimits.Default);
 
-            currentTime = currentTime.AddMinutes(advanceMinutes);
-
             if (isDriving && advanceMinutes > 0)
             {
                 legProgress.AdvanceByTicks(advanceMinutes / TickMinutes);
             }
 
-            if (!isDriving || !legWillFinish || advanceMinutes == 0)
+            if (!isDriving || !legWillFinish)
             {
                 continue;
             }
+
+            // A zero-length leg (minutesToFinishLeg == 0) finishes with zero elapsed time
+            // by definition - it must complete here even though advanceMinutes is 0, or the
+            // walk loops forever (driverBoundaryMinutes never changes, so jumpMinutes stays
+            // 0 on every subsequent iteration too). This is distinct from the "driver
+            // exactly on a compliance boundary" zero-jump case above: there, legWillFinish
+            // is false (the boundary bounds the jump, not the leg), so this branch is never
+            // reached for it - the Advance(0) call above alone handles that case by
+            // transitioning the ledger's activity, which a later iteration then acts on.
 
             // Leg finished this jump - the stop it leads to is reached now. The stamped
             // arrival is the physical arrival; if the stop's window has not opened yet the
@@ -251,8 +265,8 @@ public sealed class RouteEtaCalculator
                 {
                     waitTicks[reachedStopId] = ticks;
                     var waitEnd = currentTime.AddMinutes(wait);
-                    _driverRuleEngine.RecordVoluntaryStop(primary, wait, waitEnd, primaryRules, RestRuleLimits.Default);
-                    _driverRuleEngine.RecordVoluntaryStop(secondary, wait, waitEnd, secondaryRules, RestRuleLimits.Default);
+                    _driverRuleEngine.RecordVoluntaryStop(primary, wait, waitEnd, primaryRules, RestRuleLimits.Default, isTeamDriver: true);
+                    _driverRuleEngine.RecordVoluntaryStop(secondary, wait, waitEnd, secondaryRules, RestRuleLimits.Default, isTeamDriver: true);
                 });
 
             nextStop = route.NextStop;

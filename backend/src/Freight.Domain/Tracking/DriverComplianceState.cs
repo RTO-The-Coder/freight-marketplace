@@ -24,6 +24,33 @@ public sealed class DriverComplianceState : HasDomainEvents
 
     public DateTime LastEvaluatedSimulatedTime { get; internal set; }
 
+    /// <summary>
+    /// When the driver's last daily or weekly rest ended - the trip opening counts as one.
+    /// Team driving uses it for the 30h rule: the next shared 9h rest must start within
+    /// <see cref="ValueObjects.RestRuleLimits.TeamMaxMinutesBetweenDailyRests"/> of it.
+    /// </summary>
+    public DateTime LastRestEndedAt { get; internal set; }
+
+    /// <summary>
+    /// When the driver's last weekly rest ended - the trip opening counts as one. The next
+    /// weekly rest must start within <see cref="ValueObjects.RestRuleLimits.MaxMinutesBetweenWeeklyRests"/>
+    /// of it (the six-day rule).
+    /// </summary>
+    public DateTime LastWeeklyRestEndedAt { get; internal set; }
+
+    /// <summary>
+    /// Minutes a short (reduced) weekly rest still owes: 45h minus its length. Paid by
+    /// adding them to the next weekly rest, which is then never reduced.
+    /// </summary>
+    public int WeeklyRestMinutesOwed { get; internal set; }
+
+    /// <summary>
+    /// Planned length of the running break/rest block (0 while driving or riding). Tells
+    /// the split rest's 3h block apart from a full daily rest, and how long a daily rest
+    /// has already run when the six-day rule turns it into the weekly rest.
+    /// </summary>
+    public int CurrentActivityLengthMinutes { get; internal set; }
+
     // EF Core cannot bind simulatedStart through the constructor below (it has no
     // corresponding property of the same name - it only seeds
     // LastEvaluatedSimulatedTime - and EF's constructor injection requires an exact
@@ -46,6 +73,8 @@ public sealed class DriverComplianceState : HasDomainEvents
         CurrentActivity = DriverActivity.Driving;
         MinutesRemainingInCurrentActivity = 0;
         LastEvaluatedSimulatedTime = simulatedStart;
+        LastRestEndedAt = simulatedStart;
+        LastWeeklyRestEndedAt = simulatedStart;
     }
 
     /// <summary>
@@ -68,7 +97,11 @@ public sealed class DriverComplianceState : HasDomainEvents
             AwaitingSecondDailyRestBlock = AwaitingSecondDailyRestBlock,
             ReducedDailyRestsUsedSinceWeeklyRest = ReducedDailyRestsUsedSinceWeeklyRest,
             WeeklyDrivingMinutesThisWeek = WeeklyDrivingMinutesThisWeek,
-            WeeklyDrivingMinutesPriorWeek = WeeklyDrivingMinutesPriorWeek
+            WeeklyDrivingMinutesPriorWeek = WeeklyDrivingMinutesPriorWeek,
+            LastRestEndedAt = LastRestEndedAt,
+            LastWeeklyRestEndedAt = LastWeeklyRestEndedAt,
+            WeeklyRestMinutesOwed = WeeklyRestMinutesOwed,
+            CurrentActivityLengthMinutes = CurrentActivityLengthMinutes
         };
     }
 }

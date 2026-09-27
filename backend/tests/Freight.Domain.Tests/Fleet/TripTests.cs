@@ -122,6 +122,64 @@ public class TripTests
     }
 
     [Fact]
+    public void AssignShipment_SecondShipmentAppendedAtEnd_RewritesOfficeReturnLegFromNewLastStop()
+    {
+        // First shipment's return leg is 40 km / 5 ticks (AppendLegPlan's default).
+        var (trip, _) = OpenTripWithOneShipment();
+
+        // The new delivery becomes the last stop before the office, so the truck now
+        // returns from there - the office leg must be re-measured from it.
+        trip.AssignShipment(
+            Guid.NewGuid(), SomeLoad(), SomeLocation(), OtherLocation(), OfficeLocation(),
+            pickupInsertIndex: 2, deliveryInsertIndex: 2, AppendLegPlan(toOfficeKm: 90, toOfficeTicks: 11));
+
+        var office = trip.Stops.Single(stop => stop.Kind == StopKind.Office);
+        Assert.Equal(90, office.IncomingLegDistanceKm);
+        Assert.Equal(11, office.IncomingLegTimeTick);
+    }
+
+    [Fact]
+    public void AssignShipment_SecondShipmentInsertedBeforeExistingStops_KeepsOfficeReturnLeg()
+    {
+        var (trip, _) = OpenTripWithOneShipment();
+
+        // Both new stops land in front of the first shipment's stops, so the last stop
+        // before the office is unchanged - its return leg must not be touched.
+        trip.AssignShipment(
+            Guid.NewGuid(), SomeLoad(), SomeLocation(), OtherLocation(), OfficeLocation(),
+            pickupInsertIndex: 0, deliveryInsertIndex: 0, MidRouteLegPlan(toOfficeKm: 99, toOfficeTicks: 99));
+
+        var office = trip.Stops.Single(stop => stop.Kind == StopKind.Office);
+        Assert.Equal(40, office.IncomingLegDistanceKm);
+        Assert.Equal(5, office.IncomingLegTimeTick);
+    }
+
+    [Fact]
+    public void AssignShipment_AfterAllStopsReached_NewStopsSortAfterTheReachedOnes()
+    {
+        // Pickup and delivery already reached, truck heading back to the office: the new
+        // shipment goes in at pending index 0, which must still come after the route's past.
+        var (trip, _) = OpenTripWithOneShipment();
+        var reached = trip.Stops.Where(stop => stop.Kind != StopKind.Office).ToList();
+        foreach (var stop in reached)
+        {
+            trip.MarkStopReached(stop.Id, StartedAt.AddHours(1));
+        }
+
+        var newShipmentId = Guid.NewGuid();
+        trip.AssignShipment(
+            newShipmentId, SomeLoad(), SomeLocation(), OtherLocation(), OfficeLocation(),
+            pickupInsertIndex: 0, deliveryInsertIndex: 0, AppendLegPlan());
+
+        Assert.Equal(
+            [reached[0].Id, reached[1].Id],
+            trip.Stops.Take(2).Select(stop => stop.Id));
+        Assert.Equal(newShipmentId, trip.Stops[2].ShipmentId);
+        Assert.Equal(StopKind.Pickup, trip.Stops[2].Kind);
+        Assert.Equal(StopKind.Office, trip.Stops[^1].Kind);
+    }
+
+    [Fact]
     public void AssignShipment_InsertedAtEnd_DoesNotTouchFollowerBecauseThereIsNone()
     {
         var (trip, _) = OpenTripWithOneShipment();

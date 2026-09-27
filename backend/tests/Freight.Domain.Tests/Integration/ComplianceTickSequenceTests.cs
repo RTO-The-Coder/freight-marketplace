@@ -38,8 +38,10 @@ public class ComplianceTickSequenceTests
         var limits = Freight.Domain.Tracking.ValueObjects.RestRuleLimits.Default;
 
         // A single long leg (16 hours = 192 ticks) - long enough to force the driver
-        // through: drive to 4.5h break trigger -> split break (15+30) -> drive to 9h daily
-        // cap -> split daily rest (3h+9h) -> resume driving for the remainder.
+        // through (clock time): drive to 2h -> 15-min first break block -> drive to 4.5h of
+        // driving -> 3h daily-rest block, which replaces the 30-min second break block ->
+        // 15-min block again after 2h more -> drive to the 9h daily cap (~12.5h) -> 9h
+        // daily-rest block, still running when the 16h of ticks run out.
         var totalTicks = 192;
         var routeProgress = new RouteProgress(totalDistanceKm: 1600, totalTimeTick: totalTicks);
 

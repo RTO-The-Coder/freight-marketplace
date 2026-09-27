@@ -18,6 +18,12 @@ public class DriverComplianceStateTests
         Assert.Equal(DriverActivity.Driving, state.CurrentActivity);
         Assert.Equal(0, state.MinutesRemainingInCurrentActivity);
         Assert.Equal(SimStart, state.LastEvaluatedSimulatedTime);
+        // The trip opening counts as the end of the previous rest (team 30h rule).
+        Assert.Equal(SimStart, state.LastRestEndedAt);
+        // Nothing owed at trip start, and the trip opening counts as the last weekly rest.
+        Assert.Equal(SimStart, state.LastWeeklyRestEndedAt);
+        Assert.Equal(0, state.WeeklyRestMinutesOwed);
+        Assert.Equal(0, state.CurrentActivityLengthMinutes);
     }
 
     [Fact]
@@ -71,6 +77,10 @@ public class DriverComplianceStateTests
             ReducedDailyRestsUsedSinceWeeklyRest = 2,
             WeeklyDrivingMinutesThisWeek = 1000,
             WeeklyDrivingMinutesPriorWeek = 800,
+            LastRestEndedAt = SimStart.AddHours(-10),
+            LastWeeklyRestEndedAt = SimStart.AddHours(-50),
+            WeeklyRestMinutesOwed = 1260,
+            CurrentActivityLengthMinutes = 660,
         };
 
         var clone = original.Clone();
@@ -88,6 +98,10 @@ public class DriverComplianceStateTests
         Assert.Equal(original.ReducedDailyRestsUsedSinceWeeklyRest, clone.ReducedDailyRestsUsedSinceWeeklyRest);
         Assert.Equal(original.WeeklyDrivingMinutesThisWeek, clone.WeeklyDrivingMinutesThisWeek);
         Assert.Equal(original.WeeklyDrivingMinutesPriorWeek, clone.WeeklyDrivingMinutesPriorWeek);
+        Assert.Equal(original.LastRestEndedAt, clone.LastRestEndedAt);
+        Assert.Equal(original.LastWeeklyRestEndedAt, clone.LastWeeklyRestEndedAt);
+        Assert.Equal(original.WeeklyRestMinutesOwed, clone.WeeklyRestMinutesOwed);
+        Assert.Equal(original.CurrentActivityLengthMinutes, clone.CurrentActivityLengthMinutes);
     }
 
     [Fact]

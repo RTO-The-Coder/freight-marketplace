@@ -34,29 +34,35 @@ public interface IDriverRuleEngine
         RestRuleLimits limits);
 
     /// <summary>
-    /// Records a stationary wait at a stop (for its window to open): <paramref name="waitMinutes"/>
-    /// passes with no driving accrued. Per EU rules the wait may count as rest - ≥
-    /// <see cref="RestRuleLimits.RequiredBreakMinutes"/> resets the continuous-driving
-    /// counter; ≥ the driver's daily-rest length also resets the daily counters. Weekly
-    /// counters are never affected; a shorter wait changes nothing. A mid-break/rest ledger
-    /// just has that block extended. Mutates <paramref name="ledger"/>.
+    /// Records a stationary wait at a stop (for its window to open), ending at
+    /// <paramref name="simulatedNow"/>: <paramref name="waitMinutes"/> pass with no driving
+    /// accrued, and the wait counts as a break or rest by its whole length
+    /// (freight-driving-rules.md section 5). A break/rest already running continues; the
+    /// minutes after it ends are a new wait. The six-day and (single driver) 24h deadlines
+    /// still apply inside the wait. <paramref name="isTeamDriver"/> applies the team rules
+    /// instead (no split blocks, no single-driver 24h deadline). Mutates <paramref name="ledger"/>.
     /// </summary>
     RestRuleOutcome RecordVoluntaryStop(
         DriverComplianceState ledger,
         int waitMinutes,
         DateTime simulatedNow,
         DrivingRules rule,
-        RestRuleLimits limits);
+        RestRuleLimits limits,
+        bool isTeamDriver = false);
 
     /// <summary>
     /// The largest window <see cref="Advance"/> can take without crossing a driving/rest
-    /// boundary: while driving, minutes to the next hard boundary (daily/weekly/two-week
-    /// cap or the 4.5h break trigger); while resting, minutes left in the block. 0 when
-    /// driving but already on a boundary (let <see cref="Advance"/> with a 0 window do the
-    /// transition, then re-query). Pure - lets the route walkers jump in variable steps.
+    /// boundary, as of the ledger's <see cref="DriverComplianceState.LastEvaluatedSimulatedTime"/>:
+    /// while driving, minutes to the next hard boundary (daily/weekly/two-week cap, the
+    /// 4.5h break trigger, the split break's 2h first-block mark per <paramref name="rule"/>,
+    /// the 24h daily-rest and six-day weekly-rest deadlines); while resting, minutes left
+    /// in the block (or to a deadline that interrupts it). 0 when driving but
+    /// already on a boundary (let <see cref="Advance"/> with a 0 window do the transition,
+    /// then re-query). Pure - lets the route walkers jump in variable steps.
     /// </summary>
     int MinutesUntilNextStateChange(
         DriverComplianceState ledger,
+        DrivingRules rule,
         RestRuleLimits limits);
 
     /// <summary>

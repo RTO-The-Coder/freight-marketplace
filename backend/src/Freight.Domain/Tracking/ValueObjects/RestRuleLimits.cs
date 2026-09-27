@@ -5,6 +5,7 @@ public sealed record RestRuleLimits
     public int MaxContinuousDrivingMinutesBeforeBreak { get; init; }
     public int RequiredBreakMinutes { get; init; }
     public int SplitBreakFirstBlockMinutes { get; init; }
+    public int SplitBreakFirstBlockAfterMinutes { get; init; }
     public int SplitBreakSecondBlockMinutes { get; init; }
 
     public int MaxDailyDrivingMinutes { get; init; }
@@ -23,11 +24,18 @@ public sealed record RestRuleLimits
     public int FullWeeklyRestMinutes { get; init; }
     public int ReducedWeeklyRestMinutes { get; init; }
 
+    public int MaxMinutesBetweenDailyRests { get; init; }
+    public int MaxMinutesBetweenWeeklyRests { get; init; }
+
+    public int TeamDailyRestMinutes { get; init; }
+    public int TeamMaxMinutesBetweenDailyRests { get; init; }
+
     public static RestRuleLimits Default { get; } = new()
     {
         MaxContinuousDrivingMinutesBeforeBreak = 270, // 4.5h
         RequiredBreakMinutes = 45,
         SplitBreakFirstBlockMinutes = 15,
+        SplitBreakFirstBlockAfterMinutes = 120, // 2h - when a split-break driver takes the first block
         SplitBreakSecondBlockMinutes = 30,
 
         MaxDailyDrivingMinutes = 540, // 9h
@@ -44,6 +52,12 @@ public sealed record RestRuleLimits
         MaxTwoWeekDrivingMinutes = 5400, // 90h
 
         FullWeeklyRestMinutes = 2700, // 45h
-        ReducedWeeklyRestMinutes = 1440 // 24h
+        ReducedWeeklyRestMinutes = 1440, // 24h
+
+        MaxMinutesBetweenDailyRests = 1440, // 24h - a daily rest must END within it (single driver)
+        MaxMinutesBetweenWeeklyRests = 8640, // 144h - a weekly rest must START within it (six-day rule)
+
+        TeamDailyRestMinutes = 540, // 9h - EU 561 Art. 8(5), a team's shared daily rest
+        TeamMaxMinutesBetweenDailyRests = 1260 // 21h - the 9h rest must end within 30h of the last one
     };
 }

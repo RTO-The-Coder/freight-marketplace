@@ -157,8 +157,8 @@ public sealed class Truck
     }
 
     /// <summary>
-    /// Sets which assigned driver is at the wheel - the one-directional stickiness
-    /// invariant is enforced by <see cref="Fleet.DriverAssignment"/>.
+    /// Sets which assigned driver is at the wheel - validated (must be a driver of this
+    /// truck's assignment) by <see cref="Fleet.DriverAssignment"/>.
     /// </summary>
     public void SetActiveDriver(Guid? driverId)
     {

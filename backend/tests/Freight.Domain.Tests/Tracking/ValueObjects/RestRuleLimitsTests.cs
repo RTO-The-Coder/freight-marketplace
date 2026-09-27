@@ -12,6 +12,7 @@ public class RestRuleLimitsTests
         Assert.Equal(270, limits.MaxContinuousDrivingMinutesBeforeBreak);
         Assert.Equal(45, limits.RequiredBreakMinutes);
         Assert.Equal(15, limits.SplitBreakFirstBlockMinutes);
+        Assert.Equal(120, limits.SplitBreakFirstBlockAfterMinutes);
         Assert.Equal(30, limits.SplitBreakSecondBlockMinutes);
 
         Assert.Equal(540, limits.MaxDailyDrivingMinutes);
@@ -29,6 +30,12 @@ public class RestRuleLimitsTests
 
         Assert.Equal(2700, limits.FullWeeklyRestMinutes);
         Assert.Equal(1440, limits.ReducedWeeklyRestMinutes);
+
+        Assert.Equal(1440, limits.MaxMinutesBetweenDailyRests);
+        Assert.Equal(8640, limits.MaxMinutesBetweenWeeklyRests);
+
+        Assert.Equal(540, limits.TeamDailyRestMinutes);
+        Assert.Equal(1260, limits.TeamMaxMinutesBetweenDailyRests);
     }
 
     [Fact]

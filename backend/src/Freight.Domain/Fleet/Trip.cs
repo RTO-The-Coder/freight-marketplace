@@ -267,8 +267,10 @@ public sealed class Trip
     /// start from the new stop (<see cref="LegPlan.PickupToFollower"/> /
     /// <see cref="LegPlan.DeliveryToFollower"/>).
     /// <paramref name="pickupInsertIndex"/> / <paramref name="deliveryInsertIndex"/> index
-    /// the trip's Pending non-Office stops only. The Office(return) stop always stays last
-    /// and is created here (via <paramref name="officeLocation"/>) on the first shipment.
+    /// the trip's Pending non-Office stops only. The Office(return) stop always stays last:
+    /// it is created here (via <paramref name="officeLocation"/>) on the first shipment, and
+    /// whenever the delivery is appended last its incoming leg is rewritten to
+    /// <see cref="LegPlan.ToOffice"/>, since the truck now returns from the new delivery.
     /// Does not set wait-for-window - see <see cref="SetPlannedWaits"/>.
     /// </summary>
     public void AssignShipment(
@@ -317,6 +319,11 @@ public sealed class Trip
                 "Delivery must be inserted at or after pickup in the route.", nameof(deliveryInsertIndex));
         }
 
+        // Decided from the positions, not from whether legPlan.ToOffice has a value: the
+        // delivery lands after every existing pending stop exactly when its index equals
+        // the pre-insertion count (the pickup can only be last if the delivery is too).
+        var deliveryAppendedLast = deliveryInsertIndex == pendingStops.Count;
+
         // Each stop gets its OWN Capacity instance, never the same shipmentSize reference
         // shared between them - EF Core's change tracker follows owned-type navigations
         // by reference identity, and reusing one Capacity instance as the ShipmentLoad
@@ -340,7 +347,10 @@ public sealed class Trip
             legPlan.DeliveryIncoming.DistanceKm, legPlan.DeliveryIncoming.TimeTick);
         InsertStop(deliveryStop, pendingStopsAfterPickup, deliveryInsertIndex + 1, legPlan.DeliveryToFollower);
 
-        EnsureOfficeStop(officeLocation, legPlan.ToOffice.DistanceKm, legPlan.ToOffice.TimeTick);
+        if (deliveryAppendedLast)
+        {
+            SetOfficeReturnLeg(officeLocation, legPlan.ToOffice);
+        }
     }
 
     /// <summary>
@@ -371,15 +381,30 @@ public sealed class Trip
     private List<Stop> PendingNonOfficeStops() =>
         [.. Stops.Where(stop => stop.Kind != StopKind.Office && stop.Status == StopStatus.Pending)];
 
-    /// <summary>Adds the trip's single Office(return) stop - a no-op if one already exists.</summary>
-    private void EnsureOfficeStop(GeoLocation officeLocation, double legDistanceKm, int legTimeTick)
+    /// <summary>
+    /// Points the Office(return) stop's incoming leg at <paramref name="toOfficeLeg"/> -
+    /// creating the stop on the trip's first shipment, rewriting it on every later one.
+    /// Called only when a delivery was just appended last, i.e. the office's predecessor
+    /// changed. A trip gains stops only through AssignShipment, so a trip with no office
+    /// stop has no pending stops either, and its first delivery is always appended last.
+    /// </summary>
+    private void SetOfficeReturnLeg(GeoLocation officeLocation, RouteSegment? toOfficeLeg)
     {
-        if (_stops.Any(stop => stop.Kind == StopKind.Office))
+        if (toOfficeLeg is null)
         {
+            throw new ArgumentNullException(
+                nameof(toOfficeLeg),
+                "The delivery was appended last, so the Office(return) leg from it must be supplied.");
+        }
+
+        var office = _stops.FirstOrDefault(stop => stop.Kind == StopKind.Office);
+        if (office is null)
+        {
+            _stops.Add(Stop.ForOffice(TruckingCompanyId, officeLocation, OfficeStopSequence, toOfficeLeg.DistanceKm, toOfficeLeg.TimeTick));
             return;
         }
 
-        _stops.Add(Stop.ForOffice(TruckingCompanyId, officeLocation, OfficeStopSequence, legDistanceKm, legTimeTick));
+        office.ReplaceIncomingLeg(toOfficeLeg.DistanceKm, toOfficeLeg.TimeTick);
     }
 
     /// <summary>
@@ -389,7 +414,10 @@ public sealed class Trip
     /// </summary>
     private int SequenceForInsertAt(IReadOnlyList<Stop> orderedStops, int index)
     {
-        var before = index > 0 ? orderedStops[index - 1].Sequence : (int?)null;
+        // At pending index 0 the stop still goes after every stop already reached - the
+        // pending list alone doesn't know them, and ignoring them could sort the new stop
+        // in among (or before) the route's past.
+        var before = index > 0 ? orderedStops[index - 1].Sequence : LastReachedSequence();
         var after = index < orderedStops.Count ? orderedStops[index].Sequence : (int?)null;
 
         var candidate = (before, after) switch
@@ -408,6 +436,12 @@ public sealed class Trip
 
         return candidate;
     }
+
+    private int? LastReachedSequence() =>
+        _stops
+            .Where(stop => stop.Kind != StopKind.Office && stop.Status != StopStatus.Pending)
+            .Select(stop => (int?)stop.Sequence)
+            .Max();
 
     /// <summary>
     /// Rare self-healing fallback: renumbers every non-Office stop to fresh evenly-spaced

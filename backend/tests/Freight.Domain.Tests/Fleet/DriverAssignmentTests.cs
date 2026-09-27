@@ -128,15 +128,22 @@ public class DriverAssignmentTests
         Assert.Equal(second.Id, assignment.ActiveDriverId);
     }
 
+    /// <summary>
+    /// A team freely alternates in either direction as each driver's own compliance clock
+    /// allows - matching DriverRuleEngine.EvaluateTeam, which computes a swap back to a
+    /// driver who has since become eligible again with no directional restriction.
+    /// </summary>
     [Fact]
-    public void AdvanceActiveDriver_SecondaryBackToPrimary_ThrowsEvenWithValidId()
+    public void AdvanceActiveDriver_SecondaryBackToPrimary_Allowed()
     {
         var first = SomeDriver();
         var second = SomeDriver();
         var assignment = DriverAssignment.Team(first, second, TruckSize.Large);
         assignment.AdvanceActiveDriver(second.Id);
 
-        Assert.Throws<InvalidOperationException>(() => assignment.AdvanceActiveDriver(first.Id));
+        assignment.AdvanceActiveDriver(first.Id);
+
+        Assert.Equal(first.Id, assignment.ActiveDriverId);
     }
 
     [Fact]
@@ -151,24 +158,6 @@ public class DriverAssignmentTests
         assignment.AdvanceActiveDriver(second.Id);
 
         Assert.Equal(second.Id, assignment.ActiveDriverId);
-    }
-
-    [Fact]
-    public void AdvanceActiveDriver_SecondaryToNullThenPrimary_AllowedBecauseStickinessOnlyBlocksDirectMove()
-    {
-        // The one-directional guard compares against the CURRENT ActiveDriverId, so once the
-        // pointer has been moved to null (stopped), a subsequent move to Primary is a
-        // null -> Primary transition, not Secondary -> Primary - the guard does not look further
-        // back in history than the immediately-preceding active driver.
-        var first = SomeDriver();
-        var second = SomeDriver();
-        var assignment = DriverAssignment.Team(first, second, TruckSize.Large);
-        assignment.AdvanceActiveDriver(second.Id);
-        assignment.AdvanceActiveDriver(null);
-
-        assignment.AdvanceActiveDriver(first.Id);
-
-        Assert.Equal(first.Id, assignment.ActiveDriverId);
     }
 
     [Fact]

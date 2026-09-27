@@ -66,11 +66,12 @@ public sealed class DriverAssignment
     }
 
     /// <summary>
-    /// Moves the active-driver pointer to <paramref name="candidateDriverId"/>, enforcing
-    /// the one-directional stickiness invariant: null -> Primary -> Secondary -> null.
-    /// Moving to null (stopping) is always allowed from any state, and a stopped truck
-    /// may start on either driver - but once the secondary is active, the assignment
-    /// never falls back to the primary, even if the primary later recovers.
+    /// Moves the active-driver pointer to <paramref name="candidateDriverId"/> - the
+    /// primary or secondary driver of this assignment, or null (stopped). A team freely
+    /// alternates in either direction as each driver's own compliance clock allows -
+    /// matching <see cref="Freight.Domain.Tracking.Services.DriverRuleEngine.EvaluateTeam"/>,
+    /// which computes a swap back to a driver who has since become eligible again with no
+    /// directional restriction.
     /// </summary>
     public void AdvanceActiveDriver(Guid? candidateDriverId)
     {
@@ -81,17 +82,6 @@ public sealed class DriverAssignment
             throw new ArgumentException(
                 "The active driver must be the primary or secondary driver of this assignment.",
                 nameof(candidateDriverId));
-        }
-
-        var isBackwardMove =
-            SecondaryDriver is not null
-            && ActiveDriverId == SecondaryDriver.Id
-            && candidateDriverId == PrimaryDriver.Id;
-
-        if (isBackwardMove)
-        {
-            throw new InvalidOperationException(
-                "The active driver moves one-directionally - it cannot return to the primary driver once the secondary driver is active.");
         }
 
         ActiveDriverId = candidateDriverId;
