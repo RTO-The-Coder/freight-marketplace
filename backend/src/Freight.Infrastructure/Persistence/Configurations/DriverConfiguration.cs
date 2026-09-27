@@ -87,6 +87,18 @@ public sealed class DriverConfiguration : IEntityTypeConfiguration<Driver>
 
             state.Property(s => s.LastEvaluatedSimulatedTime)
                 .HasColumnName("ComplianceState_LastEvaluatedSimulatedTime");
+
+            state.Property(s => s.LastRestEndedAt)
+                .HasColumnName("ComplianceState_LastRestEndedAt");
+
+            state.Property(s => s.LastWeeklyRestEndedAt)
+                .HasColumnName("ComplianceState_LastWeeklyRestEndedAt");
+
+            state.Property(s => s.WeeklyRestMinutesOwed)
+                .HasColumnName("ComplianceState_WeeklyRestMinutesOwed");
+
+            state.Property(s => s.CurrentActivityLengthMinutes)
+                .HasColumnName("ComplianceState_CurrentActivityLengthMinutes");
         });
     }
 }

@@ -50,6 +50,32 @@ public class TruckAndDriverRoundTripTests : IAsyncLifetime
     }
 
     [Fact]
+    public async Task Driver_WithComplianceLedger_RoundTripsLedgerIncludingLastRestEndedAt()
+    {
+        var tripStartedAt = new DateTime(2026, 1, 1, 6, 0, 0, DateTimeKind.Utc);
+        var driver = Driver.Create(Guid.NewGuid(), "Ledger", "Driver", SampleRules());
+        driver.ResetComplianceForNewTrip(tripStartedAt);
+
+        await using (var writeContext = new FreightDbContext(Options()))
+        {
+            writeContext.Set<Driver>().Add(driver);
+            await writeContext.SaveChangesAsync();
+        }
+
+        await using var readContext = new FreightDbContext(Options());
+        var reloaded = await readContext.Set<Driver>().FirstAsync(d => d.Id == driver.Id);
+
+        Assert.NotNull(reloaded.ComplianceState);
+        Assert.Equal(driver.ComplianceState!.CurrentActivity, reloaded.ComplianceState.CurrentActivity);
+        Assert.Equal(tripStartedAt, reloaded.ComplianceState.LastEvaluatedSimulatedTime);
+        // The trip opening counts as the end of the last daily and weekly rest.
+        Assert.Equal(tripStartedAt, reloaded.ComplianceState.LastRestEndedAt);
+        Assert.Equal(tripStartedAt, reloaded.ComplianceState.LastWeeklyRestEndedAt);
+        Assert.Equal(0, reloaded.ComplianceState.WeeklyRestMinutesOwed);
+        Assert.Equal(0, reloaded.ComplianceState.CurrentActivityLengthMinutes);
+    }
+
+    [Fact]
     public async Task Truck_PersistedAndReloaded_RoundTripsSizeDerivedCapacity()
     {
         var truck = Truck.Create(Guid.NewGuid(), "Truck-1", TruckType.Refrigerated, TruckSize.Medium);
