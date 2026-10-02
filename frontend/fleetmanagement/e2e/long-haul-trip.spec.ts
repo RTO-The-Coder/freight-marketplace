@@ -43,33 +43,6 @@ function weightLabel(s: ShipmentSummary): string {
   return `${Math.round(s.loadWeightKg).toLocaleString('en-US')} kg`
 }
 
-/** Ticks from `nowIso` until the trip's LAST stop (the implicit Office return
- *  leg after the delivery) is projected Reached, per the backend's own current
- *  ETA projection. This is a snapshot, not a promise: EU compliance events
- *  (mandatory rests) that fall inside the remaining window can shift the real
- *  Reached time once the truck actually gets there — see the retry loop in
- *  the caller, which re-polls and advances again if this undershoots. */
-async function ticksUntilTripCloses(truckId: string, nowIso: string): Promise<number> {
-  const res = await fetch(`${API_BASE_URL}/trucks/${truckId}/etas`)
-  const { stops } = (await res.json()) as {
-    stops: Array<{
-      kind: string
-      status: string
-      projectedArrival: string | null
-      waitTimeTick: number
-      waitTimeTickElapsed: number
-    }>
-  }
-  const lastStop = stops[stops.length - 1]
-  if (!lastStop?.projectedArrival) {
-    throw new Error(`GET /trucks/${truckId}/etas returned no projected arrival for the trip's final stop.`)
-  }
-  const remainingWaitTicks = lastStop.waitTimeTick - lastStop.waitTimeTickElapsed
-  const closesAt = new Date(lastStop.projectedArrival).getTime() + remainingWaitTicks * 5 * 60_000
-  const minutes = (closesAt - new Date(nowIso).getTime()) / 60_000
-  return Math.ceil(minutes / 5)
-}
-
 async function tripIsOpen(truckId: string): Promise<boolean> {
   const res = await fetch(`${API_BASE_URL}/trucks/${truckId}`)
   const detail = (await res.json()) as { stops: unknown[] }
@@ -109,12 +82,6 @@ async function findTruckByName(companyId: string, truckName: string): Promise<st
   const truck = trucks.find((t) => t.truckName === truckName)
   if (!truck) throw new Error(`Truck '${truckName}' not found in company '${companyId}'.`)
   return truck.truckId
-}
-
-async function currentSimTime(): Promise<string> {
-  const res = await fetch(`${API_BASE_URL}/simulation/time`)
-  const { currentTime } = (await res.json()) as { currentTime: string }
-  return currentTime
 }
 
 async function firstCompanyId(): Promise<string> {
@@ -210,21 +177,12 @@ test('a 10-14 day team-driver shipment runs the sim clock to full trip completio
     await expect(page.locator('.stops__when').first()).toHaveText('Pending')
   })
 
-  await test.step('run the simulation clock forward until the trip fully completes', async () => {
-    // Ask the backend directly for the honest delivery ETA (driving + mandatory
-    // EU rest for whichever driver is active + any wait-for-window), rather
-    // than guessing — this is the same real projection GET /trucks/{id}/etas
-    // gives the UI itself. See e2e-testing-setup memory for the formula.
-    const truckId = await findTruckByName(companyId, 'LongHaul-Truck')
-
-    await page.goto('/')
-    const clock = page.locator('.simclock')
-
-    // The upfront projection can legitimately undershoot once: EU compliance
-    // events (mandatory rests) that land inside the remaining window shift the
-    // real Reached time once the truck actually gets there, especially over a
-    // 10-14 day span with a two-driver relay. Re-poll and advance again to
-    // absorb that — but this must converge in 1-2 iterations, not more.
+  await test.step('run the simulation clock forward in visible 12-hour steps until the trip completes', async () => {
+    // Advances in small, watchable steps (12h = 144 ticks at a time, with a
+    // pause between each) instead of one giant jump straight to the end — so
+    // a headed run actually shows the clock and stop statuses progressing
+    // across the full 10-14 day trip instead of appearing to do nothing for
+    // ~10s and then just being done.
     //
     // KNOWN BUG (G16, see docs/design/ui-redesign-plan.md): once the relay
     // swaps active driver primary -> secondary and later becomes eligible to
@@ -234,23 +192,24 @@ test('a 10-14 day team-driver shipment runs the sim clock to full trip completio
     // unconditionally rejects any move back to the primary as "the active
     // driver moves one-directionally". That throw is never caught in
     // SimulationAdvanceHandler's tick loop, so it aborts the ENTIRE clock
-    // advance (for every truck, not just this one) and the request fails with
-    // no time movement at all — repeating the same advance just repeats the
-    // same throw forever. advanceAndCheckForError pins that failure mode
-    // explicitly instead of retrying blindly into a timeout.
-    const now = await currentSimTime()
-    const ticksNeeded = (await ticksUntilTripCloses(truckId, now)) + 1
-    await advanceAndCheckForError(clock, ticksNeeded)
+    // advance (for every truck, not just this one). advanceAndCheckForError
+    // pins that failure mode explicitly on every step, not just the first.
+    const truckId = await findTruckByName(companyId, 'LongHaul-Truck')
 
-    // If a second advance is genuinely needed (real undershoot, not the bug
-    // above), one retry with a generous margin should always be enough.
-    if (await tripIsOpen(truckId)) {
-      const now2 = await currentSimTime()
-      const ticksNeeded2 = (await ticksUntilTripCloses(truckId, now2)) + 12
-      await advanceAndCheckForError(clock, ticksNeeded2)
+    await page.goto('/')
+    const clock = page.locator('.simclock')
+
+    const STEP_TICKS = 144 // 12 hours at 5 min/tick
+    const STEP_PAUSE_MS = 5_000
+    const MAX_STEPS = 40 // generous margin over ~28 steps for a 14-day trip
+
+    for (let step = 0; step < MAX_STEPS; step++) {
+      if (!(await tripIsOpen(truckId))) break
+      await advanceAndCheckForError(clock, STEP_TICKS)
+      await page.waitForTimeout(STEP_PAUSE_MS)
     }
 
-    expect(await tripIsOpen(truckId), 'trip did not close after 2 advance attempts').toBe(false)
+    expect(await tripIsOpen(truckId), `trip did not close after ${MAX_STEPS} 12-hour steps`).toBe(false)
   })
 
   await test.step('the trip has closed: truck shows no active trip', async () => {

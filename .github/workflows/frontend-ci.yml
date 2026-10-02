@@ -3,14 +3,14 @@ name: Frontend CI
 on:
   push:
     paths:
-      - "packages/web/**"
-      - "packages/api-client/**"
+      - "frontend/fleetmanagement/**"
+      - "frontend/api-client/**"
       - "package-lock.json"
       - ".github/workflows/frontend-ci.yml"
   pull_request:
     paths:
-      - "packages/web/**"
-      - "packages/api-client/**"
+      - "frontend/fleetmanagement/**"
+      - "frontend/api-client/**"
       - "package-lock.json"
       - ".github/workflows/frontend-ci.yml"
 
@@ -30,9 +30,9 @@ jobs:
         run: npm ci
 
       - name: Typecheck
-        working-directory: packages/web
+        working-directory: frontend/fleetmanagement
         run: npx tsc --noEmit -p tsconfig.app.json
 
       - name: Vitest unit tests
-        working-directory: packages/web
+        working-directory: frontend/fleetmanagement
         run: npm test

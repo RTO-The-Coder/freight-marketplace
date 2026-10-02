@@ -9,15 +9,15 @@ name: E2E CI
 on:
   push:
     paths:
-      - "packages/web/**"
-      - "packages/api-client/**"
+      - "frontend/fleetmanagement/**"
+      - "frontend/api-client/**"
       - "backend/**"
       - "package-lock.json"
       - ".github/workflows/e2e-ci.yml"
   pull_request:
     paths:
-      - "packages/web/**"
-      - "packages/api-client/**"
+      - "frontend/fleetmanagement/**"
+      - "frontend/api-client/**"
       - "backend/**"
       - "package-lock.json"
       - ".github/workflows/e2e-ci.yml"
@@ -130,24 +130,24 @@ jobs:
       - name: Install frontend dependencies
         run: npm ci
 
-      # packages/web/.env is gitignored (it's the standard place for this,
-      # even though this particular value carries no secret) so a fresh CI
-      # checkout has none — Vite then leaves VITE_API_BASE_URL undefined,
+      # frontend/fleetmanagement/.env is gitignored (it's the standard place for
+      # this, even though this particular value carries no secret) so a fresh
+      # CI checkout has none — Vite then leaves VITE_API_BASE_URL undefined,
       # every fetch resolves against the dev server's own origin instead of
       # the API, and the app fails with "Unexpected token '<' ... is not
       # valid JSON" (the dev server's index.html coming back where JSON was
       # expected). Write the one value the app needs before the dev server
       # starts.
       - name: Write frontend .env
-        working-directory: packages/web
+        working-directory: frontend/fleetmanagement
         run: echo "VITE_API_BASE_URL=http://localhost:5017" > .env
 
       - name: Install Playwright browsers
-        working-directory: packages/web
+        working-directory: frontend/fleetmanagement
         run: npx playwright install --with-deps chromium
 
       - name: Run Playwright e2e tests
-        working-directory: packages/web
+        working-directory: frontend/fleetmanagement
         run: npm run test:e2e
 
       - name: Upload Playwright traces/screenshots
@@ -155,7 +155,7 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: playwright-test-results
-          path: packages/web/test-results/
+          path: frontend/fleetmanagement/test-results/
           retention-days: 14
           if-no-files-found: ignore
 

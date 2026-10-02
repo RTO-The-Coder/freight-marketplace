@@ -8,13 +8,13 @@ The domain has real regulatory complexity (EU driving/rest-hour law) and genuine
 
 ## Decision
 - Backend: **C# / ASP.NET Core** (minimal APIs) + EF Core, in a layered solution (Domain / Application / Infrastructure / Api) matching the bounded contexts in the requirements spec (Section 12).
-- Web client: **React**, shipper-facing.
-- Mobile client: **React Native**, trucking-company/dispatcher-facing.
-- Shared code between the two clients is limited to a TypeScript package containing **domain types, API client, and hooks only** — UI components stay platform-specific (no React Native Web).
+- Web client: **React**, shipper-facing (`shipment`) and fleet-management-facing (`fleetmanagement`).
+- Mobile client: **React Native**, fleet-management-facing (trucking-company/dispatcher) — planned, not yet built (see ADR 0002).
+- Shared code between clients is limited to a TypeScript package containing **domain types, API client, and hooks only** (`api-client`) — UI components stay platform-specific (no React Native Web). Fleet-management's eventual web/mobile split additionally shares a pure-logic core package between those two, per ADR 0002.
 - Domain/API is built and verified first via unit/integration tests and a Postman collection, before either client exists.
 
 ## Consequences
-- The layered solution structure (Domain / Application / Infrastructure / Api) and the locking approach in ADR 0003 both rely on capabilities C#/.NET provides directly (interfaces and dependency injection as first-class language/framework features, EF Core's support for explicit transactions and locking hints) — chosen for fit with this project's architecture, not evaluated against other backend languages here.
+- The layered solution structure (Domain / Application / Infrastructure / Api) and the locking approach in ADR 0013 both rely on capabilities C#/.NET provides directly (interfaces and dependency injection as first-class language/framework features, EF Core's support for explicit transactions and locking hints) — chosen for fit with this project's architecture, not evaluated against other backend languages here.
 - React + React Native both being JavaScript/TypeScript-based lets the shared types/API-client package be real code, not a translation layer — a genuine DRY win between the two clients.
 - Choosing not to share UI components (e.g. via React Native Web) means real, separate UI work for both clients, but avoids constraining the web client's styling/layout to React Native's primitive model.
 - Backend-first build order means the domain and API design get validated against real HTTP calls (via Postman) before any UI assumptions are baked in — reduces the risk of the API shape being driven by UI convenience rather than domain correctness.

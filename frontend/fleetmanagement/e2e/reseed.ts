@@ -7,7 +7,7 @@ const execFileAsync = promisify(execFile)
 
 const API_BASE_URL = 'http://localhost:5017'
 const HERE = path.dirname(fileURLToPath(import.meta.url))
-// Repo root, two levels up from packages/web.
+// Repo root, two levels up from frontend/fleetmanagement.
 const SEEDER_PROJECT = path.resolve(HERE, '../../../backend/tools/Freight.Seeder')
 
 /**

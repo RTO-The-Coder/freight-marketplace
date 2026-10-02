@@ -3,7 +3,7 @@
 **Status:** Stage 1 shipped (design system + company-first navigation + restyled
 Companies list & Company detail). Stages 2+ specified below.
 
-**Scope:** visual/UX overhaul of `packages/web` plus the structural changes the new
+**Scope:** visual/UX overhaul of `frontend/fleetmanagement` plus the structural changes the new
 requirements imply. Backend touched only where a listed gap requires it. Mobile
 (React Native) screens — Offers, Route View — are out of scope.
 
@@ -85,7 +85,7 @@ G12 (`Trip.Reschedule` + `RescheduleTripHandler` + `PATCH /trips/{id}/start`) �
 moved: open trip, no Reached stop, `legProgressFraction === 0`).
 
 ### G16 — BUG: team-driver relay swap-back permanently blocks the simulation clock
-Found by `packages/web/e2e/long-haul-trip.spec.ts` (a 10-14 day `LongHaulTeamDriver`-tier
+Found by `frontend/fleetmanagement/e2e/long-haul-trip.spec.ts` (a 10-14 day `LongHaulTeamDriver`-tier
 shipment, run to full trip completion via `POST /simulation/advance`).
 
 `DriverRuleEngine.EvaluateTeam` (`Freight.Domain/Tracking/Services/DriverRuleEngine.cs`,
@@ -184,7 +184,7 @@ merge in `AssignDriversModal.tsx`.
 
 ### G15 (FIXED) — `RouteEtaCalculator.CalculateEtas` used to spin forever on a valid route
 
-**Found by:** `packages/web/e2e/corridor-assignment.spec.ts` (Playwright), a scenario
+**Found by:** `frontend/fleetmanagement/e2e/corridor-assignment.spec.ts` (Playwright), a scenario
 built specifically to interleave 3 real-corridor shipments (Berlin→Munich, Leipzig→
 Nuremberg, Nuremberg→Munich, from the seeder's `BuildCorridorOverlapShipments`) onto one
 truck's route via the insert-index picker.
@@ -475,7 +475,7 @@ Read-only. `GET /drivers/{id}` + `/drivers/{id}/truck`. Ledger block when
   in the clock bar. **New gap G7** (`POST /simulation/reset`) for "Set time" leaving
   stale trips.
 - **Stage 5 (done, uncommitted):** `leaflet` + `react-leaflet@5` added to
-  `packages/web`. `<TripMap>` — road-following legs (one `GET /routing/geometry` per
+  `frontend/fleetmanagement`. `<TripMap>` — road-following legs (one `GET /routing/geometry` per
   consecutive stop pair, G3, sequential + session cache, straight-line fallback per
   failed leg), kind-coloured stop pins, live 🚚 marker from `GET /trucks/{id}/position`.
   Replaces the Stage 3 placeholder on Truck detail; refetches on `simVersion`. api-client:
