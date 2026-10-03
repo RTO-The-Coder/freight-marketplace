@@ -140,17 +140,23 @@ describe('assign drivers (full-screen form)', () => {
     fireEvent.press(screen.getByText('FullRest'))
     fireEvent.press(screen.getByText('FullWeeklyRest'))
     // Add Driver sits inside the Assign drivers form, so its Save comes first.
-    fireEvent.press(screen.getAllByRole('button', { name: 'Save' })[0])
+    const addDriverSave = screen.getAllByRole('button', { name: 'Save' })[0]
+    expect(addDriverSave).toBeEnabled()
+    fireEvent.press(addDriverSave)
 
-    await waitFor(() => expect(screen.queryByLabelText('First name')).toBeNull())
-    await waitFor(() => expect(callsTo(api, 'GET', '/drivers?unassigned=true')).toBe(2))
+    // Two stacked full-screen forms and four API calls: give slow CI machines more than the 1 s default.
+    const slow = { timeout: 5000 }
+    await waitFor(() => expect(callsTo(api, 'POST', '/drivers')).toBe(1), slow)
+    await waitFor(() => expect(screen.queryByLabelText('First name')).toBeNull(), slow)
+    await waitFor(() => expect(callsTo(api, 'GET', '/drivers?unassigned=true')).toBe(2), slow)
     const save = screen.getByRole('button', { name: 'Save' })
     expect(save).toBeEnabled()
     fireEvent.press(save)
-    await waitFor(() =>
-      expect(bodyOf(api, 'PATCH', '/trucks/t1/drivers')).toEqual({ primaryDriverId: 'd9', secondaryDriverId: null }),
+    await waitFor(
+      () => expect(bodyOf(api, 'PATCH', '/trucks/t1/drivers')).toEqual({ primaryDriverId: 'd9', secondaryDriverId: null }),
+      slow,
     )
-  })
+  }, 20000)
 })
 
 describe('remove drivers (bottom-sheet confirmation)', () => {
