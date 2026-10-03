@@ -11,7 +11,8 @@ public sealed class TruckingCompaniesController(
     GetTruckingCompanyByIdHandler getTruckingCompanyByIdHandler,
     GetFleetTreeHandler getFleetTreeHandler,
     EvaluateShipmentForCompanyHandler evaluateShipmentForCompanyHandler,
-    RegisterDeviceTokenHandler registerDeviceTokenHandler) : ControllerBase
+    RegisterDeviceTokenHandler registerDeviceTokenHandler,
+    UnregisterDeviceTokenHandler unregisterDeviceTokenHandler) : ControllerBase
 {
     [HttpGet]
     public async Task<ActionResult<GetTruckingCompaniesResponse>> GetTruckingCompanies(CancellationToken cancellationToken)
@@ -44,14 +45,23 @@ public sealed class TruckingCompaniesController(
         return Ok(response);
     }
 
-    public sealed record RegisterDeviceTokenBody(string Fid);
+    public sealed record DeviceTokenBody(string Fid);
 
     [HttpPost("{companyId:guid}/device-token")]
     public async Task<IActionResult> RegisterDeviceToken(
-        Guid companyId, RegisterDeviceTokenBody body, CancellationToken cancellationToken)
+        Guid companyId, DeviceTokenBody body, CancellationToken cancellationToken)
     {
         await registerDeviceTokenHandler.RegisterAsync(
             new RegisterDeviceTokenRequest(companyId, body.Fid), cancellationToken);
+        return NoContent();
+    }
+
+    [HttpDelete("{companyId:guid}/device-token")]
+    public async Task<IActionResult> UnregisterDeviceToken(
+        Guid companyId, DeviceTokenBody body, CancellationToken cancellationToken)
+    {
+        await unregisterDeviceTokenHandler.UnregisterAsync(
+            new UnregisterDeviceTokenRequest(companyId, body.Fid), cancellationToken);
         return NoContent();
     }
 }

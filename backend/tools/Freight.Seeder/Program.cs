@@ -293,7 +293,7 @@ async Task Reseed(DateTime demoAnchor)
     [
         "Shipments", "TripStops", "Trips", "TruckRouteProgresses",
         "DriverComplianceStates", "Trucks", "Drivers", "TruckingCompanies",
-        "Shippers", "SimulationClock",
+        "Shippers", "SimulationClock", "DeviceTokens",
     ];
     foreach (var table in tables)
     {
