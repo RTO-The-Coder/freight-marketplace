@@ -6,7 +6,7 @@ import type {
 } from '@freight/api-client'
 import { useCallback, useEffect, useState } from 'react'
 import { RefreshControl, ScrollView, StyleSheet, View } from 'react-native'
-import { Divider, FAB, List, Text, useTheme } from 'react-native-paper'
+import { Card, Divider, FAB, List, Text, useTheme } from 'react-native-paper'
 import { fleetApi, fleetDriverLabel, truckingCompaniesApi, useSimClock } from '@freight/fleetmanagement-core'
 import { ActivationSwitch } from '../components/ActivationSwitch'
 import { AddDriverSheet } from '../components/AddDriverSheet'
@@ -131,19 +131,28 @@ export function CompanyDetailScreen({ companyId, onLoaded, onSelectTruck }: Prop
           <EmptyState message="No trucks in this fleet yet." />
         ) : (
           trucks.map((truck) => (
-            <List.Item
+            // A card per truck so it reads as tappable; the whole card opens the truck.
+            <Card
               key={truck.truckId}
+              mode="elevated"
+              elevation={1}
+              style={[styles.truckCard, { backgroundColor: theme.colors.surface }]}
+              onPress={() => onSelectTruck(truck.truckId)}
+            >
+            <List.Item
               title={truck.truckName}
               description={`${truck.truckType} · ${truck.truckSize} · ${
                 fleetDriverLabel(details.get(truck.truckId)) ?? 'No driver assigned'
               }`}
-              onPress={() => onSelectTruck(truck.truckId)}
+              descriptionNumberOfLines={2}
+              left={(props) => <List.Icon {...props} icon="truck-outline" />}
               right={() => (
                 <View style={styles.side}>
                   <StatusPill status={truck.status} />
                   <ActivationSwitch
                     truckId={truck.truckId}
                     truckName={truck.truckName}
+                    truckSize={truck.truckSize}
                     isActive={truck.isActive}
                     hasDriver={truck.hasDriverAssignment}
                     onChanged={() => {
@@ -152,9 +161,11 @@ export function CompanyDetailScreen({ companyId, onLoaded, onSelectTruck }: Prop
                     }}
                     onError={setActionError}
                   />
+                  <List.Icon icon="chevron-right" />
                 </View>
               )}
             />
+            </Card>
           ))
         )}
       </ScrollView>
@@ -193,5 +204,6 @@ const styles = StyleSheet.create({
   head: { flexDirection: 'row', alignItems: 'center', gap: 12, padding: 16 },
   alert: { paddingHorizontal: 16, paddingTop: 12 },
   map: { paddingHorizontal: 16 },
+  truckCard: { marginHorizontal: 16, marginBottom: 8 },
   side: { flexDirection: 'row', alignItems: 'center', gap: 4 },
 })

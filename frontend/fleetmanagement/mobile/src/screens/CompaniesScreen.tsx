@@ -1,6 +1,6 @@
 import type { TruckingCompanySummaryDto } from '@freight/api-client'
 import { useCallback, useEffect, useState } from 'react'
-import { FlatList, RefreshControl } from 'react-native'
+import { FlatList, RefreshControl, View } from 'react-native'
 import { List } from 'react-native-paper'
 import { truckingCompaniesApi } from '@freight/fleetmanagement-core'
 import { CompanyLogo } from '../components/CompanyLogo'
@@ -42,7 +42,11 @@ export function CompaniesScreen({ onSelect }: { onSelect: (companyId: string) =>
         <List.Item
           title={item.name}
           description="Carrier"
-          left={() => <CompanyLogo name={item.name} />}
+          left={(props) => (
+            <View style={props.style}>
+              <CompanyLogo name={item.name} />
+            </View>
+          )}
           right={(props) => <List.Icon {...props} icon="chevron-right" />}
           onPress={() => onSelect(item.companyId)}
         />

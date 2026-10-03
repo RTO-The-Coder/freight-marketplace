@@ -6,7 +6,7 @@ import type {
   TruckSummaryDto,
 } from '@freight/api-client'
 import { useEffect, useState } from 'react'
-import { ScrollView, StyleSheet } from 'react-native'
+import { ScrollView, StyleSheet, View } from 'react-native'
 import { Button, List, Text, useTheme } from 'react-native-paper'
 import {
   fleetApi,
@@ -134,7 +134,11 @@ function CompanySheet({
             <List.Item
               key={c.companyId}
               title={c.name}
-              left={() => <CompanyLogo name={c.name} />}
+              left={(props) => (
+                <View style={props.style}>
+                  <CompanyLogo name={c.name} />
+                </View>
+              )}
               onPress={() => onChoose(c)}
             />
           ))}

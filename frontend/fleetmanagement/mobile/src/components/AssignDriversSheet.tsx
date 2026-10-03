@@ -1,7 +1,9 @@
 import { ApiError, type DriverSummaryDto, type TruckSize } from '@freight/api-client'
 import { useEffect, useState } from 'react'
-import { Text, useTheme } from 'react-native-paper'
+import { StyleSheet } from 'react-native'
+import { Button, Text, useTheme } from 'react-native-paper'
 import { fleetApi, mergeDriverPool } from '@freight/fleetmanagement-core'
+import { AddDriverSheet } from './AddDriverSheet'
 import { DriverPicker } from './DriverPicker'
 import { FormSheet } from './FormSheet'
 import { LoadingState, errorMessage } from './ScreenState'
@@ -23,6 +25,12 @@ export function AssignDriversSheet({ truckId, truckSize, visible, onClose, onAss
   const [secondaryId, setSecondaryId] = useState<string | null>(null)
   const [error, setError] = useState<string | null>(null)
   const [busy, setBusy] = useState(false)
+  const [addingDriver, setAddingDriver] = useState(false)
+
+  const fetchPool = () =>
+    Promise.all([fleetApi.getDrivers({ unassigned: true }), fleetApi.getTruckDetail(truckId)]).then(
+      ([pool, detail]) => ({ drivers: mergeDriverPool(detail, pool.drivers), detail }),
+    )
 
   // Load each time the form opens: the truck's current drivers plus the unassigned pool.
   useEffect(() => {
@@ -30,10 +38,10 @@ export function AssignDriversSheet({ truckId, truckSize, visible, onClose, onAss
     let cancelled = false
     setDrivers(null)
     setError(null)
-    Promise.all([fleetApi.getDrivers({ unassigned: true }), fleetApi.getTruckDetail(truckId)])
-      .then(([pool, detail]) => {
+    fetchPool()
+      .then(({ drivers: all, detail }) => {
         if (cancelled) return
-        setDrivers(mergeDriverPool(detail, pool.drivers))
+        setDrivers(all)
         setPrimaryId(detail.primaryDriver?.driverId ?? null)
         setSecondaryId(detail.secondaryDriver?.driverId ?? null)
       })
@@ -44,6 +52,18 @@ export function AssignDriversSheet({ truckId, truckSize, visible, onClose, onAss
       cancelled = true
     }
   }, [visible, truckId])
+
+  /** A driver created from this form joins the list (keeping the choices made so far) and is selected. */
+  const onDriverAdded = (driverId: string) => {
+    setAddingDriver(false)
+    // Primary if that slot is free; else secondary on a Large truck if free; else it becomes the primary.
+    if (primaryId === null || !isLarge) setPrimaryId(driverId)
+    else if (secondaryId === null) setSecondaryId(driverId)
+    else setPrimaryId(driverId)
+    fetchPool()
+      .then(({ drivers: all }) => setDrivers(all))
+      .catch((err) => setError(errorMessage(err, 'Failed to load drivers.')))
+  }
 
   const save = async () => {
     if (primaryId === null) return
@@ -76,7 +96,12 @@ export function AssignDriversSheet({ truckId, truckSize, visible, onClose, onAss
     >
       {!drivers && !error && <LoadingState />}
       {drivers && drivers.length === 0 && (
-        <Text variant="bodyMedium">No drivers available. Add one from the company screen first.</Text>
+        <Text variant="bodyMedium">No drivers available yet. Add a new driver to assign them.</Text>
+      )}
+      {drivers && (
+        <Button mode="outlined" icon="account-plus" style={styles.addDriver} onPress={() => setAddingDriver(true)}>
+          Add new driver
+        </Button>
       )}
       {drivers && drivers.length > 0 && (
         <>
@@ -103,6 +128,11 @@ export function AssignDriversSheet({ truckId, truckSize, visible, onClose, onAss
           )}
         </>
       )}
+      <AddDriverSheet visible={addingDriver} onClose={() => setAddingDriver(false)} onAdded={onDriverAdded} />
     </FormSheet>
   )
 }
+
+const styles = StyleSheet.create({
+  addDriver: { alignSelf: 'flex-start' },
+})

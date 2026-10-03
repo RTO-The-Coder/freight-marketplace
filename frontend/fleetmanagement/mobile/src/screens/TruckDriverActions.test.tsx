@@ -116,6 +116,41 @@ describe('assign drivers (full-screen form)', () => {
     fireEvent.press(screen.getByRole('button', { name: 'Save' }))
     expect(await screen.findByText('Driver already assigned elsewhere')).toBeOnTheScreen()
   })
+
+  it('adds a new driver from the form, selects them and assigns them', async () => {
+    const erika = { driverId: 'd9', firstName: 'Erika', lastName: 'Mustermann' }
+    let created = false
+    const api = installFakeApi({
+      'GET /trucks/t1': truck(),
+      'GET /drivers?unassigned=true': () => ({ drivers: created ? [petra, erika] : [petra] }),
+      'POST /drivers': () => {
+        created = true
+        return { driverId: 'd9' }
+      },
+      'PATCH /trucks/t1/drivers': {},
+    })
+    renderTruck()
+    fireEvent.press(await screen.findByText('Assign drivers'))
+    fireEvent.press(await screen.findByText('Add new driver'))
+
+    // The Add Driver form opens on top of Assign drivers.
+    fireEvent.changeText(await screen.findByLabelText('First name'), 'Erika')
+    fireEvent.changeText(screen.getByLabelText('Last name'), 'Mustermann')
+    fireEvent.press(screen.getByText('FullBreak'))
+    fireEvent.press(screen.getByText('FullRest'))
+    fireEvent.press(screen.getByText('FullWeeklyRest'))
+    // Add Driver sits inside the Assign drivers form, so its Save comes first.
+    fireEvent.press(screen.getAllByRole('button', { name: 'Save' })[0])
+
+    await waitFor(() => expect(screen.queryByLabelText('First name')).toBeNull())
+    await waitFor(() => expect(callsTo(api, 'GET', '/drivers?unassigned=true')).toBe(2))
+    const save = screen.getByRole('button', { name: 'Save' })
+    expect(save).toBeEnabled()
+    fireEvent.press(save)
+    await waitFor(() =>
+      expect(bodyOf(api, 'PATCH', '/trucks/t1/drivers')).toEqual({ primaryDriverId: 'd9', secondaryDriverId: null }),
+    )
+  })
 })
 
 describe('remove drivers (bottom-sheet confirmation)', () => {

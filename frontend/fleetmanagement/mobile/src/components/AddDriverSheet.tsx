@@ -12,7 +12,8 @@ const WEEKLY_REST_RULES: readonly WeeklyRestRule[] = ['FullWeeklyRest', 'Reduced
 interface Props {
   visible: boolean
   onClose: () => void
-  onAdded: () => void
+  /** Called with the new driver's id. */
+  onAdded: (driverId: string) => void
 }
 
 export function AddDriverSheet({ visible, onClose, onAdded }: Props) {
@@ -38,7 +39,7 @@ export function AddDriverSheet({ visible, onClose, onAdded }: Props) {
     setError(null)
     setBusy(true)
     try {
-      await fleetApi.addDriver({
+      const { driverId } = await fleetApi.addDriver({
         firstName: firstName.trim(),
         lastName: lastName.trim(),
         breakRule,
@@ -52,7 +53,7 @@ export function AddDriverSheet({ visible, onClose, onAdded }: Props) {
       setDailyRestRule(null)
       setWeeklyRestRule(null)
       setExtend(false)
-      onAdded()
+      onAdded(driverId)
     } catch (err) {
       setError(err instanceof ApiError ? err.message : 'Failed to add driver.')
     } finally {

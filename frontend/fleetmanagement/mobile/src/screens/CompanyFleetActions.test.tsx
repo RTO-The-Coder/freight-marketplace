@@ -69,10 +69,20 @@ describe('activation switch', () => {
     await waitFor(() => expect(callsTo(api, 'GET', '/trucks?truckingCompanyId=c1')).toBe(3))
   })
 
-  it('cannot activate a truck without a driver', async () => {
-    installFakeApi(routes())
-    renderCompany()
-    expect((await screen.findByLabelText('FL-13 active')).props.disabled).toBe(true)
+  it('explains why a truck without a driver cannot be activated, and offers to assign one', async () => {
+    const api = installFakeApi(routes({ 'GET /drivers?unassigned=true': { drivers: [] } }))
+    const onSelectTruck = jest.fn()
+    renderWithApp(<CompanyDetailScreen companyId="c1" onLoaded={jest.fn()} onSelectTruck={onSelectTruck} />)
+
+    // The switch takes the tap itself (it must not fall through and open the truck).
+    fireEvent(await screen.findByLabelText('FL-13 active'), 'valueChange', true)
+    expect(await screen.findByText("FL-13 can't be activated")).toBeOnTheScreen()
+    expect(callsTo(api, 'POST', '/trucks/t3/activate')).toBe(0)
+    expect(onSelectTruck).not.toHaveBeenCalled()
+
+    fireEvent.press(screen.getByRole('button', { name: 'Assign driver' }))
+    expect(await screen.findByText('Assign drivers')).toBeOnTheScreen()
+    expect(await screen.findByText('Add new driver')).toBeOnTheScreen()
   })
 
   it('shows the reason when the API refuses', async () => {

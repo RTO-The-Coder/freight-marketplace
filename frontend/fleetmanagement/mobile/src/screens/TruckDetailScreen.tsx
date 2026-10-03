@@ -6,7 +6,7 @@ import {
 } from '@freight/api-client'
 import { useCallback, useEffect, useState } from 'react'
 import { RefreshControl, ScrollView, StyleSheet, View } from 'react-native'
-import { Chip, Divider, FAB, List, Text, useTheme } from 'react-native-paper'
+import { Button, Chip, Divider, FAB, List, Text, useTheme } from 'react-native-paper'
 import {
   datetimeLocalToIso,
   fleetApi,
@@ -147,6 +147,7 @@ export function TruckDetailScreen({ truckId, onLoaded, onSelectDriver }: Props) 
           <ActivationSwitch
             truckId={truck.truckId}
             truckName={truck.truckName}
+            truckSize={truck.truckSize}
             isActive={truck.isActive}
             hasDriver={hasDriver}
             onChanged={() => {
@@ -177,32 +178,45 @@ export function TruckDetailScreen({ truckId, onLoaded, onSelectDriver }: Props) 
           right={(props) => <List.Icon {...props} icon="chevron-right" />}
         />
       )}
-      <List.Item
-        title={hasDriver ? 'Change drivers' : 'Assign drivers'}
-        left={(props) => <List.Icon {...props} icon="account-edit" color={theme.colors.primary} />}
-        onPress={() => setSheet('assignDrivers')}
-      />
-      {hasDriver && (
-        <List.Item
-          title="Remove drivers"
-          description={hasOpenTrip ? 'Not possible while the truck has an open trip' : undefined}
-          disabled={hasOpenTrip}
-          left={(props) => (
-            <List.Icon {...props} icon="account-remove" color={hasOpenTrip ? undefined : theme.colors.error} />
-          )}
-          onPress={() => setSheet('removeDrivers')}
-        />
+      <View style={styles.actions}>
+        <Button mode="contained-tonal" icon="account-edit" onPress={() => setSheet('assignDrivers')}>
+          {hasDriver ? 'Change drivers' : 'Assign drivers'}
+        </Button>
+        {hasDriver && (
+          <Button
+            mode="outlined"
+            icon="account-remove"
+            textColor={theme.colors.error}
+            disabled={hasOpenTrip}
+            onPress={() => setSheet('removeDrivers')}
+          >
+            Remove drivers
+          </Button>
+        )}
+      </View>
+      {hasDriver && hasOpenTrip && (
+        <Text variant="bodySmall" style={[styles.hint, { color: theme.colors.onSurfaceVariant }]}>
+          Not possible while the truck has an open trip
+        </Text>
       )}
 
       <List.Subheader>Route stops</List.Subheader>
       {canReschedule && (
-        <List.Item
-          title={rescheduling ? 'Changing trip start…' : 'Change trip start'}
-          description="Possible until the truck starts moving"
-          disabled={rescheduling}
-          left={(props) => <List.Icon {...props} icon="calendar-clock" color={theme.colors.primary} />}
-          onPress={() => void changeTripStart()}
-        />
+        <>
+          <View style={styles.actions}>
+            <Button
+              mode="contained-tonal"
+              icon="calendar-clock"
+              disabled={rescheduling}
+              onPress={() => void changeTripStart()}
+            >
+              {rescheduling ? 'Changing trip start…' : 'Change trip start'}
+            </Button>
+          </View>
+          <Text variant="bodySmall" style={[styles.hint, { color: theme.colors.onSurfaceVariant }]}>
+            Possible until the truck starts moving
+          </Text>
+        </>
       )}
       {stops.length > 0 && (
         <View style={styles.map}>
@@ -234,11 +248,11 @@ export function TruckDetailScreen({ truckId, onLoaded, onSelectDriver }: Props) 
             <EmptyState message="Driver has not started driving yet — no compliance ledger." />
           )}
           {ledger && (
-            <List.Item
-              title="Check eligibility"
-              left={(props) => <List.Icon {...props} icon="clock-check-outline" color={theme.colors.primary} />}
-              onPress={() => setSheet('eligibility')}
-            />
+            <View style={styles.actions}>
+              <Button mode="contained-tonal" icon="clock-check-outline" onPress={() => setSheet('eligibility')}>
+                Check eligibility
+              </Button>
+            </View>
           )}
         </>
       )}
@@ -301,5 +315,7 @@ const styles = StyleSheet.create({
   meta: { flexDirection: 'row', flexWrap: 'wrap', gap: 4 },
   alert: { paddingHorizontal: 16, paddingTop: 12 },
   map: { paddingHorizontal: 16, paddingBottom: 8 },
+  actions: { flexDirection: 'row', flexWrap: 'wrap', gap: 8, paddingHorizontal: 16, paddingVertical: 8 },
+  hint: { paddingHorizontal: 16, paddingBottom: 8 },
   ledger: { paddingHorizontal: 16, paddingBottom: 16 },
 })

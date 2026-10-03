@@ -114,11 +114,13 @@ it('deactivates the truck from its own screen and reloads', async () => {
   await waitFor(() => expect(callsTo(api, 'GET', '/trucks/t1')).toBe(2))
 })
 
-it('cannot activate a truck that has no driver', async () => {
+it('explains why a truck that has no driver cannot be activated', async () => {
   installFakeApi({ 'GET /trucks/t1': truck({ isActive: false, primaryDriver: null, stops: [] }) })
   renderWithApp(<TruckDetailScreen truckId="t1" onLoaded={jest.fn()} onSelectDriver={jest.fn()} />)
-  expect((await screen.findByLabelText('FL-07 active')).props.disabled).toBe(true)
-  expect(screen.getByText('Needs a driver to activate')).toBeOnTheScreen()
+  expect(await screen.findByText('Needs a driver to activate')).toBeOnTheScreen()
+  fireEvent(screen.getByLabelText('FL-07 active'), 'valueChange', true)
+  expect(await screen.findByText("FL-07 can't be activated")).toBeOnTheScreen()
+  expect(screen.getByRole('button', { name: 'Assign driver' })).toBeOnTheScreen()
 })
 
 it('reloads when the sim clock advances', async () => {
