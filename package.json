@@ -2,6 +2,10 @@
   "name": "freight-marketplace",
   "private": true,
   "workspaces": [
-    "frontend/*"
+    "frontend/api-client",
+    "frontend/shipment",
+    "frontend/fleetmanagement/core",
+    "frontend/fleetmanagement/web",
+    "frontend/fleetmanagement/mobile"
   ]
 }

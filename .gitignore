@@ -13,10 +13,10 @@ build/
 *.tsbuildinfo
 
 # Playwright
-/frontend/fleetmanagement/test-results/
-/frontend/fleetmanagement/playwright-report/
-/frontend/fleetmanagement/blob-report/
-/frontend/fleetmanagement/playwright/.cache/
+/frontend/fleetmanagement/web/test-results/
+/frontend/fleetmanagement/web/playwright-report/
+/frontend/fleetmanagement/web/blob-report/
+/frontend/fleetmanagement/web/playwright/.cache/
 
 # Env / secrets
 .env

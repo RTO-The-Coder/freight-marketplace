@@ -29,10 +29,26 @@ jobs:
       - name: Install dependencies
         run: npm ci
 
-      - name: Typecheck
-        working-directory: frontend/fleetmanagement
+      - name: Typecheck core
+        working-directory: frontend/fleetmanagement/core
+        run: npx tsc --noEmit
+
+      - name: Vitest unit tests (core)
+        working-directory: frontend/fleetmanagement/core
+        run: npm test
+
+      - name: Typecheck web
+        working-directory: frontend/fleetmanagement/web
         run: npx tsc --noEmit -p tsconfig.app.json
 
-      - name: Vitest unit tests
-        working-directory: frontend/fleetmanagement
+      - name: Vitest unit tests (web)
+        working-directory: frontend/fleetmanagement/web
         run: npm test
+
+      - name: Typecheck mobile
+        working-directory: frontend/fleetmanagement/mobile
+        run: npx tsc --noEmit
+
+      - name: Jest component tests (mobile)
+        working-directory: frontend/fleetmanagement/mobile
+        run: npx jest --ci
