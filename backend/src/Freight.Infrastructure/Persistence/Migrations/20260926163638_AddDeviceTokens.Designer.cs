@@ -12,8 +12,8 @@ using Npgsql.EntityFrameworkCore.PostgreSQL.Metadata;
 namespace Freight.Infrastructure.Persistence.Migrations
 {
     [DbContext(typeof(FreightDbContext))]
-    [Migration("20260927090319_AddDriverWeeklyRestTracking")]
-    partial class AddDriverWeeklyRestTracking
+    [Migration("20260926163638_AddDeviceTokens")]
+    partial class AddDeviceTokens
     {
         /// <inheritdoc />
         protected override void BuildTargetModel(ModelBuilder modelBuilder)
@@ -407,10 +407,6 @@ namespace Freight.Infrastructure.Persistence.Migrations
                                 .HasColumnType("text")
                                 .HasColumnName("ComplianceState_CurrentActivity");
 
-                            b1.Property<int>("CurrentActivityLengthMinutes")
-                                .HasColumnType("integer")
-                                .HasColumnName("ComplianceState_CurrentActivityLengthMinutes");
-
                             b1.Property<int>("DailyDrivingMinutesToday")
                                 .HasColumnType("integer")
                                 .HasColumnName("ComplianceState_DailyDrivingMinutesToday");
@@ -427,14 +423,6 @@ namespace Freight.Infrastructure.Persistence.Migrations
                                 .HasColumnType("timestamp with time zone")
                                 .HasColumnName("ComplianceState_LastEvaluatedSimulatedTime");
 
-                            b1.Property<DateTime>("LastRestEndedAt")
-                                .HasColumnType("timestamp with time zone")
-                                .HasColumnName("ComplianceState_LastRestEndedAt");
-
-                            b1.Property<DateTime>("LastWeeklyRestEndedAt")
-                                .HasColumnType("timestamp with time zone")
-                                .HasColumnName("ComplianceState_LastWeeklyRestEndedAt");
-
                             b1.Property<int>("MinutesRemainingInCurrentActivity")
                                 .HasColumnType("integer")
                                 .HasColumnName("ComplianceState_MinutesRemainingInCurrentActivity");
@@ -450,10 +438,6 @@ namespace Freight.Infrastructure.Persistence.Migrations
                             b1.Property<int>("WeeklyDrivingMinutesThisWeek")
                                 .HasColumnType("integer")
                                 .HasColumnName("ComplianceState_WeeklyDrivingMinutesThisWeek");
-
-                            b1.Property<int>("WeeklyRestMinutesOwed")
-                                .HasColumnType("integer")
-                                .HasColumnName("ComplianceState_WeeklyRestMinutesOwed");
 
                             b1.HasKey("DriverId");
 

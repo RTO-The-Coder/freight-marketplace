@@ -10,6 +10,8 @@ using Freight.Domain.Fleet.ValueObjects;
 using Freight.Domain.Tracking.Services;
 using Freight.Domain.ValueObjects;
 using Freight.Domain.ValueObjects.RuleVariants;
+using Freight.Domain.Notifications.Abstractions;
+using Moq;
 
 namespace Freight.Application.Tests.Integration;
 
@@ -48,7 +50,7 @@ public sealed class CapacityAndComplianceAcrossAdvanceTests
 
         var shipper = Domain.Client.Shipper.Create(Guid.NewGuid(), "Acme Shipping", "contact@acme.com");
         unitOfWork.ShippersRepo.Add(shipper);
-        var bookHandler = new BookShipmentHandler(unitOfWork, timeProvider);
+        var bookHandler = new BookShipmentHandler(unitOfWork, timeProvider, new Mock<INotificationSender>().Object);
         var pickupA = GeoLocation.Create(52.52, 13.405);
         var deliveryA = GeoLocation.Create(51.0, 12.0);
         var pickupB = GeoLocation.Create(50.5, 11.5);

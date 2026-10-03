@@ -76,6 +76,30 @@ namespace Freight.Infrastructure.Persistence.Migrations
                     b.ToTable("Shippers", (string)null);
                 });
 
+            modelBuilder.Entity("Freight.Domain.Fleet.DeviceToken", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid");
+
+                    b.Property<string>("Fid")
+                        .IsRequired()
+                        .HasColumnType("text");
+
+                    b.Property<DateTime>("RegisteredAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<Guid>("TruckingCompanyId")
+                        .HasColumnType("uuid");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("TruckingCompanyId")
+                        .IsUnique();
+
+                    b.ToTable("DeviceTokens", (string)null);
+                });
+
             modelBuilder.Entity("Freight.Domain.Fleet.Driver", b =>
                 {
                     b.Property<Guid>("Id")

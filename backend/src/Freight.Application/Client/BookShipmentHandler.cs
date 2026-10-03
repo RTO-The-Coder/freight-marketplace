@@ -1,6 +1,8 @@
 using Freight.Domain.Common;
 using Freight.Domain.Fleet;
 using Freight.Domain.Fleet.Enums;
+using Freight.Domain.Notifications;
+using Freight.Domain.Notifications.Abstractions;
 using Freight.Domain.ValueObjects;
 using ShipmentAggregate = Freight.Domain.Client.Shipment;
 
@@ -17,7 +19,8 @@ public sealed record BookShipmentRequest(
 
 public sealed record BookShipmentResponse(Guid ShipmentId);
 
-public sealed class BookShipmentHandler(IUnitOfWork unitOfWork, TimeProvider timeProvider)
+public sealed class BookShipmentHandler(
+    IUnitOfWork unitOfWork, TimeProvider timeProvider, INotificationSender notificationSender)
 {
     public async Task<BookShipmentResponse> BookShipmentAsync(BookShipmentRequest request, CancellationToken cancellationToken = default)
     {
@@ -36,6 +39,12 @@ public sealed class BookShipmentHandler(IUnitOfWork unitOfWork, TimeProvider tim
 
         unitOfWork.Shipments.Add(shipment);
         await unitOfWork.SaveChangesAsync(cancellationToken);
+
+        // Unconditional - every TruckingCompany, no eligibility filtering (ADR 0007).
+        // Runs synchronously since there is no search here, just a notification send.
+        var summary = new ShipmentNotificationSummary(
+            shipment.Id, shipment.PickupLocation, shipment.RequiredTruckType, shipment.PickupWindow);
+        await notificationSender.NotifyAllCompaniesAsync(summary, cancellationToken);
 
         return new BookShipmentResponse(shipment.Id);
     }

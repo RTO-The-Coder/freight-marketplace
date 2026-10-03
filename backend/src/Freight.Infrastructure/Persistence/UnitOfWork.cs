@@ -17,6 +17,7 @@ public sealed class UnitOfWork : IUnitOfWork
     {
         _dbContext = dbContext;
         TruckingCompanies = new TruckingCompanyRepository(dbContext);
+        DeviceTokens = new DeviceTokenRepository(dbContext);
         Shippers = new ShipperRepository(dbContext);
         Trucks = new TruckRepository(dbContext);
         Trips = new TripRepository(dbContext);
@@ -26,6 +27,8 @@ public sealed class UnitOfWork : IUnitOfWork
     }
 
     public ITruckingCompanyRepository TruckingCompanies { get; }
+
+    public IDeviceTokenRepository DeviceTokens { get; }
 
     public IShipperRepository Shippers { get; }
 

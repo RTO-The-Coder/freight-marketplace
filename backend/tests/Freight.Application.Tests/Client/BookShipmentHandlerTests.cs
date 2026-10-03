@@ -3,6 +3,8 @@ using Freight.Domain.Client;
 using Freight.Domain.Client.Abstractions;
 using Freight.Domain.Common;
 using Freight.Domain.Fleet.Enums;
+using Freight.Domain.Notifications;
+using Freight.Domain.Notifications.Abstractions;
 using Freight.Domain.ValueObjects;
 using Moq;
 
@@ -30,7 +32,7 @@ public sealed class BookShipmentHandlerTests
         var clockTime = new DateTime(2026, 1, 1, 6, 0, 0);
         FakeSimulationClock.SetUp(unitOfWork, clockTime);
 
-        var handler = new BookShipmentHandler(unitOfWork.Object, new FakeTimeProvider(DateTimeOffset.UtcNow));
+        var handler = new BookShipmentHandler(unitOfWork.Object, new FakeTimeProvider(DateTimeOffset.UtcNow), new Mock<INotificationSender>().Object);
         var request = SomeRequest();
 
         var response = await handler.BookShipmentAsync(request);
@@ -64,11 +66,47 @@ public sealed class BookShipmentHandlerTests
             .ReturnsAsync((Func<DateTime> seed, CancellationToken _) => Freight.Domain.Simulation.SimulationClock.Create(seed()));
         unitOfWork.SetupGet(u => u.SimulationClock).Returns(simulationClockRepo.Object);
 
-        var handler = new BookShipmentHandler(unitOfWork.Object, new FakeTimeProvider(seedTimeOffset));
+        var handler = new BookShipmentHandler(unitOfWork.Object, new FakeTimeProvider(seedTimeOffset), new Mock<INotificationSender>().Object);
 
         await handler.BookShipmentAsync(SomeRequest());
 
         Assert.NotNull(addedShipment);
         Assert.Equal(seedTimeOffset.UtcDateTime.AddMinutes(30), addedShipment!.OfferDeadline);
+    }
+
+    [Fact]
+    public async Task BookShipmentAsync_NotifiesAllCompaniesWithSummaryAfterSaving()
+    {
+        var shipments = new Mock<IShipmentRepository>();
+        var unitOfWork = new Mock<IUnitOfWork>();
+        unitOfWork.SetupGet(u => u.Shipments).Returns(shipments.Object);
+        FakeSimulationClock.SetUp(unitOfWork, new DateTime(2026, 1, 1, 6, 0, 0));
+
+        var calls = new List<string>();
+        unitOfWork.Setup(u => u.SaveChangesAsync(It.IsAny<CancellationToken>()))
+            .Callback(() => calls.Add("save"))
+            .ReturnsAsync(1);
+        var notificationSender = new Mock<INotificationSender>();
+        ShipmentNotificationSummary? sent = null;
+        notificationSender
+            .Setup(n => n.NotifyAllCompaniesAsync(It.IsAny<ShipmentNotificationSummary>(), It.IsAny<CancellationToken>()))
+            .Callback<ShipmentNotificationSummary, CancellationToken>((summary, _) =>
+            {
+                calls.Add("notify");
+                sent = summary;
+            })
+            .Returns(Task.CompletedTask);
+
+        var handler = new BookShipmentHandler(unitOfWork.Object, new FakeTimeProvider(DateTimeOffset.UtcNow), notificationSender.Object);
+        var request = SomeRequest();
+
+        var response = await handler.BookShipmentAsync(request);
+
+        Assert.Equal(["save", "notify"], calls);
+        Assert.NotNull(sent);
+        Assert.Equal(response.ShipmentId, sent!.ShipmentId);
+        Assert.Same(request.PickupLocation, sent.PickupLocation);
+        Assert.Equal(request.RequiredTruckType, sent.RequiredTruckType);
+        Assert.Same(request.PickupWindow, sent.PickupWindow);
     }
 }

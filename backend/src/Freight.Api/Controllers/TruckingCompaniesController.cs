@@ -10,7 +10,8 @@ public sealed class TruckingCompaniesController(
     GetTruckingCompaniesHandler getTruckingCompaniesHandler,
     GetTruckingCompanyByIdHandler getTruckingCompanyByIdHandler,
     GetFleetTreeHandler getFleetTreeHandler,
-    EvaluateShipmentForCompanyHandler evaluateShipmentForCompanyHandler) : ControllerBase
+    EvaluateShipmentForCompanyHandler evaluateShipmentForCompanyHandler,
+    RegisterDeviceTokenHandler registerDeviceTokenHandler) : ControllerBase
 {
     [HttpGet]
     public async Task<ActionResult<GetTruckingCompaniesResponse>> GetTruckingCompanies(CancellationToken cancellationToken)
@@ -41,5 +42,16 @@ public sealed class TruckingCompaniesController(
         var response = await evaluateShipmentForCompanyHandler.EvaluateAsync(
             new EvaluateShipmentForCompanyRequest(shipmentId, companyId), cancellationToken);
         return Ok(response);
+    }
+
+    public sealed record RegisterDeviceTokenBody(string Fid);
+
+    [HttpPost("{companyId:guid}/device-token")]
+    public async Task<IActionResult> RegisterDeviceToken(
+        Guid companyId, RegisterDeviceTokenBody body, CancellationToken cancellationToken)
+    {
+        await registerDeviceTokenHandler.RegisterAsync(
+            new RegisterDeviceTokenRequest(companyId, body.Fid), cancellationToken);
+        return NoContent();
     }
 }

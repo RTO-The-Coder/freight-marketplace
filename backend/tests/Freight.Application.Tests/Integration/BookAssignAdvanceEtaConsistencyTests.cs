@@ -8,6 +8,8 @@ using Freight.Domain.Fleet.Services;
 using Freight.Domain.Tracking.Services;
 using Freight.Domain.ValueObjects;
 using Freight.Domain.ValueObjects.RuleVariants;
+using Freight.Domain.Notifications.Abstractions;
+using Moq;
 
 namespace Freight.Application.Tests.Integration;
 
@@ -49,7 +51,7 @@ public sealed class BookAssignAdvanceEtaConsistencyTests
         // Book a shipment.
         var shipper = Domain.Client.Shipper.Create(Guid.NewGuid(), "Acme Shipping", "contact@acme.com");
         unitOfWork.ShippersRepo.Add(shipper);
-        var bookHandler = new BookShipmentHandler(unitOfWork, timeProvider);
+        var bookHandler = new BookShipmentHandler(unitOfWork, timeProvider, new Mock<INotificationSender>().Object);
         var bookResponse = await bookHandler.BookShipmentAsync(new BookShipmentRequest(
             shipper.Id,
             GeoLocation.Create(52.52, 13.405),

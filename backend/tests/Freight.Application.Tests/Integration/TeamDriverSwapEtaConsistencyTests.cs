@@ -8,6 +8,8 @@ using Freight.Domain.Fleet.Services;
 using Freight.Domain.Tracking.Services;
 using Freight.Domain.ValueObjects;
 using Freight.Domain.ValueObjects.RuleVariants;
+using Freight.Domain.Notifications.Abstractions;
+using Moq;
 
 namespace Freight.Application.Tests.Integration;
 
@@ -46,7 +48,7 @@ public sealed class TeamDriverSwapEtaConsistencyTests
 
         var shipper = Domain.Client.Shipper.Create(Guid.NewGuid(), "Acme Shipping", "contact@acme.com");
         unitOfWork.ShippersRepo.Add(shipper);
-        var bookResponse = await new BookShipmentHandler(unitOfWork, timeProvider).BookShipmentAsync(new BookShipmentRequest(
+        var bookResponse = await new BookShipmentHandler(unitOfWork, timeProvider, new Mock<INotificationSender>().Object).BookShipmentAsync(new BookShipmentRequest(
             shipper.Id, GeoLocation.Create(52.52, 13.405), GeoLocation.Create(48.1351, 11.582),
             Capacity.Create(100, 1), TruckType.Refrigerated,
             TimeWindow.Create(ClockStart, ClockStart.AddDays(2)), TimeWindow.Create(ClockStart, ClockStart.AddDays(3))));

@@ -11,6 +11,8 @@ public interface IUnitOfWork
 {
     ITruckingCompanyRepository TruckingCompanies { get; }
 
+    IDeviceTokenRepository DeviceTokens { get; }
+
     IShipperRepository Shippers { get; }
 
     ITruckRepository Trucks { get; }

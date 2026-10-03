@@ -19,6 +19,7 @@ namespace Freight.Application.Tests.Integration.TestSupport;
 internal sealed class FakeUnitOfWork : IUnitOfWork
 {
     public FakeTruckingCompanyRepository TruckingCompaniesRepo { get; } = new();
+    public FakeDeviceTokenRepository DeviceTokensRepo { get; } = new();
     public FakeShipperRepository ShippersRepo { get; } = new();
     public FakeTruckRepository TrucksRepo { get; } = new();
     public FakeTripRepository TripsRepo { get; } = new();
@@ -27,6 +28,7 @@ internal sealed class FakeUnitOfWork : IUnitOfWork
     public FakeSimulationClockRepository SimulationClockRepo { get; } = new();
 
     public ITruckingCompanyRepository TruckingCompanies => TruckingCompaniesRepo;
+    public IDeviceTokenRepository DeviceTokens => DeviceTokensRepo;
     public IShipperRepository Shippers => ShippersRepo;
     public ITruckRepository Trucks => TrucksRepo;
     public ITripRepository Trips => TripsRepo;
@@ -62,6 +64,15 @@ internal sealed class FakeShipperRepository : FakeRepository<Shipper>, IShipperR
 {
     public Task<IReadOnlyList<Shipper>> GetAllAsync(CancellationToken cancellationToken = default) =>
         Task.FromResult<IReadOnlyList<Shipper>>([.. Items.Values]);
+}
+
+internal sealed class FakeDeviceTokenRepository : FakeRepository<DeviceToken>, IDeviceTokenRepository
+{
+    public Task<DeviceToken?> GetByTruckingCompanyIdAsync(Guid truckingCompanyId, CancellationToken cancellationToken = default) =>
+        Task.FromResult(Items.Values.FirstOrDefault(t => t.TruckingCompanyId == truckingCompanyId));
+
+    public Task<IReadOnlyList<DeviceToken>> GetAllAsync(CancellationToken cancellationToken = default) =>
+        Task.FromResult<IReadOnlyList<DeviceToken>>([.. Items.Values]);
 }
 
 internal sealed class FakeTruckRepository : FakeRepository<Truck>, ITruckRepository

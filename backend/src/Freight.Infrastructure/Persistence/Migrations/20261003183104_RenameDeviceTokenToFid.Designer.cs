@@ -12,8 +12,8 @@ using Npgsql.EntityFrameworkCore.PostgreSQL.Metadata;
 namespace Freight.Infrastructure.Persistence.Migrations
 {
     [DbContext(typeof(FreightDbContext))]
-    [Migration("20260927090319_AddDriverWeeklyRestTracking")]
-    partial class AddDriverWeeklyRestTracking
+    [Migration("20261003183104_RenameDeviceTokenToFid")]
+    partial class RenameDeviceTokenToFid
     {
         /// <inheritdoc />
         protected override void BuildTargetModel(ModelBuilder modelBuilder)
@@ -85,12 +85,12 @@ namespace Freight.Infrastructure.Persistence.Migrations
                         .ValueGeneratedOnAdd()
                         .HasColumnType("uuid");
 
-                    b.Property<DateTime>("RegisteredAt")
-                        .HasColumnType("timestamp with time zone");
-
-                    b.Property<string>("Token")
+                    b.Property<string>("Fid")
                         .IsRequired()
                         .HasColumnType("text");
+
+                    b.Property<DateTime>("RegisteredAt")
+                        .HasColumnType("timestamp with time zone");
 
                     b.Property<Guid>("TruckingCompanyId")
                         .HasColumnType("uuid");
