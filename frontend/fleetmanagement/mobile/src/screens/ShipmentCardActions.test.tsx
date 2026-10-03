@@ -1,5 +1,5 @@
 import { fireEvent, screen, waitFor } from '@testing-library/react-native'
-import { BASE, callsTo, installFakeApi, renderWithApp } from '../test/helpers'
+import { BASE, callsTo, deviceCompany, installFakeApi, renderWithApp } from '../test/helpers'
 import { OpenShipmentsScreen } from './OpenShipmentsScreen'
 
 // 12,000 kg / 45 m³ Flatbed — only a Large Flatbed can carry it.
@@ -44,19 +44,18 @@ const fleet = [
 function routes(extra: Record<string, unknown> = {}) {
   return {
     'GET /shipments/pending': { shipments: [shipment] },
-    'GET /companies': { companies: [{ companyId: 'c1', name: 'Northwind Freight' }] },
     'GET /trucks?truckingCompanyId=c1': { trucks: fleet },
     ...extra,
   }
 }
 
+// No company choice: every action works on this device's company (c1, Northwind Freight).
 async function openCardAction(label: string) {
   fireEvent.press(await screen.findByText('Flatbed'))
   fireEvent.press(await screen.findByText(label))
-  fireEvent.press(await screen.findByText('Northwind Freight'))
 }
 
-it('check eligibility: after choosing a company, lists the feasible trucks by name', async () => {
+it("check eligibility: lists the device company's feasible trucks by name", async () => {
   installFakeApi(
     routes({
       'GET /companies/c1/shipments/sh1/evaluate': {
@@ -67,7 +66,7 @@ it('check eligibility: after choosing a company, lists the feasible trucks by na
       },
     }),
   )
-  renderWithApp(<OpenShipmentsScreen />)
+  renderWithApp(<OpenShipmentsScreen company={deviceCompany} />)
   await openCardAction('Check eligibility')
 
   expect(await screen.findByText('Eligibility at Northwind Freight')).toBeOnTheScreen()
@@ -78,14 +77,14 @@ it('check eligibility: after choosing a company, lists the feasible trucks by na
 
 it('check eligibility: says so when no truck can take it', async () => {
   installFakeApi(routes({ 'GET /companies/c1/shipments/sh1/evaluate': { trucks: [{ truckId: 't1', isFeasible: false }] } }))
-  renderWithApp(<OpenShipmentsScreen />)
+  renderWithApp(<OpenShipmentsScreen company={deviceCompany} />)
   await openCardAction('Check eligibility')
   expect(await screen.findByText('No truck at Northwind Freight can currently take this shipment.')).toBeOnTheScreen()
 })
 
 it('check eligibility: shows the API error', async () => {
   installFakeApi(routes({ 'GET /companies/c1/shipments/sh1/evaluate': new Error('Routing unavailable') }))
-  renderWithApp(<OpenShipmentsScreen />)
+  renderWithApp(<OpenShipmentsScreen company={deviceCompany} />)
   await openCardAction('Check eligibility')
   expect(await screen.findByText('Routing unavailable')).toBeOnTheScreen()
 })
@@ -104,7 +103,7 @@ it('assign: offers only ready trucks that fit, opens the form with the shipment 
       'POST /trucks/t1/assign-shipment': { stopCount: 3 },
     }),
   )
-  renderWithApp(<OpenShipmentsScreen />)
+  renderWithApp(<OpenShipmentsScreen company={deviceCompany} />)
   await openCardAction('Assign to a truck')
 
   expect(await screen.findByText('Choose a truck')).toBeOnTheScreen()
@@ -130,7 +129,7 @@ it('assign: offers only ready trucks that fit, opens the form with the shipment 
 
 it('assign: explains when the company has no truck that can take it', async () => {
   installFakeApi(routes({ 'GET /trucks?truckingCompanyId=c1': { trucks: fleet.slice(1) } }))
-  renderWithApp(<OpenShipmentsScreen />)
+  renderWithApp(<OpenShipmentsScreen company={deviceCompany} />)
   await openCardAction('Assign to a truck')
   expect(
     await screen.findByText(

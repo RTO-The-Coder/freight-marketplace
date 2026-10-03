@@ -5,10 +5,10 @@ export default function TabsLayout() {
   return (
     <Tabs screenOptions={{ headerShown: false }}>
       <Tabs.Screen
-        name="companies"
+        name="fleet"
         options={{
-          title: 'Companies',
-          tabBarIcon: ({ color, size }) => <MaterialCommunityIcons name="domain" color={color} size={size} />,
+          title: 'Fleet',
+          tabBarIcon: ({ color, size }) => <MaterialCommunityIcons name="truck-outline" color={color} size={size} />,
         }}
       />
       <Tabs.Screen

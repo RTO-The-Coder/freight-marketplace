@@ -7,7 +7,7 @@ import { CompanyLogo } from '../components/CompanyLogo'
 import { EmptyState, ErrorState, LoadingState, errorMessage } from '../components/ScreenState'
 import { usePullToRefresh } from '../components/usePullToRefresh'
 
-export function CompaniesScreen({ onSelect }: { onSelect: (companyId: string) => void }) {
+export function CompaniesScreen({ onSelect }: { onSelect: (company: TruckingCompanySummaryDto) => void }) {
   const [companies, setCompanies] = useState<TruckingCompanySummaryDto[] | null>(null)
   const [error, setError] = useState<string | null>(null)
 
@@ -48,7 +48,7 @@ export function CompaniesScreen({ onSelect }: { onSelect: (companyId: string) =>
             </View>
           )}
           right={(props) => <List.Icon {...props} icon="chevron-right" />}
-          onPress={() => onSelect(item.companyId)}
+          onPress={() => onSelect(item)}
         />
       )}
     />

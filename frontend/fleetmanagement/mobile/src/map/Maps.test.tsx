@@ -1,5 +1,5 @@
 import { fireEvent, screen, waitFor, within } from '@testing-library/react-native'
-import { installFakeApi, renderWithApp } from '../test/helpers'
+import { deviceCompany, installFakeApi, renderWithApp } from '../test/helpers'
 import { CompanyDetailScreen } from '../screens/CompanyDetailScreen'
 import { OpenShipmentsScreen } from '../screens/OpenShipmentsScreen'
 import { TruckDetailScreen } from '../screens/TruckDetailScreen'
@@ -180,7 +180,7 @@ it('shipment card: the expanded card shows the pickup → delivery route', async
     },
     [geometryKey(55.1, 19.1, 55.6, 19.6)]: { distanceKm: 1, timeTicks: 1, path: [{ lat: 55.1, lng: 19.1 }, { lat: 55.6, lng: 19.6 }] },
   })
-  renderWithApp(<OpenShipmentsScreen />)
+  renderWithApp(<OpenShipmentsScreen company={deviceCompany} />)
   expect(screen.queryByTestId('maplibre-map')).toBeNull()
 
   fireEvent.press(await screen.findByText('Flatbed'))

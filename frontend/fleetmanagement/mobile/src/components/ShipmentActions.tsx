@@ -6,7 +6,7 @@ import type {
   TruckSummaryDto,
 } from '@freight/api-client'
 import { useEffect, useState } from 'react'
-import { ScrollView, StyleSheet, View } from 'react-native'
+import { ScrollView, StyleSheet } from 'react-native'
 import { Button, List, Text, useTheme } from 'react-native-paper'
 import {
   fleetApi,
@@ -16,19 +16,16 @@ import {
 } from '@freight/fleetmanagement-core'
 import { AssignShipmentSheet } from './AssignShipmentSheet'
 import { BottomSheet } from './BottomSheet'
-import { CompanyLogo } from './CompanyLogo'
 import { LoadingState, errorMessage } from './ScreenState'
 
 export type ShipmentAction = 'assign' | 'eligibility'
 
-type Step =
-  | { kind: 'company' }
-  | { kind: 'eligibility'; company: TruckingCompanySummaryDto }
-  | { kind: 'truck'; company: TruckingCompanySummaryDto }
-  | { kind: 'assign'; truck: TruckDetailDto }
+type Step = { kind: 'start' } | { kind: 'assign'; truck: TruckDetailDto }
 
 interface Props {
   shipment: ShipmentSummaryDto
+  /** This device's company — every action works on its fleet. */
+  company: TruckingCompanySummaryDto
   /** The action the user started; null when nothing is open. */
   action: ShipmentAction | null
   onClose: () => void
@@ -36,27 +33,24 @@ interface Props {
 }
 
 /**
- * Shipments-tab actions. Both start by choosing a company in a bottom sheet:
- * - Check eligibility → which of that company's trucks could take the shipment.
+ * Shipments-tab actions, always for this device's company:
+ * - Check eligibility → which of its trucks could take the shipment.
  * - Assign to a truck → choose one of its ready trucks that fits → the full-screen assign form.
  */
-export function ShipmentActions({ shipment, action, onClose, onAssigned }: Props) {
-  const [step, setStep] = useState<Step>({ kind: 'company' })
+export function ShipmentActions({ shipment, company, action, onClose, onAssigned }: Props) {
+  const [step, setStep] = useState<Step>({ kind: 'start' })
   const [loadingTruck, setLoadingTruck] = useState(false)
   const [truckError, setTruckError] = useState<string | null>(null)
 
-  // Every new action starts again at the company choice.
+  // Every new action starts from the beginning.
   useEffect(() => {
     if (action) {
-      setStep({ kind: 'company' })
+      setStep({ kind: 'start' })
       setTruckError(null)
     }
   }, [action])
 
   if (!action) return null
-
-  const chooseCompany = (company: TruckingCompanySummaryDto) =>
-    setStep(action === 'eligibility' ? { kind: 'eligibility', company } : { kind: 'truck', company })
 
   const chooseTruck = async (truckId: string) => {
     setLoadingTruck(true)
@@ -72,13 +66,12 @@ export function ShipmentActions({ shipment, action, onClose, onAssigned }: Props
 
   return (
     <>
-      <CompanySheet visible={step.kind === 'company'} onClose={onClose} onChoose={chooseCompany} />
-      {step.kind === 'eligibility' && (
-        <EligibilityResultSheet company={step.company} shipmentId={shipment.shipmentId} onClose={onClose} />
+      {step.kind === 'start' && action === 'eligibility' && (
+        <EligibilityResultSheet company={company} shipmentId={shipment.shipmentId} onClose={onClose} />
       )}
-      {step.kind === 'truck' && (
+      {step.kind === 'start' && action === 'assign' && (
         <TruckChoiceSheet
-          company={step.company}
+          company={company}
           shipment={shipment}
           busy={loadingTruck}
           error={truckError}
@@ -96,56 +89,6 @@ export function ShipmentActions({ shipment, action, onClose, onAssigned }: Props
         />
       )}
     </>
-  )
-}
-
-function CompanySheet({
-  visible,
-  onClose,
-  onChoose,
-}: {
-  visible: boolean
-  onClose: () => void
-  onChoose: (company: TruckingCompanySummaryDto) => void
-}) {
-  const [companies, setCompanies] = useState<TruckingCompanySummaryDto[] | null>(null)
-  const [error, setError] = useState<string | null>(null)
-
-  useEffect(() => {
-    if (!visible) return
-    setError(null)
-    truckingCompaniesApi
-      .getTruckingCompanies()
-      .then((r) => setCompanies(r.companies))
-      .catch((err) => setError(errorMessage(err, 'Failed to load trucking companies.')))
-  }, [visible])
-
-  return (
-    <BottomSheet title="Choose a company" visible={visible} onClose={onClose}>
-      {error ? (
-        <SheetError message={error} />
-      ) : !companies ? (
-        <LoadingState />
-      ) : companies.length === 0 ? (
-        <Text variant="bodyMedium">No trucking companies have been provisioned yet.</Text>
-      ) : (
-        <ScrollView style={styles.list}>
-          {companies.map((c) => (
-            <List.Item
-              key={c.companyId}
-              title={c.name}
-              left={(props) => (
-                <View style={props.style}>
-                  <CompanyLogo name={c.name} />
-                </View>
-              )}
-              onPress={() => onChoose(c)}
-            />
-          ))}
-        </ScrollView>
-      )}
-      <CloseButton onClose={onClose} />
-    </BottomSheet>
   )
 }
 

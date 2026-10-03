@@ -1,4 +1,4 @@
-import type { ShipmentSummaryDto } from '@freight/api-client'
+import type { ShipmentSummaryDto, TruckingCompanySummaryDto } from '@freight/api-client'
 import { useCallback, useEffect, useState } from 'react'
 import { FlatList, RefreshControl, StyleSheet, View } from 'react-native'
 import { Button, Card, ProgressBar, Text } from 'react-native-paper'
@@ -15,7 +15,8 @@ import { ShipmentActions, type ShipmentAction } from '../components/ShipmentActi
 import { ShipmentRouteMap } from '../map/ShipmentRouteMap'
 import { usePullToRefresh } from '../components/usePullToRefresh'
 
-export function OpenShipmentsScreen() {
+/** `company` is this device's company: card actions check and assign against its fleet. */
+export function OpenShipmentsScreen({ company }: { company: TruckingCompanySummaryDto }) {
   const { currentTime, simVersion } = useSimClock()
   const [shipments, setShipments] = useState<ShipmentSummaryDto[] | null>(null)
   const [error, setError] = useState<string | null>(null)
@@ -100,6 +101,7 @@ export function OpenShipmentsScreen() {
     {active && (
       <ShipmentActions
         shipment={active.shipment}
+        company={company}
         action={active.action}
         onClose={() => setActive(null)}
         onAssigned={() => {

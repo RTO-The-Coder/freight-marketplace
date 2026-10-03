@@ -7,7 +7,7 @@ const companies = [
   { companyId: 'c2', name: 'Kessler Logistik' },
 ]
 
-it('lists the companies and opens the one tapped', async () => {
+it('lists the companies and reports the one tapped', async () => {
   installFakeApi({ 'GET /companies': { companies } })
   const onSelect = jest.fn()
   renderWithApp(<CompaniesScreen onSelect={onSelect} />)
@@ -16,7 +16,7 @@ it('lists the companies and opens the one tapped', async () => {
   // The logo is decorative and hidden from screen readers, so look for it explicitly.
   expect(screen.getByText('NF', { includeHiddenElements: true })).toBeTruthy()
   fireEvent.press(screen.getByText('Kessler Logistik'))
-  expect(onSelect).toHaveBeenCalledWith('c2')
+  expect(onSelect).toHaveBeenCalledWith(companies[1])
 })
 
 it('says so when there are no companies', async () => {

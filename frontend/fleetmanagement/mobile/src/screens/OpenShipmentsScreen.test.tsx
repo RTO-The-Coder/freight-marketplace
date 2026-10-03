@@ -1,5 +1,5 @@
 import { fireEvent, screen, waitFor } from '@testing-library/react-native'
-import { advanceClock, advanceResponse, callsTo, installFakeApi, renderWithApp } from '../test/helpers'
+import { advanceClock, advanceResponse, callsTo, deviceCompany, installFakeApi, renderWithApp } from '../test/helpers'
 import { OpenShipmentsScreen } from './OpenShipmentsScreen'
 
 const shipment = (shipmentId: string, requiredTruckType: string, pickup: string, extra = {}) => ({
@@ -28,7 +28,7 @@ const shipments = [
 
 it('lists open shipments earliest pickup first', async () => {
   installFakeApi({ 'GET /shipments/pending': { shipments } })
-  renderWithApp(<OpenShipmentsScreen />)
+  renderWithApp(<OpenShipmentsScreen company={deviceCompany} />)
 
   expect(await screen.findByText('2 pending shipments awaiting a carrier. Times are simulation-clock times.')).toBeOnTheScreen()
   const types = screen.getAllByText(/^(Flatbed|Tanker)$/).map((n) => n.props.children)
@@ -37,7 +37,7 @@ it('lists open shipments earliest pickup first', async () => {
 
 it('expands a card to show load and windows, relative to sim time', async () => {
   installFakeApi({ 'GET /shipments/pending': { shipments } })
-  renderWithApp(<OpenShipmentsScreen />)
+  renderWithApp(<OpenShipmentsScreen company={deviceCompany} />)
 
   fireEvent.press(await screen.findByText('Flatbed'))
 
@@ -51,19 +51,19 @@ it('expands a card to show load and windows, relative to sim time', async () => 
 
 it('says so when nothing is pending', async () => {
   installFakeApi({ 'GET /shipments/pending': { shipments: [] } })
-  renderWithApp(<OpenShipmentsScreen />)
+  renderWithApp(<OpenShipmentsScreen company={deviceCompany} />)
   expect(await screen.findByText('No pending shipments right now.')).toBeOnTheScreen()
 })
 
 it('shows the API error', async () => {
   installFakeApi({ 'GET /shipments/pending': new Error('Shipments unavailable') })
-  renderWithApp(<OpenShipmentsScreen />)
+  renderWithApp(<OpenShipmentsScreen company={deviceCompany} />)
   expect(await screen.findByText('Shipments unavailable')).toBeOnTheScreen()
 })
 
 it('reloads when the sim clock advances', async () => {
   const api = installFakeApi({ 'GET /shipments/pending': { shipments }, 'POST /simulation/advance': advanceResponse })
-  renderWithApp(<OpenShipmentsScreen />)
+  renderWithApp(<OpenShipmentsScreen company={deviceCompany} />)
   await screen.findByText('Flatbed')
   advanceClock()
   await waitFor(() => expect(callsTo(api, 'GET', '/shipments/pending')).toBe(2))

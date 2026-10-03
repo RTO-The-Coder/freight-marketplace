@@ -12,7 +12,8 @@
   "jest": {
     "preset": "jest-expo",
     "moduleNameMapper": {
-      "^@maplibre/maplibre-react-native$": "<rootDir>/src/test/maplibreMock.tsx"
+      "^@maplibre/maplibre-react-native$": "<rootDir>/src/test/maplibreMock.tsx",
+      "^@react-native-async-storage/async-storage$": "@react-native-async-storage/async-storage/jest/async-storage-mock"
     },
     "transformIgnorePatterns": [
       "node_modules/(?!((jest-)?react-native|@react-native(-community)?)|expo(nent)?|@expo(nent)?/.*|@expo-google-fonts/.*|react-navigation|@react-navigation/.*|react-native-paper|react-native-vector-icons)"
@@ -23,6 +24,7 @@
     "@freight/api-client": "*",
     "@freight/fleetmanagement-core": "*",
     "@maplibre/maplibre-react-native": "11.4.1",
+    "@react-native-async-storage/async-storage": "2.2.0",
     "@react-native-community/datetimepicker": "9.1.0",
     "expo": "~57.0.26",
     "expo-constants": "~57.0.20",

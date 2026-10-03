@@ -11,7 +11,7 @@ export default function TruckRoute() {
       <TruckDetailScreen
         truckId={truckId}
         onLoaded={setTitle}
-        onSelectDriver={(driverId) => router.push(`/companies/driver/${driverId}`)}
+        onSelectDriver={(driverId) => router.push(`/fleet/driver/${driverId}`)}
       />
     </>
   )

@@ -3,6 +3,7 @@ import { useColorScheme } from 'react-native'
 import { PaperProvider } from 'react-native-paper'
 import { DarkTheme, DefaultTheme, Stack, ThemeProvider } from 'expo-router'
 import { configureApi, SimClockProvider } from '@freight/fleetmanagement-core'
+import { DeviceCompanyGate } from '../device/DeviceCompany'
 import { darkTheme, lightTheme } from '../theme'
 
 // Module top level, not inside a component or effect: must run before any screen fetches.
@@ -29,7 +30,10 @@ export default function RootLayout() {
       <ThemeProvider value={navTheme}>
         <SimClockProvider>
           <StatusBar style={dark ? 'light' : 'dark'} />
-          <Stack screenOptions={{ headerShown: false }} />
+          {/* First launch asks which company this device belongs to; after that the app shows only it. */}
+          <DeviceCompanyGate>
+            <Stack screenOptions={{ headerShown: false }} />
+          </DeviceCompanyGate>
         </SimClockProvider>
       </ThemeProvider>
     </PaperProvider>

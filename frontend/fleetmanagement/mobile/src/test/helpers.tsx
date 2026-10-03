@@ -7,6 +7,9 @@ import { lightTheme } from '../theme'
 
 export const BASE = 'http://api.test'
 
+/** The company the test device belongs to. */
+export const deviceCompany = { companyId: 'c1', name: 'Northwind Freight' }
+
 type Handler = unknown | ((body: unknown) => unknown)
 export type Routes = Record<string, Handler>
 
