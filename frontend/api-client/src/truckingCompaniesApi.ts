@@ -46,6 +46,16 @@ export function createTruckingCompaniesApi(client: ApiClient) {
 
     evaluateShipment: (companyId: string, shipmentId: string) =>
       client.get<EvaluateShipmentForCompanyResponse>(`/companies/${companyId}/shipments/${shipmentId}/evaluate`),
+
+    // Registers this company's phone for shipment push notifications, addressed by its
+    // Firebase Installation ID (FID). One phone per company: registering again replaces it.
+    registerDevice: (companyId: string, fid: string) =>
+      client.post<void>(`/companies/${companyId}/device-token`, { fid }),
+
+    // Stops push notifications to this phone (the user switched them off). Only removes the
+    // registration if it is still this phone's FID - another phone may have taken over.
+    unregisterDevice: (companyId: string, fid: string) =>
+      client.delete<void>(`/companies/${companyId}/device-token`, { fid }),
   }
 }
 

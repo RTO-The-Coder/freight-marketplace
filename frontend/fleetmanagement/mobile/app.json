@@ -9,6 +9,7 @@
     "userInterfaceStyle": "automatic",
     "android": {
       "package": "com.freight.fleetmanagement",
+      "googleServicesFile": "../../../google-services.json",
       "adaptiveIcon": {
         "backgroundColor": "#E6F4FE",
         "foregroundImage": "./assets/android-icon-foreground.png",
@@ -21,7 +22,10 @@
       "expo-router",
       "expo-font",
       "@react-native-community/datetimepicker",
-      "@maplibre/maplibre-react-native"
+      "@maplibre/maplibre-react-native",
+      "@react-native-firebase/app",
+      "@react-native-firebase/messaging",
+      "./plugins/withFcmInstallationId"
     ]
   }
 }

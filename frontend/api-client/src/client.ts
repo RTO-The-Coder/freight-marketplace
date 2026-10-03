@@ -39,7 +39,8 @@ export function createApiClient(config: ApiClientConfig) {
       request<TResponse>(path, { method: 'POST', body: body ? JSON.stringify(body) : undefined }),
     patch: <TResponse>(path: string, body?: unknown) =>
       request<TResponse>(path, { method: 'PATCH', body: body ? JSON.stringify(body) : undefined }),
-    delete: <TResponse>(path: string) => request<TResponse>(path, { method: 'DELETE' }),
+    delete: <TResponse>(path: string, body?: unknown) =>
+      request<TResponse>(path, { method: 'DELETE', body: body ? JSON.stringify(body) : undefined }),
   }
 }
 

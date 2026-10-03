@@ -41,7 +41,7 @@ That registration is this slice's job.
   `npx expo install`, configure through `app.json` config plugins, never hand-edit `android/`,
   and check the current Expo docs rather than memory.
 - **Add `google-services.json`.** Download it from the **same Firebase project** as the
-  backend's service-account key (the file `FCM-token.json` the owner keeps locally). It is
+  backend's service-account key (the file `firebase-service-account.json` the owner keeps locally). It is
   already gitignored, so never commit it.
 - **Notification permission.** Android 13 and later need the `POST_NOTIFICATIONS` runtime
   permission, so ask for it.
