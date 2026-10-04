@@ -57,10 +57,21 @@ builder.Services.AddScoped<IRoutingService>(serviceProvider => new ThrottlingRou
 builder.Services.AddMemoryCache();
 
 // Device token encryption (ADR 0007) - the key lives only in local config
-// (appsettings.Development.json, gitignored), never in source.
+// (appsettings.Development.json, gitignored), never in source. Without a key (CI, tests)
+// the API still runs: only push registration is disabled, with a clear error when used.
 builder.Services.Configure<DeviceTokenEncryptionOptions>(
     builder.Configuration.GetSection(DeviceTokenEncryptionOptions.SectionName));
-builder.Services.AddSingleton<IDeviceTokenEncryptor, DeviceTokenEncryptor>();
+var deviceTokenKey = builder.Configuration
+    .GetSection(DeviceTokenEncryptionOptions.SectionName)
+    .Get<DeviceTokenEncryptionOptions>()?.Key;
+if (!string.IsNullOrWhiteSpace(deviceTokenKey))
+{
+    builder.Services.AddSingleton<IDeviceTokenEncryptor, DeviceTokenEncryptor>();
+}
+else
+{
+    builder.Services.AddSingleton<IDeviceTokenEncryptor, UnconfiguredDeviceTokenEncryptor>();
+}
 
 // Shipment-booking notifications (ADR 0003/0007): real FCM push when a service-account
 // key is configured, otherwise a log-based no-op so the app still runs without one.

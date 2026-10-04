@@ -60,6 +60,17 @@ public class DeviceTokenEncryptorTests
     }
 
     [Fact]
+    public void Unconfigured_EncryptAndDecrypt_ThrowWithClearMessage()
+    {
+        var encryptor = new UnconfiguredDeviceTokenEncryptor();
+
+        var encrypt = Assert.Throws<InvalidOperationException>(() => encryptor.Encrypt("fid"));
+        var decrypt = Assert.Throws<InvalidOperationException>(() => encryptor.Decrypt("x"));
+        Assert.Equal("DeviceTokenEncryption:Key is not configured, so push registration is disabled.", encrypt.Message);
+        Assert.Equal(encrypt.Message, decrypt.Message);
+    }
+
+    [Fact]
     public void Constructor_KeyOfWrongLength_Throws()
     {
         var tenBytes = Convert.ToBase64String(RandomNumberGenerator.GetBytes(10));
