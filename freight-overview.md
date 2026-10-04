@@ -28,9 +28,9 @@ The platform is being built as two separate, deliberately independent end-goals 
 | Track | What it demonstrates | Status |
 |---|---|---|
 | **A — Truck Simulation** | A single truck's journey, simulated tick-by-tick: fleet setup, a dispatcher assigning a shipment to a specific truck, the system calculating a feasible ETA that correctly accounts for mandatory rest breaks, and the truck's simulated movement/compliance state advancing over time. | **Built.** This is the working core of the platform today. |
-| **B — Bidding / Marketplace** | The original multi-company vision: a shipment is posted, every trucking company with a feasibly eligible truck is notified, companies compete by submitting offers, and the shipper picks the best one. | **Designed, not yet built.** This is the next phase of work — see `freight-frd.md` and `freight-build-plan.md` for the concrete remaining plan. |
+| **B — Bidding / Marketplace** | The multi-company vision: a shipment is posted, every trucking company is notified, companies offer to take it, and the shipper picks one. | **In progress.** Notifying every company by push, and each company checking a shipment against its own fleet, are built. Offers are next — see `freight-frd.md` and `freight-build-plan.md`. |
 
-Track A's simulation isn't a placeholder for a future "real GPS tracking" mode — it's intended to remain a first-class, permanent part of the product (and is planned to eventually support an AI layer on top, tracked separately). Track B builds on top of Track A's engine rather than replacing it: the same feasibility/ETA calculation that powers a single simulated truck today is what will decide, per shipment, which companies' trucks are eligible to be notified and bid.
+Track A's simulation isn't a placeholder for a future "real GPS tracking" mode — it's intended to remain a first-class, permanent part of the product (and is planned to eventually support an AI layer on top, tracked separately). Track B builds on top of Track A's engine rather than replacing it: the same feasibility/ETA calculation that powers a single simulated truck today is what a company uses to see which of its trucks could take a newly posted shipment.
 
 ## What Track A (Truck Simulation) does today, in plain terms
 
@@ -52,18 +52,18 @@ This isn't just checking a map distance. A truck that looks close by might actua
 
 Once assigned, the shipment's pickup and delivery become stops on the truck's route, inserted at the right position among any other stops it already has. A global simulation clock can be advanced (by ticks, by hours, or set directly), and as it advances, the truck's simulated position moves, stops are reached, shipment status updates automatically (picked up → delivered), and driver rest/break/rest-period state advances right alongside it — including a truck "parking" and waiting if it arrives at a stop before that stop's time window has opened yet.
 
-## What Track B (Bidding / Marketplace) will add, once built
+## What Track B (Bidding / Marketplace) adds
 
-Building on top of everything in Track A, the marketplace layer will add:
+Building on top of everything in Track A, the marketplace layer adds:
 
-1. **Automatic multi-company matching** — the moment a shipment is posted, the system searches every trucking company's fleet (not just one dispatcher-chosen truck) and identifies every truck that could feasibly take the job, using the same rest-rule-aware feasibility engine from Track A.
-2. **Notifications** — every trucking company with at least one eligible truck gets notified about the new shipment.
-3. **Offers** — each notified company can review the shipment, see how it would fit into their truck's existing route, and submit an offer (their own proposed pickup time).
-4. **Approval** — the shipper reviews all offers received and approves one; that job is locked in, the winning truck's route updates automatically (via the same assignment mechanism Track A already has), and every other offer is declined.
+1. **Notifications** *(built)* — the moment a shipment is booked, every trucking company gets a push notification on its phone. The system does not filter companies in advance; whether a shipment fits is the dispatcher's call (see ADR 0007).
+2. **Fleet check on demand** *(built)* — a dispatcher can ask which of their own trucks could take the shipment, where its pickup and delivery would fall in each truck's route, and how much distance it would add — using the same rest-rule-aware feasibility engine from Track A.
+3. **Offers** *(not built)* — notified companies offer to take the shipment.
+4. **Approval** *(not built)* — the shipper approves one offer, and the shipment is placed on the winning truck's route using the assignment mechanism Track A already has.
 
 ## Who uses what
 
 | Who | What they do | Where |
 |---|---|---|
-| Shipper | Post shipments; (Track B) review offers, approve one | Web browser |
-| Trucking company dispatcher | Manage fleet, assign shipments to trucks (Track A); (Track B) respond to job opportunities, watch offers | Web browser (fleet setup, assignment) + Phone app (Track B: offers, live tracking) |
+| Shipper | Post shipments; (Track B, not built) review offers, approve one | Web browser |
+| Trucking company dispatcher | Manage fleet, assign shipments to trucks, follow trips on maps (Track A); receive new-shipment notifications and check them against the fleet (Track B); (not built) send offers | Web browser and Android app — both have the full fleet features; each phone belongs to one company, chosen on first launch |

@@ -2,7 +2,7 @@
 
 **Companion documents:** `freight-domain-model.md` (domain/technical design), `freight-ui-screens.md` (screen specs), `freight-build-plan.md` (development slices).
 
-**Structure note:** requirements are split into two tracks (see `freight-overview.md`). **Track A — Truck Simulation** is built and working today. **Track B — Bidding / Marketplace** is designed but not yet built — its FRs are included here as the target spec for future work, clearly marked.
+**Structure note:** requirements are split into two tracks (see `freight-overview.md`). **Track A — Truck Simulation** is built and working today. **Track B — Bidding / Marketplace** is in progress: notification of every company (FR3) and the per-company fleet check (FR4.1) are built; offers are not yet. Each Track B requirement is marked built or not built.
 
 ---
 
@@ -12,9 +12,9 @@ A freight matching and fleet-tracking application connecting **Shippers** (who n
 
 | Actor | Description | Access |
 |---|---|---|
-| **Shipper** | Creates Shipments; (Track B) reviews and approves offers from TruckCompanies | React Web |
-| **TruckingCompany (dispatcher)** | Manages fleet (Trucks, Drivers), assigns Shipments to Trucks (Track A); (Track B) receives shipment notifications, submits offers, monitors routes | React Web (fleet mgmt, assignment, maps) + React Native (Track B: offers, route view) |
-| **System (background)** | Computes ETAs and feasibility, tracks driver rest compliance, advances the simulation clock (Track A); (Track B) matches Shipments to eligible Trucks, sends notifications | Application-layer handlers, invoked on request — no background/scheduled jobs exist (see FR7.2) |
+| **Shipper** | Creates Shipments; (Track B, not built) reviews and approves offers from TruckCompanies | Shipper web app (React) |
+| **TruckingCompany (dispatcher)** | Manages fleet (Trucks, Drivers), assigns Shipments to Trucks, follows trips on maps (Track A); receives new-shipment notifications and checks them against the fleet (Track B); (not built) submits offers | Fleet-management web app (React) and Android app (React Native) — both have the full fleet features. Each Android device belongs to one company, chosen on first launch; push notifications arrive on the Android app. |
+| **System** | Computes ETAs and feasibility, tracks driver rest compliance, advances the simulation clock (Track A); notifies every company when a Shipment is booked (Track B) | Application-layer handlers, invoked on request — no background/scheduled jobs exist (see FR7.2) |
 
 TruckingCompany and Shipper accounts are **provisioned out-of-band** (administratively) — no self-service sign-up screens in Phase 1. Neither actor manages the other's account type.
 
@@ -56,21 +56,21 @@ TruckingCompany and Shipper accounts are **provisioned out-of-band** (administra
 
 ---
 
-## 3. Functional Requirements — Track B (Bidding / Marketplace, not yet built)
+## 3. Functional Requirements — Track B (Bidding / Marketplace, in progress)
 
-These describe the target design for the next phase of work. None of FR3/FR4 below exist in code today — no matching engine, no notification delivery, and no Offer entity/endpoints of any kind. See `freight-build-plan.md` Slices 10–12 for the concrete plan to build these.
+FR3.1–FR3.4 and FR4.1 are built. The offer requirements (FR3.5, FR4.2–FR4.7) are not built yet.
 
-### FR3 — Shipment Matching & Notification (not built)
+### FR3 — Shipment Notification (built, except FR3.5)
 
 See `docs/adr/0007-shipment-evaluation-insertion-search.md` for the notification and on-demand insertion-search design behind this section.
 
-- FR3.1: When a Shipment is created (or its window is edited), every TruckingCompany is notified unconditionally — no automatic eligibility filtering happens at booking time (revised; see `docs/adr/0007-shipment-evaluation-insertion-search.md`). A dispatcher who wants to know whether the shipment fits their own fleet calls an on-demand, per-company evaluation (FR4.1) that runs the same feasibility engine Track A already built (FR6.3) against just their own trucks — not the whole fleet, and not automatically.
-- FR3.2: Every TruckingCompany receives a push notification about every new (or updated) Shipment — not gated by eligibility (revised; see the ADR above).
-- FR3.3/FR3.4: Feasibility for the on-demand, per-company evaluation (FR4.1) should use the exact same EU driving-time and two-driver-relay rules already implemented for Track A (FR7).
-- FR3.5: Each eligible TruckingCompany should get a fixed 30-minute submission window from the moment they are notified to submit an offer (FR4.2) — independent of any other company's window and of the Shipment's own `OfferDeadline`.
+- FR3.1 *(built)*: When a Shipment is booked, every TruckingCompany is notified unconditionally — no automatic eligibility filtering happens at booking time (see ADR 0007). A dispatcher who wants to know whether the shipment fits their own fleet calls an on-demand, per-company evaluation (FR4.1) that runs the same feasibility engine Track A already built (FR6.3) against just their own trucks — not the whole fleet, and not automatically.
+- FR3.2 *(built)*: Notification is a Firebase Cloud Messaging push to the company's registered Android device (see ADR 0003). Each company has at most one registered device; the device registers when the app starts and can unregister (`POST`/`DELETE /companies/{id}/device-token`), and its Firebase Installation ID is stored encrypted. A failed push never fails the booking. If the API has no FCM key configured, it only logs the notification; if it has no device-token encryption key, device registration is disabled and everything else keeps working.
+- FR3.3/FR3.4 *(built)*: Feasibility for the on-demand, per-company evaluation (FR4.1) uses the exact same EU driving-time and two-driver-relay rules already implemented for Track A (FR7).
+- FR3.5 *(not built)*: Each eligible TruckingCompany should get a fixed 30-minute submission window from the moment they are notified to submit an offer (FR4.2) — independent of any other company's window and of the Shipment's own `OfferDeadline`.
 
-### FR4 — Offers (not built)
-- FR4.1: A TruckingCompany dispatcher, upon notification, should be able to view Shipment details and run an on-demand evaluation against their own fleet — for every truck they own, whether it's feasible, where the Shipment's pickup/delivery would fall within that Truck's current route, and how much additional distance/time the insertion would add (revised; see `docs/adr/0007-shipment-evaluation-insertion-search.md` — this is no longer computed automatically at booking time).
+### FR4 — Offers (FR4.1 built; FR4.2–FR4.7 not built)
+- FR4.1 *(built)*: A TruckingCompany dispatcher, upon notification, can view Shipment details and run an on-demand evaluation against their own fleet — for every truck they own, whether it's feasible, where the Shipment's pickup/delivery would fall within that Truck's current route, and how much additional distance the insertion would add (see ADR 0007 — this is no longer computed automatically at booking time). Available as "Check eligibility" in the fleet-management web and Android apps.
 - FR4.2: A dispatcher should be able to submit an offer for a specific Truck, specifying their offered pickup time and an expiry time for the offer, only before their FR3.5 submission window closes.
 - FR4.3: A TruckingCompany should not be able to submit more than one active (Pending) offer for the same Shipment. Resubmission should be allowed after an earlier offer of theirs has expired or been rejected.
 - FR4.4: A Shipper should be able to view all offers submitted for their Shipment (Pending, Approved, Rejected, Expired) and approve exactly one.
@@ -85,7 +85,9 @@ See `docs/adr/0007-shipment-evaluation-insertion-search.md` for the notification
 | Item | Status |
 |---|---|
 | Fine-grained EU rule nuance (split breaks/rests, reduced-rest limits, extended-daily-driving allowance, 90h/2-week vs 56h/week cap) | **Built** (Track A) — this is not deferred; it's implemented in the driver compliance ledger. |
-| Shipment matching, notifications, and offers/bidding (Track B) | Not built — see FRD §3 above and `freight-build-plan.md` Slices 10–12. |
+| Notifications (Track B) | **Built** — every company notified by FCM push on booking (FR3). |
+| Offers/bidding (Track B) | Not built — see FRD §3 above. |
+| Dispatcher mobile app | **Built** for Android (fleet management, maps, notifications). iOS is out of scope. |
 | Shipment cancellation workflow | Not modeled. |
 | Capacity validation across a Truck's full future planned route | **Built** — checked both at insertion time (across the whole remaining route) and again at actual pickup (FR5.2/FR5.4). |
 | Loading/unloading time | Deferred — assumed zero. A Truck can still incur simulated wait time at a Stop, but only while waiting for that Stop's time window to open, not for loading/unloading duration. |
@@ -105,7 +107,7 @@ See `docs/adr/0007-shipment-evaluation-insertion-search.md` for the notification
 4. A Shipment being directly assigned to a Truck and appearing on that Truck's route.
 5. Truck movement being simulated via the global simulation clock, a Stop being reached, and the Shipment's status updating accordingly.
 
-### Track B (not yet achieved)
-6. The system automatically identifying every eligible Truck across every company for a new Shipment (not just checking one dispatcher-chosen candidate).
-7. Eligible companies being notified and able to submit competing offers.
-8. A Shipper reviewing multiple offers and approving one, with the losing offers auto-rejected and the winning Truck's route updated via the existing Track-A assignment mechanism.
+### Track B (partly achieved)
+6. *(Achieved)* Every company being notified of a new Shipment by push, and able to check it against its own fleet on demand. This replaces the original criterion of the system automatically finding every eligible Truck across every company (dropped by ADR 0007).
+7. *(Not yet)* Companies submitting competing offers.
+8. *(Not yet)* A Shipper reviewing multiple offers and approving one, with the losing offers no longer active and the winning Truck's route updated via the existing Track-A assignment mechanism.

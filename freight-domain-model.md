@@ -1,6 +1,6 @@
 # Freight Domain Model — DDD Design Reference
 
-**Status:** Reflects the actual shipped code (Track A — Truck Simulation). Track B (Bidding/Marketplace) aggregates are marked explicitly as "planned, not built" wherever they appear — see `freight-overview.md`/`freight-frd.md` for the two-track split.
+**Status:** Reflects the actual shipped code: Track A — Truck Simulation, plus Track B's notification part (device registration, notify every company, per-company evaluation). Track B parts that are not built (offers) are marked explicitly as "planned, not built" wherever they appear — see `freight-overview.md`/`freight-frd.md` for the two-track split.
 **Companion document:** `freight-ui-screens.md` covers all screens built on top of this model.
 
 ---
@@ -17,6 +17,7 @@ Trip (Aggregate Root, one open Trip per Truck at a time)
 Shipment (Aggregate Root)
 Driver (Aggregate Root)
   └── ComplianceState (Value Object, Tracking subsystem)
+DeviceToken (Aggregate Root — a company's registered push device, Track B notifications)
 
 ShipmentOffer (Aggregate Root) — PLANNED, NOT BUILT (Track B / Bidding)
 
@@ -38,9 +39,20 @@ Simulation: SimulationClock (its own small aggregate, holds the global simulated
 | Id | Guid | |
 | Name | string | |
 | OfficeLocation | GeoLocation | Company base/HQ |
-| *(FCM/notification fields)* | TBD | Not yet added — needed once Track B's notification delivery is built. |
 
-No owned collections — Trucks reference back via `TruckingCompanyId`, not the other way around. Provisioned out-of-band (backend/admin) — no UI screen creates a TruckingCompany.
+No owned collections — Trucks reference back via `TruckingCompanyId`, not the other way around. Provisioned out-of-band (backend/admin) — no UI screen creates a TruckingCompany. Push-notification registration is **not** stored on TruckingCompany; it lives in the separate `DeviceToken` aggregate below.
+
+---
+
+### DeviceToken (Aggregate Root) — Track B notifications, built
+| Field | Type | Notes |
+|---|---|---|
+| Id | Guid | |
+| TruckingCompanyId | Guid | The company this device receives notifications for |
+| Fid | string | The device's Firebase Installation ID, which FCM pushes are addressed to. Stored **encrypted** (AES-GCM, by `IDeviceTokenEncryptor` in Infrastructure); the entity just stores the string it is given. |
+| RegisteredAt | DateTime | |
+
+Methods: `Create(id, truckingCompanyId, fid, registeredAt)`, `ReplaceFid(fid, registeredAt)`. **One device per company:** registering again for a company replaces its FID. Registered and removed through `POST`/`DELETE /companies/{id}/device-token` (`RegisterDeviceTokenHandler`/`UnregisterDeviceTokenHandler`; unregister requires the same FID). See ADR 0003/0007.
 
 ---
 
@@ -202,7 +214,7 @@ This interpolates along the **straight line** between the last-reached Stop and 
 
 ### ShipmentOffer (Aggregate Root) — **PLANNED, NOT BUILT (Track B)**
 
-This aggregate, and the entire submit/approve offer workflow it implies, does not exist anywhere in the codebase today — no entity, no repository, no handler, no endpoint. It's documented here as the target shape for Track B (see `freight-frd.md` §3, `freight-build-plan.md` Slices 10–12), not as something currently working.
+This aggregate, and the entire submit/approve offer workflow it implies, does not exist anywhere in the codebase today — no entity, no repository, no handler, no endpoint. It's documented here as the target shape for Track B (see `freight-frd.md` §3, `freight-build-plan.md` Slice 12), not as something currently working.
 
 | Field (planned) | Type | Notes |
 |---|---|---|
@@ -339,7 +351,7 @@ There is no `DriverSelector.SelectActiveDriver` domain service — the equivalen
 
 ### Domain Events
 
-The codebase has a small domain-event base (`IDomainEvent`, `HasDomainEvents`), used by `DriverComplianceState`, which raises four Tracking-scoped events: `TruckArrivedAtDestination`, `TruckResumedDriving`, `TruckTookBreak`, `TruckWentIntoRest`. **`Shipment` does not raise any domain events** — `ShipmentCreatedEvent`/`ShipmentPickupWindowUpdatedEvent` (needed to eventually trigger Track B's matching engine) don't exist yet.
+The codebase has a small domain-event base (`IDomainEvent`, `HasDomainEvents`), used by `DriverComplianceState`, which raises four Tracking-scoped events: `TruckArrivedAtDestination`, `TruckResumedDriving`, `TruckTookBreak`, `TruckWentIntoRest`. **`Shipment` does not raise any domain events.** The `ShipmentCreatedEvent`/`ShipmentPickupWindowUpdatedEvent` once planned to trigger an automatic matching engine were never needed: ADR 0007 dropped that engine, and booking calls the notification sender directly (see §5).
 
 ---
 
@@ -366,21 +378,28 @@ Invoked by `POST /simulation/advance` with a tick count. For each requested tick
 
 `POST /drivers/{id}/eligibility-check` — an on-demand probe of whether a driver would still be eligible to drive after N more simulated minutes, using `IDriverRuleEngine.IsEligibleToDriveFuture`. Pull-based, not a periodic background job (see FR7.2 — no `IHostedService`/`BackgroundService` exists anywhere in the codebase).
 
-### ShipmentMatchingEngine / ShipmentMatchingBackgroundService / SubmitOfferHandler / ApproveOfferHandler — **PLANNED, NOT BUILT (Track B)**
+### BookShipmentHandler → notify every company (Track B — built)
 
-None of these exist today. The target design (once built) is:
+`POST /shipments` books the Shipment, saves it, then calls `INotificationSender.NotifyAllCompaniesAsync(summary)` synchronously — no event, no background service (ADR 0007). The summary is light: shipment id, required truck type, pickup location and window. `INotificationSender` is a Domain abstraction (ADR 0003) with two Infrastructure implementations: `FcmNotificationSender` (pushes to every registered `DeviceToken`, decrypting each FID; a failure for one device or of FCM is logged and never fails the booking) and `LogNotificationSender` (used when no FCM key is configured). Editing a shipment's window does not re-notify.
+
+### EvaluateShipmentForCompanyHandler (Track B — built, on-demand per-company evaluation)
+
+`GET /companies/{companyId}/shipments/{shipmentId}/evaluate` → `ShipmentEvaluationEngine.EvaluateForCompanyAsync`. Replaces the originally planned automatic `ShipmentMatchingEngine`/`ShipmentMatchingBackgroundService`, which ADR 0007 dropped. For each of **one** company's Trucks:
 
 ```
-ShipmentMatchingEngine.FindCandidateTrucks(Guid shipmentId)
-1. Load Shipment — RequiredTruckType, PickupLocation, PickupWindow, Load
-2. Query Trucks where: Type matches, IsActive == true, Capacity can accommodate Load (rough pre-filter)
-3. For each candidate: run ShipmentInsertionEvaluator (already built) — can this truck reach PickupLocation within PickupWindow?
-4. Resolve eligible TruckingCompanies from the feasible Trucks (dedupe)
+1. Cheap gate, no OSRM: Type matches, IsActive, has a DriverAssignment (capacity is NOT pre-checked —
+   load depends on where in the route the shipment would go)
+2. Insertion-position search via ShipmentInsertionPlanner + ShipmentInsertionEvaluator (the same
+   window, capacity and EU-rule checks as a real assignment)
+3. Result per truck: feasible or not, pickup/delivery insert positions, added distance and time
 ```
-```
-ShipmentMatchingBackgroundService: listens for ShipmentCreatedEvent / ShipmentPickupWindowUpdatedEvent (neither exists yet)
-→ FindCandidateTrucks(shipmentId) → notify each eligible TruckingCompany
-```
+
+Run only when a dispatcher asks ("Check eligibility"), never at booking time, and never against other companies' trucks.
+
+### SubmitOfferHandler / ApproveOfferHandler — **PLANNED, NOT BUILT (Track B)**
+
+Neither exists today. The target design (once built) is:
+
 ```
 SubmitOfferHandler: guard the 30-min submission window → ShipmentOffer.Create(...) → save
 ApproveOfferHandler: approve one offer → reject the rest → Shipment.AssignToCompany(...) → run the existing AssignShipmentToTruckHandler
@@ -409,7 +428,7 @@ Implemented by `OsrmRoutingService`, wrapped by `ThrottlingRoutingService` (rate
 `Fleet/Services/RouteEtaCalculator` (`CalculateEtas` for a single driver, `CalculateEtasForTeam` for two) — `GET /trucks/{id}/etas` via `GetTruckEtasHandler`. Walks the route leg-by-leg, consulting compliance state to inject breaks/rests/team-swaps, and reports each Stop's projected arrival plus whether the truck would be waiting (parked) for a window to open.
 
 ### Q3 — "Can my Truck reach a new Stop within a time window, at a position I specify?"
-`Fleet/Services/ShipmentInsertionEvaluator.Evaluate(InsertionContext)` — the single class doing both capacity and window feasibility checking (there is no separate `RouteInsertionEvaluator`/`FeasibilityChecker` pair). Exposed via `POST /trucks/{id}/assign-shipment/feasibility` (dry run) and as the gate inside `POST /trucks/{id}/assign-shipment` (commit). **Not built:** an automatic "try every position, return the best/earliest feasible one" search — the caller must specify the candidate insertion position(s).
+`Fleet/Services/ShipmentInsertionEvaluator.Evaluate(InsertionContext)` — the single class doing both capacity and window feasibility checking (there is no separate `RouteInsertionEvaluator`/`FeasibilityChecker` pair). Exposed via `POST /trucks/{id}/assign-shipment/feasibility` (dry run) and as the gate inside `POST /trucks/{id}/assign-shipment` (commit); for these two the caller specifies the insertion positions. The automatic "try every position" search exists in the per-company evaluation (`ShipmentEvaluationEngine`, see §5), which calls this same evaluator for each position it tries.
 
 ### Q4 — "How far is my Truck from a particular GeoLocation?"
 **Not built as a single dedicated query.** No truck-aware distance endpoint exists. The closest building blocks are generic OSRM passthroughs: `GET /routing/leg` (point-to-point distance/time) and `GET /routing/geometry` (full polyline, for map drawing) — a caller composes Q1 (get the truck's current position) with `/routing/leg` to get the same answer today.
@@ -420,8 +439,8 @@ Implemented by `OsrmRoutingService`, wrapped by `ThrottlingRoutingService` (rate
 
 ## 7. Repository & Persistence Pattern (EF Core)
 
-- **`IRepository<T>` per Aggregate Root** — `ITruckingCompanyRepository`, `IShipperRepository`, `ITruckRepository`, `ITripRepository`, `IDriverRepository`, `IShipmentRepository`. No repository for `Stop` — only ever accessed through `Trip`. (No `IShipmentOfferRepository` — that aggregate doesn't exist yet.)
-- **`IUnitOfWork`** exposes: `TruckingCompanies, Shippers, Trucks, Trips, Drivers, Shipments, SimulationClock` — one commit point (`SaveChangesAsync()`) per business transaction.
+- **`IRepository<T>` per Aggregate Root** — `ITruckingCompanyRepository`, `IDeviceTokenRepository`, `IShipperRepository`, `ITruckRepository`, `ITripRepository`, `IDriverRepository`, `IShipmentRepository`. No repository for `Stop` — only ever accessed through `Trip`. (No `IShipmentOfferRepository` — that aggregate doesn't exist yet.)
+- **`IUnitOfWork`** exposes: `TruckingCompanies, DeviceTokens, Shippers, Trucks, Trips, Drivers, Shipments, SimulationClock` — one commit point (`SaveChangesAsync()`) per business transaction.
 - **`SimulationClock`** is its own small persisted aggregate (`ISimulationClockRepository`) holding the app's simulated "now." Every booking/assignment/advance timestamp in the system is measured against this simulated clock, not wall-clock time — this is a foundational, load-bearing concept for the whole Track-A simulation and isn't just an incidental detail.
 - Repositories never call `SaveChanges` — they only track changes (`Add`, modify loaded entities).
 - Domain project has zero reference to EF Core.
@@ -437,6 +456,5 @@ Implemented by `OsrmRoutingService`, wrapped by `ThrottlingRoutingService` (rate
 - **Office Stop side effects**: pure waypoint, no automatic rest/refueling trigger.
 - **Stop-arrival trigger mechanism**: resolved — driven entirely by `POST /simulation/advance` (a pull-based, global tick advance), not GPS/telematics or manual per-stop confirmation.
 - **Multi-tenancy / auth**: out of scope. No `TenantId` or auth scaffolding exists.
-- **TruckingCompany FCM/notification fields**: not yet added — needed once Track B's notification delivery is built.
-- **Competitive bidding (Track B)**: `ShipmentOffer` and its whole submit/approve workflow — see §2 above and `freight-build-plan.md` Slices 10–12 for the concrete plan.
+- **Competitive bidding (Track B)**: `ShipmentOffer` and its whole submit/approve workflow — see §2 above and `freight-build-plan.md` Slice 12.
 - **Hazmat certification is unreachable from the API**: the domain method exists (`Truck.CertifyForHazmat`) but no handler/endpoint calls it yet.

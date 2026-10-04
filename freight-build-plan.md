@@ -5,7 +5,7 @@
 - `freight-domain-model.md` — exact entities/fields/methods and workflows drive *how* each slice is implemented.
 - `freight-ui-screens.md` — exact screens ship what's user-facing in each slice.
 
-**Status:** Slices 1–9 (**Track A — Truck Simulation**) are done and shipped, corrected below to match the actual implementation. Slices 10–12 (**Track B — Bidding/Marketplace**) are the concrete, still-current plan for the next phase of work — nothing in Track B is built yet. Slice 13 (mobile Route View) has its backend prerequisites in place but wasn't otherwise assessed here.
+**Status:** Slices 1–9 (**Track A — Truck Simulation**) are done and shipped, corrected below to match the actual implementation, and the fleet-management Android app was added on top of them. In **Track B — Bidding/Marketplace**, Slice 10 was replaced by an on-demand per-company evaluation and Slice 11 is built as "notify every company" (both per ADR 0007); Slice 12 (offers) is not built. Slice 13 (mobile route view) is partly covered by the Android truck screen.
 
 ---
 
@@ -33,7 +33,7 @@ This slice originally posed an open design question: should `Driver` get its own
 ## Slice 5 — Shipment Booking ✅ Done
 `Shipment.Book(...)`, `UpdatePickupWindow(...)`. `Book` creates `Pending` status, no `TruckingCompanyId`, and sets `OfferDeadline = bookedAt + 30min` (a fixed system value, not a Shipper-entered field — see `freight-frd.md` FR2.2). `UpdatePickupWindow` is Pending-only and resets that same 30-minute deadline. Endpoints: `POST /shipments`, `PATCH /shipments/{id}/pickup-window`. UI: Shipment Booking screen with map pickers, per `freight-ui-screens.md`.
 
-*(The window-edit's "restarts the matching process" effect described in the FRD is not yet meaningful — there is no matching engine to restart. See Slice 10.)*
+*(The window-edit's "restarts the matching process" effect described in the FRD has no effect: there is no matching engine (ADR 0007, see Slice 10), and editing the window does not re-notify companies.)*
 
 **Exit criteria (met):** a Shipper books a Shipment through the browser and sees it `Pending`.
 
@@ -65,10 +65,10 @@ A companion dry-run entry point, `CheckFeasibilityAsync`, exposed as `POST /truc
 ## Slice 8 — Remaining Dispatcher Queries (Q1, Q3, Q4) ✅ Mostly done (Q3 partial, Q4 not built)
 
 - **Q1** ✅ `GET /trucks/{id}/position` → `GetTruckPositionHandler`: interpolates using `Truck.CurrentProgress.GetProgressFraction()` between last-reached and next Stop; falls back to `TruckingCompany.OfficeLocation` with no open Trip.
-- **Q3** ⚠️ Partial. `POST /trucks/{id}/assign-shipment/feasibility` → `ShipmentInsertionEvaluator.Evaluate(...)` (a single class doing both capacity and window checks — not two separate classes as an earlier draft of this plan named). This validates **a specific, caller-given insertion position** — hard-rejecting if any existing Stop's committed window would be missed. **Not built:** an automatic "try every position, return the best/earliest feasible one" search.
+- **Q3** ⚠️ Partial. `POST /trucks/{id}/assign-shipment/feasibility` → `ShipmentInsertionEvaluator.Evaluate(...)` (a single class doing both capacity and window checks — not two separate classes as an earlier draft of this plan named). This validates **a specific, caller-given insertion position** — hard-rejecting if any existing Stop's committed window would be missed. The automatic "try every position" search now exists inside the per-company evaluation (Slice 10, ADR 0007), which reports for each truck where the shipment fits best; the single-truck assign flow itself still takes caller-given positions.
 - **Q4** ❌ Not built as a dedicated endpoint. No truck-aware `GET /trucks/{id}/distance?to=...` exists. The closest building blocks are generic OSRM passthroughs — `GET /routing/leg` (point-to-point distance/time) and `GET /routing/geometry` (polyline, for map drawing) — composable with Q1 to get the same answer.
 
-**Exit criteria (partially met):** a feasibility check correctly rejects a specific insertion that breaks an existing committed window (met); the system does not yet find the best position automatically, and there is no single-call truck-to-location distance query (not met — carried forward as future work, not urgent since both are composable from existing pieces).
+**Exit criteria (mostly met):** a feasibility check correctly rejects a specific insertion that breaks an existing committed window (met); the best position per truck is found by the per-company evaluation (met, via Slice 10); there is no single-call truck-to-location distance query (not met — carried forward as future work, not urgent since it is composable from existing pieces).
 
 ## Slice 9 — Simulated Movement (Stop reached, capacity-at-pickup, status transitions) ✅ Done, different mechanism than planned
 
@@ -78,51 +78,46 @@ Also shipped: `PATCH /trips/{id}/start` → `RescheduleTripHandler` (`Trip.Resch
 
 **Exit criteria (met):** advancing the simulation clock past a leg's distance reaches the Stop, marks it `Reached`, and updates the Shipment's status correctly, with capacity re-validated at the actual pickup moment.
 
+## Fleet-management Android app ✅ Done (added beyond the original slices)
+
+The fleet-management features of the web app, as an Android app (`frontend/fleetmanagement/mobile`, Expo SDK 57 / React Native 0.86.3). Web and mobile share their logic through `@freight/fleetmanagement-core` (sim time, fleet and shipment rules, route geometry), so only the screens differ.
+
+- Built to Android conventions rather than the web layout: bottom tabs (Fleet, Shipments), sim clock as a top-bar chip, floating action buttons, bottom sheets for short choices, full-screen forms with Cancel/Save at the bottom.
+- Same features as the web app: trucks and drivers, activation, assign/remove drivers, driver eligibility, change trip start, assign a shipment with insert positions and live feasibility, and per-company "Check eligibility" for open shipments.
+- Maps on OpenStreetMap via MapLibre (fleet, trip and shipment route), as static previews that open full screen.
+- Each device belongs to one company, chosen once on first launch.
+- Receives new-shipment push notifications (Slice 11); tapping one opens that shipment's details.
+- No backend changes were needed beyond Slice 11's device registration.
+
+**Exit criteria (met):** the Track A fleet flows work end to end on an Android emulator, and component tests cover each screen.
+
 ---
 
-## Slice 10 — Shipment Matching Engine — **Track B, not built, next up**
+## Slice 10 — Shipment Evaluation (replaces the Matching Engine) ✅ Done
 
-**FRD:** FR3.1, FR3.3, FR3.4.
-**Domain doc:** `ShipmentMatchingEngine.FindCandidateTrucks` (planned workflow), driven by `ShipmentCreatedEvent`/`ShipmentPickupWindowUpdatedEvent` (neither event exists yet — `Shipment` doesn't currently inherit the codebase's `HasDomainEvents` base at all).
+**FRD:** FR3.1, FR3.3, FR3.4, FR4.1. **ADR:** 0007.
 
-**1. Entities/Domain**
-- Add `ShipmentCreatedEvent`, `ShipmentPickupWindowUpdatedEvent` — raise them from `Shipment.Book`/`UpdatePickupWindow`. This requires `Shipment` to inherit `HasDomainEvents` (already used elsewhere, e.g. `DriverComplianceState`'s Tracking events — same pattern, not a new concept).
-- No new aggregates.
+The originally planned automatic matching engine (an event-driven, fleet-wide search on every booking that notified only eligible companies) was **dropped** in ADR 0007. Every company is notified instead (Slice 11), and a dispatcher evaluates a shipment against their own fleet when they choose to. No domain events were added for this.
 
-**2. Persistence**
-- None new — reads through existing `ITruckRepository`/`IShipmentRepository`.
+- `GET /companies/{companyId}/shipments/{shipmentId}/evaluate` → `EvaluateShipmentForCompanyHandler` → `ShipmentEvaluationEngine.EvaluateForCompanyAsync`.
+- For each of the company's trucks: a cheap gate first (type, active, driver assigned — no OSRM), then an insertion-position search through `ShipmentInsertionPlanner` and the already-built `ShipmentInsertionEvaluator` (Slice 8's Q3), which applies the full window, capacity and EU-rule checks.
+- Returns, per truck: feasible or not, the pickup/delivery insert positions, and the added distance and time.
+- UI: "Check eligibility" on open shipments in the fleet-management web and Android apps.
 
-**3. API/Handlers**
-- `ShipmentMatchingEngine.FindCandidateTrucks(shipmentId)`, triggered by the events above:
-  1. Load Shipment (RequiredTruckType, PickupLocation, PickupWindow, Load)
-  2. Pre-filter Trucks: `Type` matches, `IsActive`, capacity can accommodate (rough check against `Capacity`)
-  3. Per candidate: run the **already-built** `ShipmentInsertionEvaluator` (Slice 8's Q3) — feasible pickup time + proposed Stop insertion positions
-  4. Dedupe to eligible `TruckingCompany` ids
+**Exit criteria (met):** for a booked Shipment, a company sees which of its own trucks could take it and where it would fit, without any search running at booking time.
 
-**4. Verification**
-- No UI (background engine; Slice 12's Offer Submission screen is the first UI to surface its output).
-- **Exit criteria:** booking a Shipment triggers a run that correctly filters by type/active/capacity and produces the right eligible-Truck list with proposed Stop positions, verifiable via logged output or a temporary diagnostic endpoint.
+## Slice 11 — Notifications ✅ Done (as "notify every company")
 
-## Slice 11 — Notifications — **Track B, not built**
+**FRD:** FR3.2. **ADR:** 0003, 0007.
 
-**FRD:** FR3.2, FR3.5.
-**Domain doc:** `ShipmentMatchingBackgroundService`; `TruckingCompany` FCM/device-target fields (shape not yet decided).
+- **Domain/persistence:** `DeviceToken` — one registered device per company, holding the device's Firebase Installation ID (FID), stored encrypted (AES-GCM). Registering again replaces the company's FID. The FCM fields were kept off `TruckingCompany`.
+- **Endpoints:** `POST /companies/{id}/device-token` (register) and `DELETE /companies/{id}/device-token` (unregister; the FID must match).
+- **Sending:** `BookShipmentHandler` calls `INotificationSender.NotifyAllCompaniesAsync` synchronously after the booking is saved — no hosted/background service was needed. `FcmNotificationSender` sends the same light summary (shipment id, required truck type, pickup location and window) to every registered device; a failure for one device, or of FCM itself, is logged and never fails the booking.
+- **Running without secrets:** with no FCM service-account key configured, `LogNotificationSender` only logs; with no device-token encryption key, `UnconfiguredDeviceTokenEncryptor` disables registration while the rest of the API keeps working (this is how CI runs).
+- **Mobile:** the Android app asks for notification permission, registers its FID for the device's company on start, unregisters when permission is switched off, and opens the shipment's details when a notification is tapped.
+- **Not built:** re-notifying companies when a shipment's window is edited, and FR3.5's per-company submission window (part of offers).
 
-**1. Entities/Domain**
-- Add FCM/device-target fields to `TruckingCompany` (shape TBD — decide here).
-
-**2. Persistence**
-- Migration adding the FCM fields.
-
-**3. API/Handlers**
-- `INotificationService.NotifyEligibleCompanies(shipmentId, truckingCompanyIds)`.
-- A listener (hosted service or explicit call from `BookShipmentHandler`/`UpdatePickupWindowHandler`) that reacts to the Slice 10 events → `FindCandidateTrucks` → `NotifyEligibleCompanies`. **Note:** no `IHostedService`/`BackgroundService` exists anywhere in this codebase today — this is the first slice that would introduce one, or an explicit synchronous call could substitute for Phase 1's demo purposes given the whole system is already pull-based (the simulation clock is advanced on request, not on a timer).
-- Device token / target registration endpoint.
-- FR3.5's per-company 30-minute submission window starts here, at notification time — track it alongside the notification record.
-
-**4. Verification**
-- No UI in Phase 1 for managing FCM targets — verified via a test harness/mock push receiver.
-- **Exit criteria:** a company with ≥1 eligible Truck receives a notification when a matching Shipment is created (or its window is edited); a company with no registered target fails gracefully rather than breaking the run for others.
+**Exit criteria (met):** booking a Shipment delivers a push to every company with a registered device; a company with no device, or a failed send, does not affect the booking or the others.
 
 ## Slice 12 — Offers & Approval — **Track B, not built**
 
@@ -148,9 +143,9 @@ Also shipped: `PATCH /trips/{id}/start` → `RescheduleTripHandler` (`Trip.Resch
 
 **Exit criteria:** full negotiation loop, in the browser/app — book → match/notify (Slice 10/11) → offer submitted → Shipper sees it → approves → Stops created on the winning Truck via the existing Slice-6 handler → other offers auto-rejected.
 
-## Slice 13 — Route View (Mobile) — backend prerequisites in place, UI not assessed
+## Slice 13 — Route View (Mobile) — ⚠️ Partly covered
 
-Pure consumer of Q1 (`GET /trucks/{id}/position`) and Q2 (`GET /trucks/{id}/etas`), both already built. A lightweight combined `GET /trucks/{id}/route-view` endpoint (single round trip) hasn't been built but is optional — the two existing calls already cover it. Mobile UI itself was outside the scope of the backend/web review this plan is based on.
+Pure consumer of Q1 (`GET /trucks/{id}/position`) and Q2 (`GET /trucks/{id}/etas`), both already built. The Android app's truck screen already shows the trip on a map with the truck's live position and the list of stops (reached or pending). **Not built:** per-stop ETAs in either app — `GET /trucks/{id}/etas` is used only by the e2e tests today. A combined `GET /trucks/{id}/route-view` endpoint remains optional.
 
 ---
 
@@ -160,10 +155,12 @@ Pure consumer of Q1 (`GET /trucks/{id}/position`) and Q2 (`GET /trucks/{id}/etas
 Track A (done):
 1 Foundation → 2 Reference Data → 3 Fleet Management → 4 Driver Compliance
   → 5 Shipment Booking → 6 Route Assignment (Trip/Stop) → 7 Route ETAs (Q2)
-  → 8 Q1/Q3(partial)/Q4(missing) → 9 Simulated Movement (global tick advance)
+  → 8 Q1/Q3/Q4(missing) → 9 Simulated Movement (global tick advance)
+  + Fleet-management Android app
 
-Track B (next, not built):
-10 Matching Engine → 11 Notifications → 12 Offers & Approval → 13 Mobile Route View
+Track B (in progress):
+10 Shipment Evaluation (done) → 11 Notifications (done) → 12 Offers & Approval (not built)
+  → 13 Mobile Route View (partly covered)
 ```
 
-Slices 1–9 satisfy Track A's success criteria in full (`freight-frd.md` §5, items 1–5) — a complete direct-assignment demo with real compliance-aware ETAs and simulated movement, no negotiation layer. Slices 10–13 are the concrete remaining plan for Track B (marketplace/negotiation loop + mobile route view), designed to build on top of 1–9 without reworking them — in particular, Slice 12's approval step is designed to call Slice 6's `AssignShipmentToTruckHandler` unchanged.
+Slices 1–9 satisfy Track A's success criteria in full (`freight-frd.md` §5, items 1–5) — a complete direct-assignment demo with real compliance-aware ETAs and simulated movement, no negotiation layer — on both web and Android. Slices 10 and 11 deliver Track B's notification half; Slice 12 (offers) is the remaining marketplace step, designed to build on top of 1–11 without reworking them — in particular, its approval step is designed to call Slice 6's `AssignShipmentToTruckHandler` unchanged.
