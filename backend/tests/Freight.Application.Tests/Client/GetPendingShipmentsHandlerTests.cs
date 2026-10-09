@@ -21,6 +21,12 @@ public sealed class GetPendingShipmentsHandlerTests
         TimeWindow.Create(BookedAt.AddHours(5), BookedAt.AddHours(7)),
         BookedAt);
 
+    private static GetPendingShipmentsHandler NewHandler(Mock<IUnitOfWork> unitOfWork, DateTime? now = null)
+    {
+        FakeSimulationClock.SetUp(unitOfWork, now ?? BookedAt);
+        return new GetPendingShipmentsHandler(unitOfWork.Object, TimeProvider.System);
+    }
+
     [Fact]
     public async Task GetPendingShipmentsAsync_QueriesByPendingStatusSpecifically()
     {
@@ -29,7 +35,7 @@ public sealed class GetPendingShipmentsHandlerTests
         var unitOfWork = new Mock<IUnitOfWork>();
         unitOfWork.SetupGet(u => u.Shipments).Returns(shipments.Object);
 
-        var handler = new GetPendingShipmentsHandler(unitOfWork.Object);
+        var handler = NewHandler(unitOfWork);
         await handler.GetPendingShipmentsAsync();
 
         shipments.Verify(s => s.GetByStatusAsync(ShipmentStatus.Pending, It.IsAny<CancellationToken>()), Times.Once);
@@ -45,7 +51,7 @@ public sealed class GetPendingShipmentsHandlerTests
         var unitOfWork = new Mock<IUnitOfWork>();
         unitOfWork.SetupGet(u => u.Shipments).Returns(shipments.Object);
 
-        var handler = new GetPendingShipmentsHandler(unitOfWork.Object);
+        var handler = NewHandler(unitOfWork);
         var response = await handler.GetPendingShipmentsAsync();
 
         var dto = Assert.Single(response.Shipments);
@@ -64,6 +70,24 @@ public sealed class GetPendingShipmentsHandlerTests
         Assert.Equal(shipment.DeliveryWindow.Latest, dto.DeliveryWindowLatest);
         Assert.Equal(shipment.OfferDeadline, dto.OfferDeadline);
         Assert.Equal(ShipmentStatus.Pending, dto.Status);
+        Assert.False(dto.IsDirect);
+        Assert.True(dto.OffersOpen);
+        Assert.Equal(0, dto.WaitingOfferCount);
+    }
+
+    [Fact]
+    public async Task GetPendingShipmentsAsync_AfterOfferDeadline_OffersNotOpen()
+    {
+        var shipment = SomeShipment();
+        var shipments = new Mock<IShipmentRepository>();
+        shipments.Setup(s => s.GetByStatusAsync(ShipmentStatus.Pending, It.IsAny<CancellationToken>())).ReturnsAsync([shipment]);
+        var unitOfWork = new Mock<IUnitOfWork>();
+        unitOfWork.SetupGet(u => u.Shipments).Returns(shipments.Object);
+
+        var handler = NewHandler(unitOfWork, shipment.OfferDeadline);
+        var response = await handler.GetPendingShipmentsAsync();
+
+        Assert.False(Assert.Single(response.Shipments).OffersOpen);
     }
 
     [Fact]
@@ -74,7 +98,7 @@ public sealed class GetPendingShipmentsHandlerTests
         var unitOfWork = new Mock<IUnitOfWork>();
         unitOfWork.SetupGet(u => u.Shipments).Returns(shipments.Object);
 
-        var handler = new GetPendingShipmentsHandler(unitOfWork.Object);
+        var handler = NewHandler(unitOfWork);
         var response = await handler.GetPendingShipmentsAsync();
 
         Assert.NotNull(response.Shipments);

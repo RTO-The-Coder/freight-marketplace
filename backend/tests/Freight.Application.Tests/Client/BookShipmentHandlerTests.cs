@@ -38,7 +38,7 @@ public sealed class BookShipmentHandlerTests
         var response = await handler.BookShipmentAsync(request);
 
         Assert.NotNull(addedShipment);
-        Assert.Equal(clockTime.AddMinutes(30), addedShipment!.OfferDeadline);
+        Assert.Equal(clockTime.AddHours(2), addedShipment!.OfferDeadline);
         Assert.Equal(request.ShipperId, addedShipment.ShipperId);
         Assert.Same(request.PickupLocation, addedShipment.PickupLocation);
         Assert.Same(request.DeliveryLocation, addedShipment.DeliveryLocation);
@@ -71,7 +71,7 @@ public sealed class BookShipmentHandlerTests
         await handler.BookShipmentAsync(SomeRequest());
 
         Assert.NotNull(addedShipment);
-        Assert.Equal(seedTimeOffset.UtcDateTime.AddMinutes(30), addedShipment!.OfferDeadline);
+        Assert.Equal(seedTimeOffset.UtcDateTime.AddHours(2), addedShipment!.OfferDeadline);
     }
 
     [Fact]
@@ -108,5 +108,60 @@ public sealed class BookShipmentHandlerTests
         Assert.Same(request.PickupLocation, sent.PickupLocation);
         Assert.Equal(request.RequiredTruckType, sent.RequiredTruckType);
         Assert.Same(request.PickupWindow, sent.PickupWindow);
+        Assert.False(sent.IsDirect);
+        notificationSender.Verify(n => n.NotifyCompanyAsync(
+            It.IsAny<Guid>(), It.IsAny<ShipmentNotificationSummary>(), It.IsAny<CancellationToken>()), Times.Never);
+    }
+
+    [Fact]
+    public async Task BookShipmentAsync_WithKnownCompany_BooksDirectAndNotifiesOnlyThatCompany()
+    {
+        var company = Freight.Domain.Fleet.TruckingCompany.Create(Guid.NewGuid(), "Acme Trucking", GeoLocation.Create(50.11, 8.68));
+        var companies = new Mock<Freight.Domain.Fleet.Abstractions.ITruckingCompanyRepository>();
+        companies.Setup(c => c.GetByIdAsync(company.Id, It.IsAny<CancellationToken>())).ReturnsAsync(company);
+        var shipments = new Mock<IShipmentRepository>();
+        Shipment? addedShipment = null;
+        shipments.Setup(s => s.Add(It.IsAny<Shipment>())).Callback<Shipment>(s => addedShipment = s);
+        var unitOfWork = new Mock<IUnitOfWork>();
+        unitOfWork.SetupGet(u => u.Shipments).Returns(shipments.Object);
+        unitOfWork.SetupGet(u => u.TruckingCompanies).Returns(companies.Object);
+        FakeSimulationClock.SetUp(unitOfWork, new DateTime(2026, 1, 1, 6, 0, 0));
+        var notificationSender = new Mock<INotificationSender>();
+
+        var handler = new BookShipmentHandler(unitOfWork.Object, new FakeTimeProvider(DateTimeOffset.UtcNow), notificationSender.Object);
+        var response = await handler.BookShipmentAsync(SomeRequest() with { TruckingCompanyId = company.Id });
+
+        Assert.NotNull(addedShipment);
+        Assert.True(addedShipment!.IsDirect);
+        Assert.Equal(company.Id, addedShipment.TruckingCompanyId);
+        notificationSender.Verify(n => n.NotifyCompanyAsync(
+            company.Id,
+            It.Is<ShipmentNotificationSummary>(s => s.ShipmentId == response.ShipmentId && s.IsDirect),
+            It.IsAny<CancellationToken>()), Times.Once);
+        notificationSender.Verify(n => n.NotifyAllCompaniesAsync(
+            It.IsAny<ShipmentNotificationSummary>(), It.IsAny<CancellationToken>()), Times.Never);
+    }
+
+    [Fact]
+    public async Task BookShipmentAsync_UnknownCompany_Throws_NeverSavesOrNotifies()
+    {
+        var companies = new Mock<Freight.Domain.Fleet.Abstractions.ITruckingCompanyRepository>();
+        companies.Setup(c => c.GetByIdAsync(It.IsAny<Guid>(), It.IsAny<CancellationToken>()))
+            .ReturnsAsync((Freight.Domain.Fleet.TruckingCompany?)null);
+        var shipments = new Mock<IShipmentRepository>();
+        var unitOfWork = new Mock<IUnitOfWork>();
+        unitOfWork.SetupGet(u => u.Shipments).Returns(shipments.Object);
+        unitOfWork.SetupGet(u => u.TruckingCompanies).Returns(companies.Object);
+        FakeSimulationClock.SetUp(unitOfWork, new DateTime(2026, 1, 1, 6, 0, 0));
+        var notificationSender = new Mock<INotificationSender>();
+
+        var handler = new BookShipmentHandler(unitOfWork.Object, new FakeTimeProvider(DateTimeOffset.UtcNow), notificationSender.Object);
+
+        await Assert.ThrowsAsync<InvalidOperationException>(() =>
+            handler.BookShipmentAsync(SomeRequest() with { TruckingCompanyId = Guid.NewGuid() }));
+
+        shipments.Verify(s => s.Add(It.IsAny<Shipment>()), Times.Never);
+        unitOfWork.Verify(u => u.SaveChangesAsync(It.IsAny<CancellationToken>()), Times.Never);
+        notificationSender.VerifyNoOtherCalls();
     }
 }

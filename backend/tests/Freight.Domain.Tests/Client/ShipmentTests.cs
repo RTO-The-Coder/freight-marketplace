@@ -51,7 +51,8 @@ public class ShipmentTests
         Assert.Equal(TruckType.Refrigerated, shipment.RequiredTruckType);
         Assert.Same(pickupWindow, shipment.PickupWindow);
         Assert.Same(deliveryWindow, shipment.DeliveryWindow);
-        Assert.Equal(BookedAt.AddMinutes(30), shipment.OfferDeadline);
+        Assert.Equal(BookedAt.AddHours(2), shipment.OfferDeadline);
+        Assert.False(shipment.IsDirect);
         Assert.Null(shipment.ScheduledPickupWindow);
         Assert.Null(shipment.ScheduledDeliveryWindow);
         Assert.Null(shipment.EstimatedPickup);
@@ -178,56 +179,165 @@ public class ShipmentTests
     }
 
     [Fact]
-    public void UpdatePickupWindow_WhilePending_UpdatesWindowAndRecomputesDeadlineFromUpdatedAt()
+    public void Book_WithDirectCompany_IsDirectHeldByThatCompanyAndPending()
+    {
+        var companyId = Guid.NewGuid();
+
+        var shipment = Shipment.Book(
+            Guid.NewGuid(), SomeLocation(), OtherLocation(), SomeLoad(), TruckType.Refrigerated,
+            SomeWindow(BookedAt.AddHours(1)), SomeWindow(BookedAt.AddHours(5)), BookedAt, companyId);
+
+        Assert.True(shipment.IsDirect);
+        Assert.Equal(companyId, shipment.TruckingCompanyId);
+        Assert.Equal(ShipmentStatus.Pending, shipment.Status);
+        Assert.False(shipment.IsOpenForOffers(BookedAt));
+    }
+
+    [Fact]
+    public void Book_EmptyDirectCompanyId_Throws()
+    {
+        Assert.Throws<ArgumentException>(() => Shipment.Book(
+            Guid.NewGuid(), SomeLocation(), OtherLocation(), SomeLoad(), TruckType.Refrigerated,
+            SomeWindow(BookedAt.AddHours(1)), SomeWindow(BookedAt.AddHours(5)), BookedAt, Guid.Empty));
+    }
+
+    [Fact]
+    public void IsOpenForOffers_OpenShipment_TrueUntilDeadline()
+    {
+        var shipment = BookedShipment();
+
+        Assert.True(shipment.IsOpenForOffers(BookedAt));
+        Assert.True(shipment.IsOpenForOffers(BookedAt.AddHours(2).AddTicks(-1)));
+        Assert.False(shipment.IsOpenForOffers(BookedAt.AddHours(2)));
+    }
+
+    [Fact]
+    public void AcceptOffer_WhileOpen_SetsCompanyAndStaysPending()
+    {
+        var shipment = BookedShipment();
+        var companyId = Guid.NewGuid();
+
+        shipment.AcceptOffer(companyId, BookedAt.AddHours(1));
+
+        Assert.Equal(companyId, shipment.TruckingCompanyId);
+        Assert.False(shipment.IsDirect);
+        Assert.Equal(ShipmentStatus.Pending, shipment.Status);
+        Assert.False(shipment.IsOpenForOffers(BookedAt.AddHours(1)));
+    }
+
+    [Fact]
+    public void AcceptOffer_AfterDeadline_Throws()
+    {
+        var shipment = BookedShipment();
+
+        Assert.Throws<InvalidOperationException>(() => shipment.AcceptOffer(Guid.NewGuid(), BookedAt.AddHours(2)));
+    }
+
+    [Fact]
+    public void AcceptOffer_SecondTime_Throws()
+    {
+        var shipment = BookedShipment();
+        shipment.AcceptOffer(Guid.NewGuid(), BookedAt);
+
+        Assert.Throws<InvalidOperationException>(() => shipment.AcceptOffer(Guid.NewGuid(), BookedAt));
+    }
+
+    [Fact]
+    public void AcceptOffer_EmptyCompanyId_Throws()
+    {
+        var shipment = BookedShipment();
+
+        Assert.Throws<ArgumentException>(() => shipment.AcceptOffer(Guid.Empty, BookedAt));
+    }
+
+    [Fact]
+    public void UpdateWindows_WhilePending_UpdatesBothWindowsAndRestartsDeadlineFromUpdatedAt()
     {
         var shipment = BookedShipment();
         var updatedAt = BookedAt.AddHours(3);
-        var newWindow = SomeWindow(updatedAt.AddHours(1));
+        var newPickup = SomeWindow(updatedAt.AddHours(1));
+        var newDelivery = SomeWindow(updatedAt.AddHours(6));
 
-        shipment.UpdatePickupWindow(newWindow, updatedAt);
+        shipment.UpdateWindows(newPickup, newDelivery, updatedAt);
 
-        Assert.Same(newWindow, shipment.PickupWindow);
-        Assert.Equal(updatedAt.AddMinutes(30), shipment.OfferDeadline);
-        Assert.NotEqual(BookedAt.AddMinutes(30), shipment.OfferDeadline);
+        Assert.Same(newPickup, shipment.PickupWindow);
+        Assert.Same(newDelivery, shipment.DeliveryWindow);
+        Assert.Equal(updatedAt.AddHours(2), shipment.OfferDeadline);
+        Assert.True(shipment.IsOpenForOffers(updatedAt));
     }
 
     [Fact]
-    public void UpdatePickupWindow_Null_Throws()
+    public void UpdateWindows_NullWindow_Throws()
     {
         var shipment = BookedShipment();
 
-        Assert.Throws<ArgumentNullException>(() => shipment.UpdatePickupWindow(null!, BookedAt));
+        Assert.Throws<ArgumentNullException>(() => shipment.UpdateWindows(null!, SomeWindow(BookedAt.AddHours(5)), BookedAt));
+        Assert.Throws<ArgumentNullException>(() => shipment.UpdateWindows(SomeWindow(BookedAt.AddHours(1)), null!, BookedAt));
     }
 
     [Fact]
-    public void UpdatePickupWindow_AfterBooked_Throws()
+    public void UpdateWindows_AfterBooked_Throws()
     {
         var shipment = BookedShipment();
         shipment.AssignToCompany(Guid.NewGuid());
 
-        Assert.Throws<InvalidOperationException>(() => shipment.UpdatePickupWindow(SomeWindow(BookedAt.AddHours(2)), BookedAt));
+        Assert.Throws<InvalidOperationException>(() =>
+            shipment.UpdateWindows(SomeWindow(BookedAt.AddHours(2)), SomeWindow(BookedAt.AddHours(6)), BookedAt));
     }
 
     [Fact]
-    public void UpdatePickupWindow_PushedPastDeliveryWindow_Throws()
+    public void UpdateWindows_AfterOfferAccepted_Throws()
     {
-        // BookedShipment()'s delivery window is [BookedAt+5h, BookedAt+7h] - a new pickup
-        // window opening after that leaves no room to deliver.
+        var shipment = BookedShipment();
+        shipment.AcceptOffer(Guid.NewGuid(), BookedAt);
+
+        Assert.Throws<InvalidOperationException>(() =>
+            shipment.UpdateWindows(SomeWindow(BookedAt.AddHours(2)), SomeWindow(BookedAt.AddHours(6)), BookedAt));
+    }
+
+    [Fact]
+    public void UpdateWindows_DirectShipment_Succeeds()
+    {
+        var shipment = Shipment.Book(
+            Guid.NewGuid(), SomeLocation(), OtherLocation(), SomeLoad(), TruckType.Refrigerated,
+            SomeWindow(BookedAt.AddHours(1)), SomeWindow(BookedAt.AddHours(5)), BookedAt, Guid.NewGuid());
+        var newPickup = SomeWindow(BookedAt.AddHours(2));
+
+        shipment.UpdateWindows(newPickup, SomeWindow(BookedAt.AddHours(6)), BookedAt);
+
+        Assert.Same(newPickup, shipment.PickupWindow);
+    }
+
+    [Fact]
+    public void UpdateWindows_DeliveryClosesBeforePickupOpens_Throws()
+    {
         var shipment = BookedShipment();
 
         Assert.Throws<ArgumentException>(() =>
-            shipment.UpdatePickupWindow(SomeWindow(BookedAt.AddHours(8)), BookedAt));
+            shipment.UpdateWindows(SomeWindow(BookedAt.AddHours(8)), SomeWindow(BookedAt.AddHours(5)), BookedAt));
     }
 
     [Fact]
-    public void UpdatePickupWindow_StillWithinDeliveryWindow_Succeeds()
+    public void AssignToCompany_SameCompanyAsAcceptedOffer_TransitionsToBooked()
     {
         var shipment = BookedShipment();
-        var newWindow = SomeWindow(BookedAt.AddHours(4));
+        var companyId = Guid.NewGuid();
+        shipment.AcceptOffer(companyId, BookedAt);
 
-        shipment.UpdatePickupWindow(newWindow, BookedAt);
+        shipment.AssignToCompany(companyId);
 
-        Assert.Same(newWindow, shipment.PickupWindow);
+        Assert.Equal(ShipmentStatus.Booked, shipment.Status);
+    }
+
+    [Fact]
+    public void AssignToCompany_OtherCompanyThanHolder_Throws()
+    {
+        var shipment = Shipment.Book(
+            Guid.NewGuid(), SomeLocation(), OtherLocation(), SomeLoad(), TruckType.Refrigerated,
+            SomeWindow(BookedAt.AddHours(1)), SomeWindow(BookedAt.AddHours(5)), BookedAt, Guid.NewGuid());
+
+        Assert.Throws<InvalidOperationException>(() => shipment.AssignToCompany(Guid.NewGuid()));
+        Assert.Equal(ShipmentStatus.Pending, shipment.Status);
     }
 
     [Fact]

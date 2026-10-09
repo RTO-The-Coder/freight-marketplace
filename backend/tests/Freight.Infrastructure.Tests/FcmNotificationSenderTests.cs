@@ -66,6 +66,37 @@ public sealed class FcmNotificationSenderTests : IDisposable
         Assert.Equal(["corrupt-1", "corrupt-2"], encryptor.Decrypted);
     }
 
+    [Fact]
+    public async Task NotifyCompanyAsync_CompanyHasNoRegisteredDevice_DoesNothing()
+    {
+        var otherCompanysDevice = DeviceToken.Create(Guid.NewGuid(), Guid.NewGuid(), "other-fid", DateTime.UtcNow);
+        var encryptor = new RecordingEncryptor();
+        var sender = new FcmNotificationSender(
+            new DeviceTokensOnlyUnitOfWork([otherCompanysDevice]), encryptor, _firebaseApp, NullLogger<FcmNotificationSender>.Instance);
+
+        await sender.NotifyCompanyAsync(Guid.NewGuid(), SomeSummary() with { IsDirect = true });
+
+        Assert.Empty(encryptor.Decrypted);
+    }
+
+    [Fact]
+    public async Task NotifyCompanyAsync_OnlyThatCompanysDeviceIsUsed_UndecryptableIsSkippedWithoutThrowing()
+    {
+        var companyId = Guid.NewGuid();
+        var devices = new[]
+        {
+            DeviceToken.Create(Guid.NewGuid(), Guid.NewGuid(), "other-fid", DateTime.UtcNow),
+            DeviceToken.Create(Guid.NewGuid(), companyId, "chosen-corrupt", DateTime.UtcNow),
+        };
+        var encryptor = new RecordingEncryptor(throwOnDecrypt: true);
+        var sender = new FcmNotificationSender(
+            new DeviceTokensOnlyUnitOfWork(devices), encryptor, _firebaseApp, NullLogger<FcmNotificationSender>.Instance);
+
+        await sender.NotifyCompanyAsync(companyId, SomeSummary() with { IsDirect = true });
+
+        Assert.Equal(["chosen-corrupt"], encryptor.Decrypted);
+    }
+
     private sealed class RecordingEncryptor(bool throwOnDecrypt = false) : IDeviceTokenEncryptor
     {
         public List<string> Decrypted { get; } = [];
@@ -91,6 +122,7 @@ public sealed class FcmNotificationSenderTests : IDisposable
         public ITripRepository Trips => throw new NotSupportedException();
         public IDriverRepository Drivers => throw new NotSupportedException();
         public IShipmentRepository Shipments => throw new NotSupportedException();
+        public IShipmentOfferRepository ShipmentOffers => throw new NotSupportedException();
         public ISimulationClockRepository SimulationClock => throw new NotSupportedException();
 
         public Task<int> SaveChangesAsync(CancellationToken cancellationToken = default) => throw new NotSupportedException();
@@ -102,7 +134,7 @@ public sealed class FcmNotificationSenderTests : IDisposable
             Task.FromResult(devices);
 
         public Task<DeviceToken?> GetByTruckingCompanyIdAsync(Guid truckingCompanyId, CancellationToken cancellationToken = default) =>
-            throw new NotSupportedException();
+            Task.FromResult(devices.FirstOrDefault(device => device.TruckingCompanyId == truckingCompanyId));
 
         public Task<DeviceToken?> GetByIdAsync(Guid id, CancellationToken cancellationToken = default) =>
             throw new NotSupportedException();

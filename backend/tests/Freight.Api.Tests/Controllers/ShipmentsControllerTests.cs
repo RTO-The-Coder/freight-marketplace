@@ -86,65 +86,123 @@ public sealed class ShipmentsControllerTests : ApiTestBase
     }
 
     [Fact]
-    public async Task UpdatePickupWindow_UnknownShipment_Returns400ViaExceptionMiddleware()
+    public async Task BookShipment_WithKnownCompany_IsDirectAndHeldByThatCompany()
     {
-        var newEarliest = new DateTimeOffset(2026, 3, 1, 6, 0, 0, TimeSpan.Zero).UtcDateTime;
+        var shipper = await Factory.SeedShipperAsync();
+        var company = await Factory.SeedTruckingCompanyAsync();
 
-        var response = await Client.PatchAsJsonAsync($"/shipments/{Guid.NewGuid()}/pickup-window", new
-        {
-            PickupWindowEarliest = newEarliest,
-            PickupWindowLatest = newEarliest.AddDays(1)
-        }, JsonOptions);
+        var bookResponse = await BookShipmentAsync(shipper.Id, company.Id);
+
+        var pending = await Client.GetFromJsonAsync<GetPendingShipmentsResponse>("/shipments/pending", JsonOptions);
+        var shipment = pending!.Shipments.Single(s => s.ShipmentId == bookResponse.ShipmentId);
+        Assert.True(shipment.IsDirect);
+        Assert.Equal(company.Id, shipment.TruckingCompanyId);
+        Assert.False(shipment.OffersOpen);
+    }
+
+    [Fact]
+    public async Task BookShipment_UnknownCompany_Returns400ViaExceptionMiddleware()
+    {
+        var shipper = await Factory.SeedShipperAsync();
+        var pickupStart = new DateTimeOffset(2026, 3, 1, 6, 0, 0, TimeSpan.Zero).UtcDateTime;
+
+        var response = await Client.PostAsJsonAsync("/shipments", BookBody(shipper.Id, pickupStart, Guid.NewGuid()), JsonOptions);
 
         Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
     }
 
     [Fact]
-    public async Task UpdatePickupWindow_ValidBody_Returns204AndUpdatesWindow()
+    public async Task UpdateWindows_UnknownShipment_Returns400ViaExceptionMiddleware()
+    {
+        var newEarliest = new DateTimeOffset(2026, 3, 1, 6, 0, 0, TimeSpan.Zero).UtcDateTime;
+
+        var response = await Client.PatchAsJsonAsync($"/shipments/{Guid.NewGuid()}/windows", WindowsBody(newEarliest), JsonOptions);
+
+        Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
+    }
+
+    [Fact]
+    public async Task UpdateWindows_ValidBody_Returns204AndUpdatesBothWindows()
     {
         var shipper = await Factory.SeedShipperAsync();
         var bookResponse = await BookShipmentAsync(shipper.Id);
-        // BookShipmentAsync's delivery window closes at pickupStart.AddDays(3) - this stays
-        // inside it, so it's a valid pickup-window edit.
         var newEarliest = new DateTimeOffset(2026, 3, 2, 6, 0, 0, TimeSpan.Zero).UtcDateTime;
 
-        var response = await Client.PatchAsJsonAsync($"/shipments/{bookResponse.ShipmentId}/pickup-window", new
-        {
-            PickupWindowEarliest = newEarliest,
-            PickupWindowLatest = newEarliest.AddDays(1)
-        }, JsonOptions);
+        var response = await Client.PatchAsJsonAsync(
+            $"/shipments/{bookResponse.ShipmentId}/windows", WindowsBody(newEarliest), JsonOptions);
 
         Assert.Equal(HttpStatusCode.NoContent, response.StatusCode);
 
         var pending = await Client.GetFromJsonAsync<GetPendingShipmentsResponse>("/shipments/pending", JsonOptions);
         var shipment = pending!.Shipments.Single(s => s.ShipmentId == bookResponse.ShipmentId);
         Assert.Equal(newEarliest, shipment.PickupWindowEarliest);
+        Assert.Equal(newEarliest.AddDays(2), shipment.DeliveryWindowLatest);
     }
 
     [Fact]
-    public async Task UpdatePickupWindow_PushesPickupPastDeliveryWindow_Returns400ViaExceptionMiddleware()
+    public async Task UpdateWindows_DeliveryClosesBeforePickupOpens_Returns400ViaExceptionMiddleware()
     {
         var shipper = await Factory.SeedShipperAsync();
         var bookResponse = await BookShipmentAsync(shipper.Id);
-        // BookShipmentAsync's delivery window closes at pickupStart.AddDays(3) - pushing
-        // pickup to open after that makes delivery impossible.
         var newEarliest = new DateTimeOffset(2026, 3, 10, 6, 0, 0, TimeSpan.Zero).UtcDateTime;
 
-        var response = await Client.PatchAsJsonAsync($"/shipments/{bookResponse.ShipmentId}/pickup-window", new
+        var response = await Client.PatchAsJsonAsync($"/shipments/{bookResponse.ShipmentId}/windows", new
         {
             PickupWindowEarliest = newEarliest,
-            PickupWindowLatest = newEarliest.AddDays(1)
+            PickupWindowLatest = newEarliest.AddDays(1),
+            DeliveryWindowEarliest = newEarliest.AddDays(-3),
+            DeliveryWindowLatest = newEarliest.AddDays(-2)
         }, JsonOptions);
 
         Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
     }
 
-    private async Task<BookShipmentResponse> BookShipmentAsync(Guid shipperId)
+    [Fact]
+    public async Task GetOffers_NewShipment_ReturnsEmptyListWithDeadline()
+    {
+        var shipper = await Factory.SeedShipperAsync();
+        var bookResponse = await BookShipmentAsync(shipper.Id);
+
+        var offers = await Client.GetFromJsonAsync<Freight.Application.Offers.GetShipmentOffersResponse>(
+            $"/shipments/{bookResponse.ShipmentId}/offers", JsonOptions);
+
+        Assert.NotNull(offers);
+        Assert.Equal(bookResponse.ShipmentId, offers.ShipmentId);
+        Assert.Empty(offers.Offers);
+    }
+
+    private static object WindowsBody(DateTime pickupEarliest) => new
+    {
+        PickupWindowEarliest = pickupEarliest,
+        PickupWindowLatest = pickupEarliest.AddDays(1),
+        DeliveryWindowEarliest = pickupEarliest,
+        DeliveryWindowLatest = pickupEarliest.AddDays(2)
+    };
+
+    private static object BookBody(Guid shipperId, DateTime pickupStart, Guid? truckingCompanyId) => new
+    {
+        ShipperId = shipperId,
+        PickupLatitude = 52.52,
+        PickupLongitude = 13.405,
+        DeliveryLatitude = 48.1351,
+        DeliveryLongitude = 11.582,
+        LoadWeightKg = 100.0,
+        LoadVolumeCubicMeters = 1.0,
+        RequiredTruckType = TruckType.Refrigerated,
+        PickupWindowEarliest = pickupStart,
+        PickupWindowLatest = pickupStart.AddDays(2),
+        DeliveryWindowEarliest = pickupStart,
+        DeliveryWindowLatest = pickupStart.AddDays(3),
+        TruckingCompanyId = truckingCompanyId
+    };
+
+    private async Task<BookShipmentResponse> BookShipmentAsync(Guid shipperId, Guid? truckingCompanyId = null)
     {
         var pickupStart = new DateTimeOffset(2026, 3, 1, 6, 0, 0, TimeSpan.Zero).UtcDateTime;
 
         var response = await Client.PostAsJsonAsync("/shipments", new
         {
+            TruckingCompanyId = truckingCompanyId,
             ShipperId = shipperId,
             PickupLatitude = 52.52,
             PickupLongitude = 13.405,

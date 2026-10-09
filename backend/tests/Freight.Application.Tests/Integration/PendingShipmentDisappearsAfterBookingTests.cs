@@ -53,7 +53,7 @@ public sealed class PendingShipmentDisappearsAfterBookingTests
             Capacity.Create(50, 1), TruckType.Refrigerated,
             TimeWindow.Create(ClockStart, ClockStart.AddDays(2)), TimeWindow.Create(ClockStart, ClockStart.AddDays(3))));
 
-        var pendingHandler = new GetPendingShipmentsHandler(unitOfWork);
+        var pendingHandler = new GetPendingShipmentsHandler(unitOfWork, timeProvider);
         var pendingBefore = await pendingHandler.GetPendingShipmentsAsync();
         Assert.Equal(2, pendingBefore.Shipments.Count);
 
@@ -64,7 +64,7 @@ public sealed class PendingShipmentDisappearsAfterBookingTests
         await assignHandler.AssignShipmentAsync(new AssignShipmentToTruckRequest(truckResponse.TruckId, shipmentA.ShipmentId, 0, 0));
 
         var pendingAfter = await pendingHandler.GetPendingShipmentsAsync();
-        var byShipperHandler = new GetShipmentsByShipperHandler(unitOfWork);
+        var byShipperHandler = new GetShipmentsByShipperHandler(unitOfWork, timeProvider);
         var shipperHistory = await byShipperHandler.GetShipmentsByShipperAsync(new GetShipmentsByShipperRequest(shipper.Id));
 
         // Shipment A is gone from the pending list; shipment B remains.

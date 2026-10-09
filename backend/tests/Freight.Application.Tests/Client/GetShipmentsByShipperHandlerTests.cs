@@ -20,6 +20,40 @@ public sealed class GetShipmentsByShipperHandlerTests
         TimeWindow.Create(BookedAt.AddHours(5), BookedAt.AddHours(7)),
         BookedAt);
 
+    private static GetShipmentsByShipperHandler NewHandler(
+        Mock<IUnitOfWork> unitOfWork, IReadOnlyList<ShipmentOffer>? offers = null, DateTime? now = null)
+    {
+        FakeSimulationClock.SetUp(unitOfWork, now ?? BookedAt);
+        var offerRepo = new Mock<IShipmentOfferRepository>();
+        offerRepo.Setup(r => r.GetByShipmentIdsAsync(It.IsAny<IReadOnlyCollection<Guid>>(), It.IsAny<CancellationToken>()))
+            .ReturnsAsync(offers ?? []);
+        unitOfWork.SetupGet(u => u.ShipmentOffers).Returns(offerRepo.Object);
+        return new GetShipmentsByShipperHandler(unitOfWork.Object, TimeProvider.System);
+    }
+
+    [Fact]
+    public async Task GetShipmentsByShipperAsync_CountsOnlyWaitingOffers()
+    {
+        var shipperId = Guid.NewGuid();
+        var shipment = SomeShipment(shipperId);
+        var waiting = ShipmentOffer.Create(shipment.Id, Guid.NewGuid(), Guid.NewGuid(), 0, 1, 5, 500m, null, BookedAt);
+        var limitPassed = ShipmentOffer.Create(shipment.Id, Guid.NewGuid(), Guid.NewGuid(), 0, 1, 5, 600m, BookedAt.AddMinutes(10), BookedAt);
+        var rejected = ShipmentOffer.Create(shipment.Id, Guid.NewGuid(), Guid.NewGuid(), 0, 1, 5, 700m, null, BookedAt);
+        rejected.Reject();
+
+        var shipments = new Mock<IShipmentRepository>();
+        shipments.Setup(s => s.GetByShipperIdAsync(shipperId, It.IsAny<CancellationToken>())).ReturnsAsync([shipment]);
+        var unitOfWork = new Mock<IUnitOfWork>();
+        unitOfWork.SetupGet(u => u.Shipments).Returns(shipments.Object);
+
+        var handler = NewHandler(unitOfWork, [waiting, limitPassed, rejected], BookedAt.AddMinutes(30));
+        var response = await handler.GetShipmentsByShipperAsync(new GetShipmentsByShipperRequest(shipperId));
+
+        var dto = Assert.Single(response.Shipments);
+        Assert.Equal(1, dto.WaitingOfferCount);
+        Assert.True(dto.OffersOpen);
+    }
+
     [Fact]
     public async Task GetShipmentsByShipperAsync_ForwardsRequestedShipperIdVerbatim()
     {
@@ -29,7 +63,7 @@ public sealed class GetShipmentsByShipperHandlerTests
         var unitOfWork = new Mock<IUnitOfWork>();
         unitOfWork.SetupGet(u => u.Shipments).Returns(shipments.Object);
 
-        var handler = new GetShipmentsByShipperHandler(unitOfWork.Object);
+        var handler = NewHandler(unitOfWork);
         await handler.GetShipmentsByShipperAsync(new GetShipmentsByShipperRequest(shipperId));
 
         shipments.Verify(s => s.GetByShipperIdAsync(shipperId, It.IsAny<CancellationToken>()), Times.Once);
@@ -49,7 +83,7 @@ public sealed class GetShipmentsByShipperHandlerTests
         var unitOfWork = new Mock<IUnitOfWork>();
         unitOfWork.SetupGet(u => u.Shipments).Returns(shipments.Object);
 
-        var handler = new GetShipmentsByShipperHandler(unitOfWork.Object);
+        var handler = NewHandler(unitOfWork);
         var response = await handler.GetShipmentsByShipperAsync(new GetShipmentsByShipperRequest(shipperId));
 
         var dto = Assert.Single(response.Shipments);
@@ -65,7 +99,7 @@ public sealed class GetShipmentsByShipperHandlerTests
         var unitOfWork = new Mock<IUnitOfWork>();
         unitOfWork.SetupGet(u => u.Shipments).Returns(shipments.Object);
 
-        var handler = new GetShipmentsByShipperHandler(unitOfWork.Object);
+        var handler = NewHandler(unitOfWork);
         var response = await handler.GetShipmentsByShipperAsync(new GetShipmentsByShipperRequest(shipperId));
 
         Assert.NotNull(response.Shipments);

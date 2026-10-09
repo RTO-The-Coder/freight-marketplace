@@ -25,6 +25,7 @@ internal sealed class FakeUnitOfWork : IUnitOfWork
     public FakeTripRepository TripsRepo { get; } = new();
     public FakeDriverRepository DriversRepo { get; } = new();
     public FakeShipmentRepository ShipmentsRepo { get; } = new();
+    public FakeShipmentOfferRepository ShipmentOffersRepo { get; } = new();
     public FakeSimulationClockRepository SimulationClockRepo { get; } = new();
 
     public ITruckingCompanyRepository TruckingCompanies => TruckingCompaniesRepo;
@@ -34,6 +35,7 @@ internal sealed class FakeUnitOfWork : IUnitOfWork
     public ITripRepository Trips => TripsRepo;
     public IDriverRepository Drivers => DriversRepo;
     public IShipmentRepository Shipments => ShipmentsRepo;
+    public IShipmentOfferRepository ShipmentOffers => ShipmentOffersRepo;
     public ISimulationClockRepository SimulationClock => SimulationClockRepo;
 
     public Task<int> SaveChangesAsync(CancellationToken cancellationToken = default) => Task.FromResult(0);
@@ -106,6 +108,19 @@ internal sealed class FakeShipmentRepository : FakeRepository<Shipment>, IShipme
 
     public Task<IReadOnlyList<Shipment>> GetByStatusAsync(ShipmentStatus status, CancellationToken cancellationToken = default) =>
         Task.FromResult<IReadOnlyList<Shipment>>([.. Items.Values.Where(s => s.Status == status)]);
+}
+
+internal sealed class FakeShipmentOfferRepository : FakeRepository<ShipmentOffer>, IShipmentOfferRepository
+{
+    public Task<IReadOnlyList<ShipmentOffer>> GetByShipmentIdAsync(Guid shipmentId, CancellationToken cancellationToken = default) =>
+        Task.FromResult<IReadOnlyList<ShipmentOffer>>([.. Items.Values.Where(o => o.ShipmentId == shipmentId)]);
+
+    public Task<IReadOnlyList<ShipmentOffer>> GetByShipmentIdsAsync(
+        IReadOnlyCollection<Guid> shipmentIds, CancellationToken cancellationToken = default) =>
+        Task.FromResult<IReadOnlyList<ShipmentOffer>>([.. Items.Values.Where(o => shipmentIds.Contains(o.ShipmentId))]);
+
+    public Task<IReadOnlyList<ShipmentOffer>> GetByCompanyIdAsync(Guid truckingCompanyId, CancellationToken cancellationToken = default) =>
+        Task.FromResult<IReadOnlyList<ShipmentOffer>>([.. Items.Values.Where(o => o.TruckingCompanyId == truckingCompanyId)]);
 }
 
 internal sealed class FakeSimulationClockRepository : ISimulationClockRepository
