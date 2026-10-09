@@ -23,6 +23,8 @@ public interface IUnitOfWork
 
     IShipmentRepository Shipments { get; }
 
+    IShipmentOfferRepository ShipmentOffers { get; }
+
     ISimulationClockRepository SimulationClock { get; }
 
     Task<int> SaveChangesAsync(CancellationToken cancellationToken = default);

@@ -23,6 +23,7 @@ public sealed class UnitOfWork : IUnitOfWork
         Trips = new TripRepository(dbContext);
         Drivers = new DriverRepository(dbContext);
         Shipments = new ShipmentRepository(dbContext);
+        ShipmentOffers = new ShipmentOfferRepository(dbContext);
         SimulationClock = new SimulationClockRepository(dbContext);
     }
 
@@ -39,6 +40,8 @@ public sealed class UnitOfWork : IUnitOfWork
     public IDriverRepository Drivers { get; }
 
     public IShipmentRepository Shipments { get; }
+
+    public IShipmentOfferRepository ShipmentOffers { get; }
 
     public ISimulationClockRepository SimulationClock { get; }
 

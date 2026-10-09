@@ -8,6 +8,7 @@ using ShipmentAggregate = Freight.Domain.Client.Shipment;
 
 namespace Freight.Application.Client;
 
+/// <param name="TruckingCompanyId">Set to book the shipment straight to that company (no offers); null for an open shipment.</param>
 public sealed record BookShipmentRequest(
     Guid ShipperId,
     GeoLocation PickupLocation,
@@ -15,7 +16,8 @@ public sealed record BookShipmentRequest(
     Capacity Load,
     TruckType RequiredTruckType,
     TimeWindow PickupWindow,
-    TimeWindow DeliveryWindow);
+    TimeWindow DeliveryWindow,
+    Guid? TruckingCompanyId = null);
 
 public sealed record BookShipmentResponse(Guid ShipmentId);
 
@@ -24,6 +26,12 @@ public sealed class BookShipmentHandler(
 {
     public async Task<BookShipmentResponse> BookShipmentAsync(BookShipmentRequest request, CancellationToken cancellationToken = default)
     {
+        if (request.TruckingCompanyId is { } companyId
+            && await unitOfWork.TruckingCompanies.GetByIdAsync(companyId, cancellationToken) is null)
+        {
+            throw new InvalidOperationException($"Trucking company '{companyId}' was not found.");
+        }
+
         var clock = await unitOfWork.SimulationClock.GetOrCreateAsync(
             () => timeProvider.GetUtcNow().UtcDateTime, cancellationToken);
 
@@ -35,16 +43,24 @@ public sealed class BookShipmentHandler(
             request.RequiredTruckType,
             request.PickupWindow,
             request.DeliveryWindow,
-            clock.CurrentTime);
+            clock.CurrentTime,
+            request.TruckingCompanyId);
 
         unitOfWork.Shipments.Add(shipment);
         await unitOfWork.SaveChangesAsync(cancellationToken);
 
-        // Unconditional - every TruckingCompany, no eligibility filtering (ADR 0007).
-        // Runs synchronously since there is no search here, just a notification send.
+        // No search here, just a notification send, so it runs synchronously (ADR 0007):
+        // an open shipment goes to every TruckingCompany, a direct one only to its company.
         var summary = new ShipmentNotificationSummary(
-            shipment.Id, shipment.PickupLocation, shipment.RequiredTruckType, shipment.PickupWindow);
-        await notificationSender.NotifyAllCompaniesAsync(summary, cancellationToken);
+            shipment.Id, shipment.PickupLocation, shipment.RequiredTruckType, shipment.PickupWindow, shipment.IsDirect);
+        if (shipment.IsDirect)
+        {
+            await notificationSender.NotifyCompanyAsync(shipment.TruckingCompanyId!.Value, summary, cancellationToken);
+        }
+        else
+        {
+            await notificationSender.NotifyAllCompaniesAsync(summary, cancellationToken);
+        }
 
         return new BookShipmentResponse(shipment.Id);
     }

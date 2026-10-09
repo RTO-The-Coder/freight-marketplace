@@ -25,4 +25,21 @@ public sealed class LogNotificationSender(ILogger<LogNotificationSender> logger)
 
         return Task.CompletedTask;
     }
+
+    public Task NotifyCompanyAsync(
+        Guid truckingCompanyId, ShipmentNotificationSummary summary, CancellationToken cancellationToken = default)
+    {
+        logger.LogInformation(
+            "Shipment {ShipmentId} booked directly to company {TruckingCompanyId} (pickup {PickupLatitude},{PickupLongitude}, " +
+            "{TruckType}, window {Earliest}-{Latest}) - no push sent, Fcm:ServiceAccountPath is not configured.",
+            summary.ShipmentId,
+            truckingCompanyId,
+            summary.PickupLocation.Latitude,
+            summary.PickupLocation.Longitude,
+            summary.RequiredTruckType,
+            summary.PickupWindow.Earliest,
+            summary.PickupWindow.Latest);
+
+        return Task.CompletedTask;
+    }
 }

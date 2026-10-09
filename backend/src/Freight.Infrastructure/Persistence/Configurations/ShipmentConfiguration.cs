@@ -17,6 +17,9 @@ public sealed class ShipmentConfiguration : IEntityTypeConfiguration<Shipment>
 
         builder.Property(shipment => shipment.TruckingCompanyId);
 
+        builder.Property(shipment => shipment.IsDirect)
+            .IsRequired();
+
         builder.Property(shipment => shipment.RequiredTruckType)
             .HasConversion<string>()
             .IsRequired();
