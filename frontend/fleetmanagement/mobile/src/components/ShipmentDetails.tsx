@@ -1,22 +1,24 @@
 import type { ShipmentSummaryDto } from '@freight/api-client'
+import type { ReactNode } from 'react'
 import { StyleSheet, View } from 'react-native'
-import { Button, Card, ProgressBar, Text } from 'react-native-paper'
+import { Card, ProgressBar, Text } from 'react-native-paper'
 import { capacityFill, fmtRelative, fmtWindow, useSimClock } from '@freight/fleetmanagement-core'
 import { ShipmentRouteMap } from '../map/ShipmentRouteMap'
-import type { ShipmentAction } from './ShipmentActions'
 
 interface Props {
   shipment: ShipmentSummaryDto
-  /** Check eligibility / Assign to a truck was pressed. Without it, the buttons are not shown. */
-  onAction?: (action: ShipmentAction) => void
+  /** Extra lines under the windows - e.g. this company's offers on the shipment. */
+  extra?: ReactNode
+  /** The card's buttons, which depend on the list the shipment is in. None when omitted. */
+  actions?: ReactNode
 }
 
 /**
  * One shipment's details inside a Card - route map, load, pickup and delivery windows -
- * plus, when `onAction` is given, its two actions. Shared by the expanded card in the Open
- * shipments list (with actions) and the Shipment screen a notification opens (details only).
+ * plus whatever extra lines and buttons the caller passes. Shared by the expanded cards in the
+ * Shipments tab's lists and the Shipment screen a notification opens.
  */
-export function ShipmentDetails({ shipment: s, onAction }: Props) {
+export function ShipmentDetails({ shipment: s, extra, actions }: Props) {
   const { currentTime } = useSimClock()
   const cap = capacityFill(s)
 
@@ -37,17 +39,9 @@ export function ShipmentDetails({ shipment: s, onAction }: Props) {
           <Text variant="labelMedium">Deliver</Text>
           <Text variant="bodyMedium">{fmtWindow(s.deliveryWindowEarliest, s.deliveryWindowLatest)}</Text>
         </View>
+        {extra}
       </Card.Content>
-      {onAction && (
-        <Card.Actions>
-          <Button mode="outlined" onPress={() => onAction('eligibility')}>
-            Check eligibility
-          </Button>
-          <Button mode="contained" onPress={() => onAction('assign')}>
-            Assign to a truck
-          </Button>
-        </Card.Actions>
-      )}
+      {actions && <Card.Actions>{actions}</Card.Actions>}
     </>
   )
 }

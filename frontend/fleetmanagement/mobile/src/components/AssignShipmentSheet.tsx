@@ -10,8 +10,8 @@ import {
   fmtWindow,
   insertionPreviewOrder,
   pendingRouteStops,
+  offersApi,
   resolveInsertionIndices,
-  shipmentsApi,
   shipmentsFittingTruck,
   useSimClock,
 } from '@freight/fleetmanagement-core'
@@ -64,11 +64,16 @@ export function AssignShipmentSheet({ truck, visible, onClose, onAssigned, initi
     setStartInput('')
     setPickupRaw(null)
     setDeliveryRaw(null)
-    shipmentsApi
-      .getPendingShipments()
-      .then((r) => setShipments(r.shipments))
+    // Only shipments booked straight to this truck's company - open shipments go through offers.
+    if (!truck.truckingCompanyId) {
+      setShipments([])
+      return
+    }
+    offersApi
+      .getShipmentBoard(truck.truckingCompanyId)
+      .then((board) => setShipments(board.direct))
       .catch((err) => setLoadError(errorMessage(err, 'Failed to load shipments.')))
-  }, [visible, initialShipmentId])
+  }, [visible, initialShipmentId, truck.truckingCompanyId])
 
   const relevant = useMemo(
     () =>
@@ -163,7 +168,7 @@ export function AssignShipmentSheet({ truck, visible, onClose, onAssigned, initi
         {`Pending shipments needing a ${truck.truckType} that fit a ${truck.truckSize} truck.`}
       </Text>
       {!shipments && !loadError && <LoadingState />}
-      {shipments && relevant.length === 0 && <Text variant="bodyMedium">No pending shipment matches this truck.</Text>}
+      {shipments && relevant.length === 0 && <Text variant="bodyMedium">No shipment booked directly to this company matches this truck.</Text>}
       {relevant.length > 0 && (
         <RadioButton.Group value={shipmentId ?? ''} onValueChange={setShipmentId}>
           {relevant.slice(0, RENDER_LIMIT).map((s) => {

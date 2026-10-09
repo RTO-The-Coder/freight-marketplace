@@ -157,8 +157,11 @@ describe('fleet map on the company screen', () => {
 
 it('shipment card: the expanded card shows the pickup → delivery route', async () => {
   installFakeApi({
-    'GET /shipments/pending': {
-      shipments: [
+    'GET /companies/c1/shipments/board': {
+      offered: [],
+      approved: [],
+      direct: [],
+      open: [
         {
           shipmentId: 'sh1',
           truckingCompanyId: null,
@@ -175,6 +178,9 @@ it('shipment card: the expanded card shows the pickup → delivery route', async
           deliveryWindowLatest: '2026-08-03T18:00:00Z',
           offerDeadline: '2026-08-01T06:00:00Z',
           status: 'Pending',
+          isDirect: false,
+          offersOpen: true,
+          waitingOfferCount: 0,
         },
       ],
     },

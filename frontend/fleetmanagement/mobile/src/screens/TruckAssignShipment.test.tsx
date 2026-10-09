@@ -37,9 +37,13 @@ const truck = (extra = {}) => ({
   ...extra,
 })
 
+// The truck screen only offers shipments booked directly to the truck's company (c1).
 const shipment = (shipmentId: string, weight: number, pickup: string, extra = {}) => ({
   shipmentId,
-  truckingCompanyId: null,
+  truckingCompanyId: 'c1',
+  isDirect: true,
+  offersOpen: false,
+  waitingOfferCount: 0,
   pickupLatitude: 51,
   pickupLongitude: 17,
   deliveryLatitude: 52,
@@ -63,11 +67,13 @@ const pending = [
   shipment('tanker', 500, '2026-08-01T08:00:00Z', { requiredTruckType: 'Tanker' }),
 ]
 
+const board = (direct: unknown[]) => ({ open: [], offered: [], approved: [], direct })
+
 function routes(extra: Record<string, unknown> = {}) {
   return {
     'GET /trucks/t1': truck(),
     'GET /drivers/d1': { ...jan, breakRule: 'FullBreak', dailyRestRule: 'FullRest', weeklyRestRule: 'FullWeeklyRest', extendDailyDrivingWhenEligible: false, complianceState: null },
-    'GET /shipments/pending': { shipments: pending },
+    'GET /companies/c1/shipments/board': board(pending),
     'POST /trucks/t1/assign-shipment/feasibility': { isFeasible: true, violatingStopId: null, reason: null },
     'POST /trucks/t1/assign-shipment': { stopCount: 3 },
     ...extra,
@@ -195,8 +201,8 @@ it('shows the API error when assigning fails', async () => {
 })
 
 it('says so when no shipment fits', async () => {
-  installFakeApi(routes({ 'GET /shipments/pending': { shipments: [pending[2], pending[3]] } }))
+  installFakeApi(routes({ 'GET /companies/c1/shipments/board': board([pending[2], pending[3]]) }))
   renderTruck()
   fireEvent.press(await screen.findByText('Assign shipment'))
-  expect(await screen.findByText('No pending shipment matches this truck.')).toBeOnTheScreen()
+  expect(await screen.findByText('No shipment booked directly to this company matches this truck.')).toBeOnTheScreen()
 })
