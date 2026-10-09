@@ -1,7 +1,10 @@
 import type { ShipmentSummaryDto, ShipperSummaryDto } from '@freight/api-client'
 import { useCallback, useEffect, useState } from 'react'
+import { ChangeTimesModal } from '../components/ChangeTimesModal'
 import { NewShipmentForm } from '../components/NewShipmentForm'
-import { shipmentsApi } from '../apiClient'
+import { ShipmentOffersModal } from '../components/ShipmentOffersModal'
+import { shipmentsApi, truckingCompaniesApi } from '../apiClient'
+import { formatDateTime } from '../formatDateTime'
 
 interface ShipperDetailScreenProps {
   shipperId: string
@@ -9,15 +12,26 @@ interface ShipperDetailScreenProps {
 }
 
 function formatWindow(earliest: string, latest: string): string {
-  const format = (iso: string) => new Date(iso).toLocaleString()
-  return `${format(earliest)} – ${format(latest)}`
+  return `${formatDateTime(earliest)} – ${formatDateTime(latest)}`
+}
+
+/** What the shipper can do with a still-Pending shipment, from who holds it and the 2-hour offer window. */
+type PendingState = 'direct' | 'accepted' | 'offersOpen' | 'dead'
+
+function pendingState(shipment: ShipmentSummaryDto): PendingState {
+  if (shipment.isDirect) return 'direct'
+  if (shipment.truckingCompanyId) return 'accepted'
+  return shipment.offersOpen ? 'offersOpen' : 'dead'
 }
 
 export function ShipperDetailScreen({ shipperId, onBack }: ShipperDetailScreenProps) {
   const [shipper, setShipper] = useState<ShipperSummaryDto | null>(null)
   const [shipments, setShipments] = useState<ShipmentSummaryDto[] | null>(null)
+  const [companyNames, setCompanyNames] = useState<Record<string, string>>({})
   const [error, setError] = useState<string | null>(null)
   const [showForm, setShowForm] = useState(false)
+  const [offersFor, setOffersFor] = useState<string | null>(null)
+  const [changeTimesFor, setChangeTimesFor] = useState<ShipmentSummaryDto | null>(null)
 
   const loadShipments = useCallback(() => {
     shipmentsApi
@@ -34,6 +48,64 @@ export function ShipperDetailScreen({ shipperId, onBack }: ShipperDetailScreenPr
 
     loadShipments()
   }, [shipperId, loadShipments])
+
+  useEffect(() => {
+    // Only for showing names on direct/accepted shipments - a failure just leaves them out.
+    truckingCompaniesApi
+      .getTruckingCompanies()
+      .then((response) =>
+        setCompanyNames(Object.fromEntries(response.companies.map((c) => [c.companyId, c.name]))),
+      )
+      .catch(() => setCompanyNames({}))
+  }, [])
+
+  const companyName = (companyId: string | null) => (companyId ? (companyNames[companyId] ?? 'a company') : null)
+
+  const renderPendingPart = (shipment: ShipmentSummaryDto) => {
+    const state = pendingState(shipment)
+    const changeTimes = (
+      <button type="button" className="button-secondary" onClick={() => setChangeTimesFor(shipment)}>
+        Change times
+      </button>
+    )
+
+    switch (state) {
+      case 'direct':
+        return (
+          <>
+            <p className="shipment-card-note">Booked directly to {companyName(shipment.truckingCompanyId)}.</p>
+            <div className="shipment-card-actions">{changeTimes}</div>
+          </>
+        )
+      case 'accepted':
+        return (
+          <p className="shipment-card-note">
+            Offer accepted — {companyName(shipment.truckingCompanyId)} is adding it to a trip.
+          </p>
+        )
+      case 'offersOpen':
+        return (
+          <>
+            <p className="shipment-card-note">Offers close {formatDateTime(shipment.offerDeadline)}.</p>
+            <div className="shipment-card-actions">
+              <button type="submit" onClick={() => setOffersFor(shipment.shipmentId)}>
+                See offers ({shipment.waitingOfferCount})
+              </button>
+              {changeTimes}
+            </div>
+          </>
+        )
+      case 'dead':
+        return (
+          <>
+            <p className="shipment-card-note shipment-card-note--warn">
+              No offer accepted — change times to get new offers.
+            </p>
+            <div className="shipment-card-actions">{changeTimes}</div>
+          </>
+        )
+    }
+  }
 
   return (
     <div>
@@ -66,6 +138,10 @@ export function ShipperDetailScreen({ shipperId, onBack }: ShipperDetailScreenPr
                 </p>
                 <p>Pickup window: {formatWindow(shipment.pickupWindowEarliest, shipment.pickupWindowLatest)}</p>
                 <p>Delivery window: {formatWindow(shipment.deliveryWindowEarliest, shipment.deliveryWindowLatest)}</p>
+                {shipment.status === 'Pending' && renderPendingPart(shipment)}
+                {shipment.status !== 'Pending' && shipment.truckingCompanyId && (
+                  <p className="shipment-card-note">Carried by {companyName(shipment.truckingCompanyId)}.</p>
+                )}
               </div>
             </li>
           ))}
@@ -89,6 +165,28 @@ export function ShipperDetailScreen({ shipperId, onBack }: ShipperDetailScreenPr
             }}
           />
         </>
+      )}
+
+      {offersFor && (
+        <ShipmentOffersModal
+          shipmentId={offersFor}
+          onClose={() => setOffersFor(null)}
+          onAccepted={() => {
+            setOffersFor(null)
+            loadShipments()
+          }}
+        />
+      )}
+
+      {changeTimesFor && (
+        <ChangeTimesModal
+          shipment={changeTimesFor}
+          onClose={() => setChangeTimesFor(null)}
+          onSaved={() => {
+            setChangeTimesFor(null)
+            loadShipments()
+          }}
+        />
       )}
     </div>
   )

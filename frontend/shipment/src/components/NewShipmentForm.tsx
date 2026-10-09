@@ -1,6 +1,6 @@
-import { ApiError, type TruckType } from '@freight/api-client'
-import { useState } from 'react'
-import { shipmentsApi } from '../apiClient'
+import { ApiError, type TruckingCompanySummaryDto, type TruckType } from '@freight/api-client'
+import { useEffect, useState } from 'react'
+import { shipmentsApi, truckingCompaniesApi } from '../apiClient'
 import { type LatLng, LocationMapPicker } from './LocationMapPicker'
 
 const truckTypes: TruckType[] = ['BoxVan', 'Flatbed', 'Refrigerated', 'Tanker']
@@ -27,8 +27,18 @@ export function NewShipmentForm({ shipperId, onBooked }: NewShipmentFormProps) {
   const [pickupWindowLatest, setPickupWindowLatest] = useState('')
   const [deliveryWindowEarliest, setDeliveryWindowEarliest] = useState('')
   const [deliveryWindowLatest, setDeliveryWindowLatest] = useState('')
+  // '' = open shipment (companies send offers); a company id = booked straight to that company.
+  const [truckingCompanyId, setTruckingCompanyId] = useState('')
+  const [companies, setCompanies] = useState<TruckingCompanySummaryDto[]>([])
   const [error, setError] = useState<string | null>(null)
   const [isSubmitting, setIsSubmitting] = useState(false)
+
+  useEffect(() => {
+    truckingCompaniesApi
+      .getTruckingCompanies()
+      .then((response) => setCompanies(response.companies))
+      .catch(() => setCompanies([]))
+  }, [])
 
   const handleSubmit = async (event: React.FormEvent) => {
     event.preventDefault()
@@ -58,6 +68,7 @@ export function NewShipmentForm({ shipperId, onBooked }: NewShipmentFormProps) {
         pickupWindowLatest: toIsoUtc(pickupWindowLatest),
         deliveryWindowEarliest: toIsoUtc(deliveryWindowEarliest),
         deliveryWindowLatest: toIsoUtc(deliveryWindowLatest),
+        truckingCompanyId: truckingCompanyId || undefined,
       })
 
       setPickupLocation(null)
@@ -68,6 +79,7 @@ export function NewShipmentForm({ shipperId, onBooked }: NewShipmentFormProps) {
       setPickupWindowLatest('')
       setDeliveryWindowEarliest('')
       setDeliveryWindowLatest('')
+      setTruckingCompanyId('')
       onBooked()
     } catch (err) {
       setError(err instanceof ApiError ? err.message : 'Failed to book shipment.')
@@ -173,6 +185,18 @@ export function NewShipmentForm({ shipperId, onBooked }: NewShipmentFormProps) {
             required
           />
         </div>
+      </div>
+
+      <div className="form-field">
+        <label htmlFor="assign-company">Assign to company (optional)</label>
+        <select id="assign-company" value={truckingCompanyId} onChange={(event) => setTruckingCompanyId(event.target.value)}>
+          <option value="">None — open to offers from all companies</option>
+          {companies.map((company) => (
+            <option key={company.companyId} value={company.companyId}>
+              {company.name}
+            </option>
+          ))}
+        </select>
       </div>
 
       <button type="submit" disabled={isSubmitting}>
