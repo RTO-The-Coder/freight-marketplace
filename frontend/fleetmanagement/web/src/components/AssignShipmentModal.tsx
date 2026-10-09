@@ -9,8 +9,8 @@ import { useEffect, useMemo, useState } from 'react'
 import {
   fleetApi,
   insertionPreviewOrder,
+  offersApi,
   pendingRouteStops,
-  shipmentsApi,
   shipmentsFittingTruck,
   trucksReadyForAssignment,
 } from '@freight/fleetmanagement-core'
@@ -22,6 +22,8 @@ import { ShipmentRouteMap } from './ShipmentRouteMap'
 import { capacityFill, fmtWindow } from '@freight/fleetmanagement-core'
 
 interface AssignShipmentModalProps {
+  /** Only shipments booked directly to this company can be assigned here - open ones go through offers. */
+  companyId: string
   trucks: TruckSummaryDto[]
   truckDetails: Map<string, TruckDetailDto>
   onClose: () => void
@@ -36,7 +38,7 @@ type FeasibilityState =
   | { kind: 'error'; message: string }
 
 /** Screen 5 — pick a truck, see only shipments that could fit it, place on route. */
-export function AssignShipmentModal({ trucks, truckDetails, onClose, onAssigned }: AssignShipmentModalProps) {
+export function AssignShipmentModal({ companyId, trucks, truckDetails, onClose, onAssigned }: AssignShipmentModalProps) {
   const { currentTime } = useSimClock()
   const [shipments, setShipments] = useState<ShipmentSummaryDto[] | null>(null)
   const [loadError, setLoadError] = useState<string | null>(null)
@@ -51,11 +53,11 @@ export function AssignShipmentModal({ trucks, truckDetails, onClose, onAssigned 
   const [assigning, setAssigning] = useState(false)
 
   useEffect(() => {
-    shipmentsApi
-      .getPendingShipments()
-      .then((r) => setShipments(r.shipments))
+    offersApi
+      .getShipmentBoard(companyId)
+      .then((board) => setShipments(board.direct))
       .catch((err) => setLoadError(err instanceof Error ? err.message : 'Failed to load shipments.'))
-  }, [])
+  }, [companyId])
 
   // Only trucks that can legally take a shipment: active, has a driver, on a company.
   const eligibleTrucks = useMemo(() => trucksReadyForAssignment(trucks), [trucks])
@@ -213,7 +215,7 @@ export function AssignShipmentModal({ trucks, truckDetails, onClose, onAssigned 
             {!shipments ? (
               <p className="notice">Loading shipments…</p>
             ) : relevant.length === 0 ? (
-              <p className="notice">No pending shipment matches this truck.</p>
+              <p className="notice">No shipment booked directly to this company matches this truck.</p>
             ) : (
               <ul className="assign-shipment-list">
                 {relevant.slice(0, 20).map((s) => {

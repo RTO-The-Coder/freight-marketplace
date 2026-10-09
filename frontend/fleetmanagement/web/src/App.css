@@ -1232,6 +1232,25 @@ p[role='alert'] {
   flex-wrap: wrap;
 }
 
+.tab-row {
+  display: flex;
+  gap: var(--space-2);
+  flex-wrap: wrap;
+}
+
+.offer-row {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+}
+
+.offer-row__inputs {
+  display: flex;
+  gap: var(--space-2);
+  flex-wrap: wrap;
+  padding-left: var(--space-4);
+}
+
 .eligibility-list {
   margin: 0;
   padding: 0;

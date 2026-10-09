@@ -135,7 +135,7 @@ export function TruckingCompanyDetailScreen({
             className="btn btn--sm btn--primary"
             onClick={() => setModal('openShipments')}
           >
-            Show open shipments
+            Show shipments
           </button>
         </div>
         {truckDetails ? (
@@ -247,12 +247,15 @@ export function TruckingCompanyDetailScreen({
       {modal === 'openShipments' && (
         <OpenShipmentsPanel
           companyId={companyId}
+          companyName={company?.name ?? 'this company'}
           onClose={() => setModal(null)}
+          onFleetChanged={loadFleet}
           onAssign={() => setModal('assignShipment')}
         />
       )}
       {modal === 'assignShipment' && trucks && truckDetails && (
         <AssignShipmentModal
+          companyId={companyId}
           trucks={trucks}
           truckDetails={truckDetails}
           onClose={() => setModal(null)}

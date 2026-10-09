@@ -1,3 +1,4 @@
+import { bookDirectCopy, firstCompanyId, openDirectAssignModal, pendingShipments, type PendingShipment } from './directShipments'
 import { expect, test } from './fixtures'
 
 const API_BASE_URL = 'http://localhost:5017'
@@ -12,17 +13,10 @@ const API_BASE_URL = 'http://localhost:5017'
  * are at most a few hours; LongHaulSingleDriver targets ~7 days; only
  * LongHaulTeamDriver reaches the 10+ day range asserted below.
  */
-interface ShipmentSummary {
-  shipmentId: string
-  requiredTruckType: string
-  loadWeightKg: number
-  pickupWindowLatest: string
-  deliveryWindowEarliest: string
-}
+type ShipmentSummary = PendingShipment
 
 async function findLongHaulShipment(): Promise<ShipmentSummary> {
-  const res = await fetch(`${API_BASE_URL}/shipments/pending`)
-  const { shipments } = (await res.json()) as { shipments: ShipmentSummary[] }
+  const shipments = await pendingShipments()
 
   const spanDays = (s: ShipmentSummary) =>
     (new Date(s.deliveryWindowEarliest).getTime() - new Date(s.pickupWindowLatest).getTime()) /
@@ -82,12 +76,6 @@ async function findTruckByName(companyId: string, truckName: string): Promise<st
   const truck = trucks.find((t) => t.truckName === truckName)
   if (!truck) throw new Error(`Truck '${truckName}' not found in company '${companyId}'.`)
   return truck.truckId
-}
-
-async function firstCompanyId(): Promise<string> {
-  const res = await fetch(`${API_BASE_URL}/companies`)
-  const { companies } = (await res.json()) as { companies: Array<{ companyId: string }> }
-  return companies[0].companyId
 }
 
 test('a 10-14 day team-driver shipment runs the sim clock to full trip completion', async ({ page }) => {
@@ -154,10 +142,9 @@ test('a 10-14 day team-driver shipment runs the sim clock to full trip completio
   })
 
   await test.step('assign the 10-14 day shipment to a new trip', async () => {
-    await page.getByRole('button', { name: 'Show open shipments' }).click()
-    await page.locator('.shipment-card__head').first().click()
-    await page.getByRole('button', { name: 'Assign to a truck →' }).click()
-    await expect(page.getByRole('heading', { name: 'Assign a shipment' })).toBeVisible()
+    // Seeded shipments are open (offers only); assign a direct copy booked to this company.
+    await bookDirectCopy(shipment, companyId)
+    await openDirectAssignModal(page)
 
     await page.locator('.assign-radio', { hasText: 'LongHaul-Truck' }).click()
     await page

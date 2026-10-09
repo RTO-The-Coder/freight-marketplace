@@ -1,24 +1,12 @@
+import { bookDirectCopy, firstCompanyId, openDirectAssignModal, pendingShipments, type PendingShipment } from './directShipments'
 import { expect, test } from './fixtures'
-
-const API_BASE_URL = 'http://localhost:5017'
 
 // Per-test reseeding (every test starting from a clean, known DB state) is
 // handled by the `page` fixture in ./fixtures — see its comment for why that's
 // needed for every file, not just this one (both tests here assign shipments,
 // which removes them from GET /shipments/pending for any test after).
 
-interface ShipmentSummary {
-  shipmentId: string
-  requiredTruckType: string
-  pickupLatitude: number
-  pickupLongitude: number
-  deliveryLatitude: number
-  deliveryLongitude: number
-  loadWeightKg: number
-  loadVolumeCubicMeters: number
-  pickupWindowEarliest: string
-  deliveryWindowEarliest: string
-}
+type ShipmentSummary = PendingShipment
 
 /**
  * The seeder (Freight.Seeder/Program.cs, BuildCorridorOverlapShipments) books
@@ -32,14 +20,16 @@ interface ShipmentSummary {
  * GUIDs each reseed, so this locates the 3 shipments at test time by the exact
  * geography the seeder places them at (rounded — seeded coordinates carry more
  * decimal places than these comparisons need).
+ *
+ * Seeded shipments are open (offers only), so direct copies of the 3 are booked to the
+ * first company - the one the tests open - for the full assign form to list them.
  */
 async function findCorridorShipments(): Promise<{
   corridor1: ShipmentSummary // Berlin -> Munich (opens first, closes last)
   corridor2: ShipmentSummary // Leipzig -> Nuremberg (nested inside corridor1)
   corridor3: ShipmentSummary // Nuremberg -> Munich
 }> {
-  const res = await fetch(`${API_BASE_URL}/shipments/pending`)
-  const { shipments } = (await res.json()) as { shipments: ShipmentSummary[] }
+  const shipments = await pendingShipments()
 
   const near = (a: number, b: number) => Math.abs(a - b) < 0.05
   const isBerlin = (lat: number, lng: number) => near(lat, 52.52) && near(lng, 13.4)
@@ -66,6 +56,10 @@ async function findCorridorShipments(): Promise<{
       'Could not find all 3 corridor-overlap shipments via GET /shipments/pending — ' +
         'has the seed data changed? (see Freight.Seeder/Program.cs, BuildCorridorOverlapShipments)',
     )
+  }
+  const companyId = await firstCompanyId()
+  for (const s of [corridor1, corridor2, corridor3]) {
+    await bookDirectCopy(s, companyId)
   }
   return { corridor1, corridor2, corridor3 }
 }
@@ -105,16 +99,8 @@ async function buildActivatedFlatbedTruck(page: import('@playwright/test').Page,
   await expect(truckRow.getByRole('button', { name: 'Deactivate' })).toBeVisible()
 }
 
-/** Opens the Assign-Shipment modal from the "Show open shipments" panel. */
-async function openAssignModal(page: import('@playwright/test').Page) {
-  await page.getByRole('button', { name: 'Show open shipments' }).click()
-  // Cards start collapsed — expand any one to reveal "Assign to a truck →",
-  // which just opens the Assign modal (the actual shipment is picked in its
-  // own Step 2, not carried over from which card was expanded here).
-  await page.locator('.shipment-card__head').first().click()
-  await page.getByRole('button', { name: 'Assign to a truck →' }).click()
-  await expect(page.getByRole('heading', { name: 'Assign a shipment' })).toBeVisible()
-}
+/** Opens the full Assign-Shipment form from a Direct card in the "Show shipments" panel. */
+const openAssignModal = openDirectAssignModal
 
 async function assignShipment(
   page: import('@playwright/test').Page,

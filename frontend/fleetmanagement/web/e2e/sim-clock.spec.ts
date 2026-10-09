@@ -1,3 +1,4 @@
+import { bookDirectCopy, firstCompanyId, openDirectAssignModal, pendingShipments } from './directShipments'
 import { expect, test } from './fixtures'
 
 const API_BASE_URL = 'http://localhost:5017'
@@ -104,12 +105,6 @@ test.describe('Sim clock mechanics', () => {
   })
 })
 
-async function firstCompanyId(): Promise<string> {
-  const res = await fetch(`${API_BASE_URL}/companies`)
-  const { companies } = (await res.json()) as { companies: Array<{ companyId: string }> }
-  return companies[0].companyId
-}
-
 test('advancing the clock moves a truck along its route (a Pending stop becomes Reached)', async ({
   page,
 }) => {
@@ -152,9 +147,12 @@ test('advancing the clock moves a truck along its route (a Pending stop becomes 
   })
 
   await test.step('assign the first matching pending shipment to a new trip', async () => {
-    await page.getByRole('button', { name: 'Show open shipments' }).click()
-    await page.locator('.shipment-card__head').first().click()
-    await page.getByRole('button', { name: 'Assign to a truck →' }).click()
+    // Seeded shipments are open (offers only); book a direct copy of a seeded BoxVan
+    // shipment to this company, so the full assign form lists it.
+    const boxVan = (await pendingShipments()).find((s) => s.requiredTruckType === 'BoxVan')
+    expect(boxVan, 'No BoxVan shipment is pending in the seed data — this test needs at least one.').toBeDefined()
+    await bookDirectCopy(boxVan!, companyId)
+    await openDirectAssignModal(page)
 
     // Step 2 filters to shipments matching the SELECTED truck's own type and
     // capacity (see AssignShipmentModal's `relevant` filter) — so picking
@@ -165,8 +163,8 @@ test('advancing the clock moves a truck along its route (a Pending stop becomes 
     await expect(page.getByRole('heading', { name: /Relevant shipments for Clock-Truck/ })).toBeVisible()
 
     await expect(
-      page.getByText('No pending shipment matches this truck.'),
-      'No BoxVan shipment is currently pending in the seed data — this test needs at least one.',
+      page.getByText('No shipment booked directly to this company matches this truck.'),
+      'The direct BoxVan copy booked above should match Clock-Truck.',
     ).toHaveCount(0)
 
     const firstShipment = page.locator('.assign-shipment-list .assign-radio').first()
