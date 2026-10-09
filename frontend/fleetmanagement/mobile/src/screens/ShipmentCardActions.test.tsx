@@ -76,10 +76,11 @@ describe('open shipment: check eligibility and send offers', () => {
     renderWithApp(<OpenShipmentsScreen company={deviceCompany} />)
     await openEligibility()
 
-    expect(await screen.findByText('FL-01 · +12.5 km to route')).toBeOnTheScreen()
-    expect(screen.getByText('FL-02 · +31.0 km to route')).toBeOnTheScreen()
+    expect(await screen.findByLabelText('FL-01 · +12.5 km to route')).toBeOnTheScreen()
+    expect(screen.getByLabelText('FL-02 · +31.0 km to route')).toBeOnTheScreen()
     expect(screen.queryByText(/FL-03/)).toBeNull()
-    expect(screen.getByText(/^Offers close .*07:00/)).toBeOnTheScreen()
+    // The sheet's own line - the card behind it shows "Offers close …" too.
+    expect(screen.getByText(/^Offers close .*07:00\. Tick trucks/)).toBeOnTheScreen()
   })
 
   it('sends one offer per ticked truck with its price and no limit, then reloads', async () => {
@@ -88,9 +89,9 @@ describe('open shipment: check eligibility and send offers', () => {
     await openEligibility()
 
     expect(await screen.findByRole('button', { name: 'Send offer' })).toBeDisabled()
-    fireEvent.press(screen.getByText('FL-01 · +12.5 km to route'))
+    fireEvent.press(screen.getByLabelText('FL-01 · +12.5 km to route'))
     fireEvent.changeText(await screen.findByLabelText('Price for FL-01'), '850')
-    fireEvent.press(screen.getByText('FL-02 · +31.0 km to route'))
+    fireEvent.press(screen.getByLabelText('FL-02 · +31.0 km to route'))
     fireEvent.changeText(await screen.findByLabelText('Price for FL-02'), '910,5')
 
     fireEvent.press(screen.getByRole('button', { name: 'Send 2 offers' }))
@@ -113,7 +114,7 @@ describe('open shipment: check eligibility and send offers', () => {
     renderWithApp(<OpenShipmentsScreen company={deviceCompany} />)
     await openEligibility()
 
-    fireEvent.press(await screen.findByText('FL-01 · +12.5 km to route'))
+    fireEvent.press(await screen.findByLabelText('FL-01 · +12.5 km to route'))
     fireEvent.changeText(await screen.findByLabelText('Price for FL-01'), '850')
     fireEvent.press(screen.getByText('No limit'))
     expect(await screen.findByText(/^ends .*05:40/)).toBeOnTheScreen()
@@ -127,7 +128,7 @@ describe('open shipment: check eligibility and send offers', () => {
     renderWithApp(<OpenShipmentsScreen company={deviceCompany} />)
     await openEligibility()
 
-    fireEvent.press(await screen.findByText('FL-01 · +12.5 km to route'))
+    fireEvent.press(await screen.findByLabelText('FL-01 · +12.5 km to route'))
     fireEvent.changeText(await screen.findByLabelText('Price for FL-01'), 'abc')
     expect(screen.getByRole('button', { name: 'Send offer' })).toBeDisabled()
     fireEvent.changeText(screen.getByLabelText('Price for FL-01'), '0')
@@ -141,7 +142,7 @@ describe('open shipment: check eligibility and send offers', () => {
     renderWithApp(<OpenShipmentsScreen company={deviceCompany} />)
     await openEligibility()
 
-    fireEvent.press(await screen.findByText('FL-01 · +12.5 km to route'))
+    fireEvent.press(await screen.findByLabelText('FL-01 · +12.5 km to route'))
     fireEvent.changeText(await screen.findByLabelText('Price for FL-01'), '850')
     fireEvent.press(screen.getByRole('button', { name: 'Send offer' }))
 
