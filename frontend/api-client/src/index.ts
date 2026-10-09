@@ -59,8 +59,22 @@ export type {
   BookShipmentRequest,
   BookShipmentResponse,
   ShipmentsApi,
-  UpdatePickupWindowRequest,
+  UpdateShipmentWindowsRequest,
 } from './shipmentsApi'
+export { createOffersApi } from './offersApi'
+export type {
+  AcceptOfferResponse,
+  ApprovedShipmentDto,
+  CompanyOfferDto,
+  CompanyShipmentBoardResponse,
+  OfferedShipmentDto,
+  OfferItem,
+  OffersApi,
+  SendOffersRequest,
+  SendOffersResponse,
+  ShipmentOffersResponse,
+  ShipperOfferDto,
+} from './offersApi'
 export type {
   GetPendingShipmentsResponse,
   GetShipmentsByShipperResponse,

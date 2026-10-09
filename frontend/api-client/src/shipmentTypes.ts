@@ -28,6 +28,12 @@ export interface ShipmentSummaryDto {
   deliveryWindowLatest: string
   offerDeadline: string
   status: ShipmentStatus
+  /** Booked straight to one company by the shipper - no offers. */
+  isDirect: boolean
+  /** Offers can still be sent and accepted (open shipment, inside its 2-hour window), as of the sim clock. */
+  offersOpen: boolean
+  /** Offers still waiting for the shipper - only filled in the shipper's own list. */
+  waitingOfferCount: number
 }
 
 export interface GetShipmentsByShipperResponse {

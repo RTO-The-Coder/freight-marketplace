@@ -15,15 +15,19 @@ export interface BookShipmentRequest {
   pickupWindowLatest: string
   deliveryWindowEarliest: string
   deliveryWindowLatest: string
+  /** Set to book the shipment straight to this company (no offers); omit for an open shipment. */
+  truckingCompanyId?: string | null
 }
 
 export interface BookShipmentResponse {
   shipmentId: string
 }
 
-export interface UpdatePickupWindowRequest {
+export interface UpdateShipmentWindowsRequest {
   pickupWindowEarliest: string
   pickupWindowLatest: string
+  deliveryWindowEarliest: string
+  deliveryWindowLatest: string
 }
 
 export function createShipmentsApi(client: ApiClient) {
@@ -37,8 +41,9 @@ export function createShipmentsApi(client: ApiClient) {
 
     bookShipment: (body: BookShipmentRequest) => client.post<BookShipmentResponse>('/shipments', body),
 
-    updatePickupWindow: (shipmentId: string, body: UpdatePickupWindowRequest) =>
-      client.patch<void>(`/shipments/${shipmentId}/pickup-window`, body),
+    /** Changes both windows: restarts the 2-hour offer window, rejects waiting offers, pushes the shipment again. */
+    updateWindows: (shipmentId: string, body: UpdateShipmentWindowsRequest) =>
+      client.patch<void>(`/shipments/${shipmentId}/windows`, body),
   }
 }
 

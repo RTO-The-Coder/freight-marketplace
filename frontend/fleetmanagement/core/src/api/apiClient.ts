@@ -1,6 +1,7 @@
 import {
   createApiClient,
   createFleetApi,
+  createOffersApi,
   createRoutingApi,
   createShipmentsApi,
   createSimulationApi,
@@ -17,6 +18,7 @@ export let shipmentsApi: ReturnType<typeof createShipmentsApi>
 export let simulationApi: ReturnType<typeof createSimulationApi>
 export let routingApi: ReturnType<typeof createRoutingApi>
 export let tripsApi: ReturnType<typeof createTripsApi>
+export let offersApi: ReturnType<typeof createOffersApi>
 
 export function configureApi(baseUrl: string): void {
   apiClient = createApiClient({ baseUrl })
@@ -26,4 +28,5 @@ export function configureApi(baseUrl: string): void {
   simulationApi = createSimulationApi(apiClient)
   routingApi = createRoutingApi(apiClient)
   tripsApi = createTripsApi(apiClient)
+  offersApi = createOffersApi(apiClient)
 }

@@ -84,6 +84,9 @@ export function shipment(overrides: Partial<ShipmentSummaryDto> = {}): ShipmentS
     deliveryWindowLatest: '2026-08-02T18:00:00Z',
     offerDeadline: '2026-08-01T06:00:00Z',
     status: 'Pending',
+    isDirect: false,
+    offersOpen: true,
+    waitingOfferCount: 0,
     ...overrides,
   }
 }
