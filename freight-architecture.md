@@ -138,7 +138,7 @@ flowchart TB
 
 | Topic | How it works | ADR |
 |---|---|---|
-| **Time** | One `SimulationClock`, stored in the database, is "now" for every rule. Business code never reads the wall clock. It advances in 5-minute ticks, on request. | — |
+| **Time** | One `SimulationClock`, stored in the database, is "now" for every rule. Business code never reads the wall clock. It advances in 5-minute ticks, on request. | 0008 |
 | **Routing** | OSRM is the only source of road distance and time. Calls are **throttled to one every 1.1 s** to respect the public server, and road geometry is **cached in memory**. | 0006 |
 | **Push** | FCM behind an `INotificationSender` interface. Without a Firebase key the API only logs; without an encryption key, phones can't register. Either way the API runs. | 0003 |
 | **Who gets notified** | Every company on booking, with no matching at booking time; each company checks its own fleet on demand. | 0007 |
@@ -178,7 +178,11 @@ Frontend: **Vitest** for the shared core, **Jest** with React Native Testing Lib
 | [0002](docs/adr/0002-client-facet-split.md) | Shipper on web only; fleet management on web and mobile |
 | [0003](docs/adr/0003-fcm-push-behind-notification-abstraction.md) | Real FCM push behind a notification interface |
 | [0004](docs/adr/0004-suburb-level-geography-with-osrm-map-routing.md) | Suburb-level demo geography, OSRM for map routes |
-| [0005](docs/adr/0005-loading-time-and-working-time-directive-deferred.md) | Loading time and the Working Time Directive deferred |
+| [0005](docs/adr/0005-loading-time-and-working-time-directive-deferred.md) | Loading takes no time; the Working Time Directive is out of scope |
 | [0006](docs/adr/0006-osrm-only-no-pricing-no-haversine.md) | OSRM as the only distance and time source |
-| [0007](docs/adr/0007-shipment-evaluation-insertion-search.md) | Notify every company; evaluate feasibility on demand, per company |
-| [0013](docs/adr/0013-pessimistic-locking-for-bid-state.md)–[0015](docs/adr/0015-base-price-staleness-accepted.md) | Phase 2 competitive bidding (not active) |
+| [0007](docs/adr/0007-shipment-evaluation-insertion-search.md) | Notify companies on booking; evaluate feasibility on demand, per company |
+| [0008](docs/adr/0008-simulation-only-time-on-one-clock.md) | Simulation-only time on a single clock |
+| [0009](docs/adr/0009-trip-aggregate-owns-the-stops.md) | A Trip aggregate owns the stops: inserted anywhere, never deleted |
+| [0010](docs/adr/0010-offers-and-direct-shipments.md) | Offers and direct shipments: the shipper accepts one quote |
+| [0011](docs/adr/0011-maps-on-openstreetmap-without-keys.md) | Maps on OpenStreetMap, without API keys |
+| [0012](docs/adr/0012-integration-tests-against-hand-worked-results.md) | Integration tests against hand-worked expected results |
