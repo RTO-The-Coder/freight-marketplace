@@ -15,8 +15,8 @@ namespace Freight.Infrastructure.Tests;
 
 /// <summary>
 /// Only the paths that never reach Firebase are covered here - an actual send needs a real
-/// Firebase project and device, and is checked end to end instead (see
-/// docs/design/mobile-push-notifications-handoff.md). The FirebaseApp uses a dummy access
+/// Firebase project and device, and is checked end to end instead, on an emulator with
+/// the Android app. The FirebaseApp uses a dummy access
 /// token, so any path that did call FCM would fail rather than send.
 /// </summary>
 public sealed class FcmNotificationSenderTests : IDisposable

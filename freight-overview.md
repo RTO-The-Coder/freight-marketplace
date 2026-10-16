@@ -30,7 +30,7 @@ The platform is built as two separate, deliberately independent end-goals that s
 | **A — Truck Simulation** | The working core of the platform. Every truck's journey, simulated tick-by-tick on one global clock: fleet setup, a dispatcher putting a shipment on a specific truck, the system calculating a feasible ETA that correctly accounts for mandatory rest breaks, and each truck's movement and each driver's compliance state advancing over time. |
 | **B — Bidding / Marketplace** | The multi-company side: a shipment is posted, every trucking company is notified by push and checks it against its own fleet, companies bid with priced offers, and the shipper picks one. A shipper can also book directly to one company. See `freight-frd.md`. |
 
-Track A's simulation isn't a placeholder for a future "real GPS tracking" mode — it's intended to remain a first-class, permanent part of the product (and is planned to eventually support an AI layer on top, tracked separately). Track B builds on top of Track A's engine rather than replacing it: the same feasibility/ETA calculation that drives the simulated trucks is what a company uses to see which of its trucks could take a newly posted shipment.
+Track A's simulation isn't a placeholder for a future "real GPS tracking" mode — it's intended to remain a first-class, permanent part of the product. Track B builds on top of Track A's engine rather than replacing it: the same feasibility/ETA calculation that drives the simulated trucks is what a company uses to see which of its trucks could take a newly posted shipment.
 
 ## What Track A (Truck Simulation) does
 

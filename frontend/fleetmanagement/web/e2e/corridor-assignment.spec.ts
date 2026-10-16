@@ -205,7 +205,7 @@ test.skip('interleave 3 corridor shipments onto one Flatbed truck via the insert
 // e2e pass. G15 itself (the non-termination bug) is still fixed; only this
 // specific seed-data scenario needs new numbers.
 test.skip('regression: the corridor-3 insertion that used to hang (G15) now resolves', async ({ page }) => {
-  // G15 (docs/design/ui-redesign-plan.md) was found by this exact scenario:
+  // G15 (a bug where an ETA calculation never ended) was found by this exact scenario:
   // RouteEtaCalculator.CalculateEtas never terminated for this specific
   // insertion, hitting its own 10,000-iteration bail-out. Fixed; this pins the
   // fix so a regression is caught immediately rather than rediscovered later.

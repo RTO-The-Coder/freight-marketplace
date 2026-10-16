@@ -1,7 +1,7 @@
 name: E2E CI
 
-# Non-blocking (continue-on-error on the whole job) until G16 is fixed
-# (docs/design/ui-redesign-plan.md): long-haul-trip.spec.ts intentionally fails
+# Non-blocking (continue-on-error on the whole job) until G16 is fixed:
+# long-haul-trip.spec.ts intentionally fails
 # whenever the random long-haul shipment it picks triggers a real backend bug
 # in the team-driver relay's active-driver swap-back. That is expected,
 # data-dependent failure, not flakiness — remove `continue-on-error` once G16

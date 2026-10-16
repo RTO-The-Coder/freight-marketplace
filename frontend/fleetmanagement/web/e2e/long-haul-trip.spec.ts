@@ -59,7 +59,7 @@ async function advanceAndCheckForError(
     const message = await errorEl.innerText()
     if (/one-directionally/.test(message)) {
       throw new Error(
-        'KNOWN BUG reproduced (G16, docs/design/ui-redesign-plan.md): the team-driver relay ' +
+        'KNOWN BUG reproduced (G16): the team-driver relay ' +
           'swapped back to the primary driver (a legitimate compliance outcome) but ' +
           'DriverAssignment.AdvanceActiveDriver rejects any backward swap, and ' +
           'SimulationAdvanceHandler does not catch it — this permanently blocks the simulation ' +
@@ -171,7 +171,7 @@ test('a 10-14 day team-driver shipment runs the sim clock to full trip completio
     // across the full 10-14 day trip instead of appearing to do nothing for
     // ~10s and then just being done.
     //
-    // KNOWN BUG (G16, see docs/design/ui-redesign-plan.md): once the relay
+    // KNOWN BUG (G16): once the relay
     // swaps active driver primary -> secondary and later becomes eligible to
     // swap BACK to the primary (a real, correct compliance outcome —
     // DriverRuleEngine.EvaluateTeam's `else` branch, ~line 301), persisting

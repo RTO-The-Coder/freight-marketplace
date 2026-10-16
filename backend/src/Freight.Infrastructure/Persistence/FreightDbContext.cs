@@ -14,8 +14,7 @@ public sealed class FreightDbContext : DbContext
 
         // Entity configurations are added incrementally, one slice at a time,
         // as each slice claims persistence for its own aggregate(s).
-        // See trucking-marketplace-requirements.md Section 18 and the per-slice
-        // design docs under docs/design/ for which slice owns which entity's mapping.
+        // Each IEntityTypeConfiguration in this assembly is picked up automatically.
         modelBuilder.ApplyConfigurationsFromAssembly(typeof(FreightDbContext).Assembly);
     }
 }
