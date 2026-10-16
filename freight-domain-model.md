@@ -1,6 +1,6 @@
 # Freight Domain Model — DDD Design Reference
 
-**Status:** Reflects the actual shipped code: Track A — Truck Simulation, plus Track B's notification part (device registration, notify every company, per-company evaluation). Track B parts that are not built (offers) are marked explicitly as "planned, not built" wherever they appear — see `freight-overview.md`/`freight-frd.md` for the two-track split.
+**Status:** Reflects the actual shipped code: Track A — Truck Simulation, plus Track B — Bidding/Marketplace (device registration and push, per-company evaluation, offers, shipper approval and direct shipments). See `freight-overview.md`/`freight-frd.md` for the two-track split.
 **Companion document:** `freight-ui-screens.md` covers all screens built on top of this model.
 
 ---
@@ -18,8 +18,7 @@ Shipment (Aggregate Root)
 Driver (Aggregate Root)
   └── ComplianceState (Value Object, Tracking subsystem)
 DeviceToken (Aggregate Root — a company's registered push device, Track B notifications)
-
-ShipmentOffer (Aggregate Root) — PLANNED, NOT BUILT (Track B / Bidding)
+ShipmentOffer (Aggregate Root — a company's priced offer for one truck, Track B)
 
 Value Objects: GeoLocation, TimeWindow, DrivingRules, RouteProgress, Capacity
 Simulation: SimulationClock (its own small aggregate, holds the global simulated "now")
@@ -188,21 +187,22 @@ This interpolates along the **straight line** between the last-reached Stop and 
 |---|---|---|
 | Id | Guid | |
 | ShipperId | Guid | |
-| TruckingCompanyId | Guid? | Nullable — not set at booking. Assigned when a Truck is assigned to the Shipment. |
+| TruckingCompanyId | Guid? | The company that holds the Shipment: set at booking for a direct Shipment, when the shipper accepts an offer, or when a Truck is assigned. Null for an open Shipment no company holds yet. |
+| IsDirect | bool | Booked straight to one company by the shipper — no offers, no offer window |
 | PickupLocation | GeoLocation | |
 | DeliveryLocation | GeoLocation | |
 | Load | Capacity | Weight + volume |
 | RequiredTruckType | enum: Flatbed \| Refrigerated \| BoxVan \| Tanker | Hard constraint at assignment |
 | PickupWindow | TimeWindow | |
 | DeliveryWindow | TimeWindow | |
-| OfferDeadline | DateTime | Fixed 30 minutes after `Book(...)` (or after `UpdatePickupWindow`, which resets it). Only meaningful once Track B's offer flow exists — a Track-A direct assignment doesn't consult this field. |
+| OfferDeadline | DateTime | Fixed **2 hours** after `Book(...)`, restarted by `UpdateWindows(...)`. Offers can be sent and accepted only before it. Set on direct Shipments too, but never consulted for them; a direct assignment doesn't consult it either. |
 | ScheduledPickupWindow / ScheduledDeliveryWindow | TimeWindow? | Committed windows, calculated later — both null by default |
 | EstimatedPickup | DateTime? | Set (to the actual pickup time) when `MarkPickedUp(actualPickupAt)` is called |
 | Status | enum: Pending \| Booked \| InTransit \| Delivered | See lifecycle below |
 
 **Status lifecycle:**
-- `Pending` — created by Shipper, no TruckingCompany assigned
-- `Booked` — assigned to a Truck/company, awaiting pickup
+- `Pending` — created by Shipper, not yet on any Truck's route. It may already belong to a company (direct, or an accepted offer awaiting Add to trip).
+- `Booked` — on a Truck's route (stops created), awaiting pickup
 - `InTransit` — Pickup Stop reached
 - `Delivered` — Delivery Stop reached
 
@@ -212,21 +212,24 @@ This interpolates along the **straight line** between the last-reached Stop and 
 
 ---
 
-### ShipmentOffer (Aggregate Root) — **PLANNED, NOT BUILT (Track B)**
+### ShipmentOffer (Aggregate Root) — Track B, built
 
-This aggregate, and the entire submit/approve offer workflow it implies, does not exist anywhere in the codebase today — no entity, no repository, no handler, no endpoint. It's documented here as the target shape for Track B (see `freight-frd.md` §3, `freight-build-plan.md` Slice 12), not as something currently working.
+A trucking company's priced offer to carry an open Shipment on one of its Trucks. Created only by `SendOffersHandler` (§5), which runs the company's eligibility once and stores the evaluated positions on the offer — the client never supplies positions.
 
-| Field (planned) | Type | Notes |
+| Field | Type | Notes |
 |---|---|---|
 | Id | Guid | |
 | ShipmentId | Guid | |
 | TruckingCompanyId | Guid | |
-| ProposedTruckId | Guid | The specific truck the company would offer |
-| OfferedPickupTime | DateTime | |
-| ExpiresAt | DateTime | |
-| Status | enum: Pending \| Approved \| Rejected \| Expired | |
+| TruckId | Guid | One offer per Truck per Shipment (enforced by the sending handler) |
+| PickupInsertIndex / DeliveryInsertIndex | int | Where the stops go in the Truck's route, from the evaluation at send time. Add to trip inserts at these positions without re-checking. |
+| AddedDistanceKm | double | From the same evaluation |
+| PriceEur | decimal | Typed by the dispatcher; > 0; fixed once sent |
+| LimitAt | DateTime? | The company's own limit; null = valid until the Shipment's `OfferDeadline` |
+| CreatedAt | DateTime | Simulation-clock time |
+| Status | enum: Pending \| Accepted \| Rejected | There is no Expired status — see `IsWaiting` |
 
-Planned methods: `Create(...)`, `Approve()`, `Reject()`, `Expire()`. Planned rule: one Pending offer per company per Shipment; approving one auto-rejects the others for that Shipment and calls the existing (already-built) `AssignShipmentToTruckHandler` as its final step.
+**Waiting vs. stored status:** an offer is *waiting* while it is `Pending`, before its `LimitAt` (if set) and before the Shipment's `OfferDeadline`. Expiry is computed when reading; nothing sweeps or rewrites old offers, so a run-out offer stays `Pending` in storage but is shown nowhere. Rejected and run-out offers are kept for history.
 
 ---
 
@@ -320,11 +323,21 @@ Constructed via `DrivingRules.Create(breakRule, dailyRestRule, weeklyRestRule, e
 ### Shipment
 | Method | Purpose |
 |---|---|
-| `Book(shipperId, pickupLocation, deliveryLocation, load, requiredTruckType, pickupWindow, deliveryWindow, bookedAt)` | Factory — `Pending`, `OfferDeadline = bookedAt + 30min` |
-| `AssignToCompany(truckingCompanyId)` | `Pending → Booked`. Throws if not `Pending`. |
-| `UpdatePickupWindow(TimeWindow newPickupWindow, DateTime updatedAt)` | Pending-only; also resets `OfferDeadline = updatedAt + 30min`; validates the new pickup window still precedes `DeliveryWindow.Latest` |
+| `Book(shipperId, pickupLocation, deliveryLocation, load, requiredTruckType, pickupWindow, deliveryWindow, bookedAt, directCompanyId = null)` | Factory — `Pending`, `OfferDeadline = bookedAt + 2h`. With `directCompanyId`, sets `TruckingCompanyId` and `IsDirect`. |
+| `IsOpenForOffers(now)` | `Pending`, no company holds it, and `now < OfferDeadline` |
+| `AcceptOffer(truckingCompanyId, now)` | Requires `IsOpenForOffers`; sets `TruckingCompanyId`. Status stays `Pending` — no stops yet. |
+| `UpdateWindows(newPickupWindow, newDeliveryWindow, updatedAt)` | Changes both windows; Pending-only, refused once an offer has been accepted (allowed for direct Shipments); validates delivery after pickup; restarts `OfferDeadline = updatedAt + 2h` |
+| `AssignToCompany(truckingCompanyId)` | `Pending → Booked`, as the stops are added to a Truck's trip. Throws if not `Pending`, or if the Shipment already belongs to a *different* company. |
 | `MarkPickedUp(DateTime actualPickupAt)` | → `InTransit`; sets `EstimatedPickup` |
 | `MarkDelivered(DateTime actualDeliveryAt)` | → `Delivered` |
+
+### ShipmentOffer
+| Method | Purpose |
+|---|---|
+| `Create(shipmentId, truckingCompanyId, truckId, pickupInsertIndex, deliveryInsertIndex, addedDistanceKm, priceEur, limitAt, createdAt)` | Factory — `Pending`. Price > 0, positions and distance not negative, `limitAt` in the future |
+| `IsWaiting(now, offerDeadline)` | `Pending`, before `LimitAt` (if set) and before the Shipment's `OfferDeadline` |
+| `Accept(now, offerDeadline)` | Waiting → `Accepted` |
+| `Reject()` | `Pending` → `Rejected` |
 
 ### Driver
 | Method | Purpose |
@@ -359,14 +372,14 @@ The codebase has a small domain-event base (`IDomainEvent`, `HasDomainEvents`), 
 
 ### AssignShipmentToTruckHandler (Track A — built, the real direct-assignment path)
 
-This is the actual mechanism by which a Shipment gets assigned to a Truck today — it runs standalone, invoked directly by a dispatcher action; there is no offer-approval step preceding it (Track B will eventually call it as the final step of its own approval flow, reusing it as-is).
+This is the one place a Shipment's stops are created. The apps call it directly for a **direct** Shipment (Check eligibility → Assign), and Track B's **Add to trip** calls it, unchanged, with the positions stored on the accepted offer. The endpoint still accepts open Shipments (the seeder and tests use that); the apps no longer offer it for them.
 
 1. Load Truck + Shipment; validate the Truck belongs to a company, is active, its `Type` matches `Shipment.RequiredTruckType`, and it has a `DriverAssignment`.
 2. Load or open the Truck's Trip (`ITripRepository.GetOpenTripByTruckIdAsync`, opening a new one if none exists).
 3. Call OSRM (`IRoutingService`) to measure every new/rewritten road leg the insertion would create.
 4. Clone the Trip (`Trip.Clone()`) and preview the insertion on the clone.
 5. Run `IShipmentInsertionEvaluator.Evaluate(InsertionContext)` — checks capacity (across the full remaining route) and window feasibility (via `RouteEtaCalculator`) for the previewed insertion. Rejects with a human-readable reason if infeasible.
-6. If feasible: commit via `Trip.AssignShipment(...)`, `Truck.SyncProgressToNextStop(...)`, and `Shipment.AssignToCompany(truck.TruckingCompanyId)`.
+6. If feasible: commit via `Trip.AssignShipment(...)`, `Truck.SyncProgressToNextStop(...)`, and `Shipment.AssignToCompany(truck.TruckingCompanyId)` — which refuses a Truck of another company if the Shipment already belongs to one.
 
 A separate dry-run entry point, `CheckFeasibilityAsync`, runs the same evaluation (steps 1–5) without committing — exposed as `POST /trucks/{id}/assign-shipment/feasibility`.
 
@@ -378,9 +391,13 @@ Invoked by `POST /simulation/advance` with a tick count. For each requested tick
 
 `POST /drivers/{id}/eligibility-check` — an on-demand probe of whether a driver would still be eligible to drive after N more simulated minutes, using `IDriverRuleEngine.IsEligibleToDriveFuture`. Pull-based, not a periodic background job (see FR7.2 — no `IHostedService`/`BackgroundService` exists anywhere in the codebase).
 
-### BookShipmentHandler → notify every company (Track B — built)
+### BookShipmentHandler → notify companies (Track B — built)
 
-`POST /shipments` books the Shipment, saves it, then calls `INotificationSender.NotifyAllCompaniesAsync(summary)` synchronously — no event, no background service (ADR 0007). The summary is light: shipment id, required truck type, pickup location and window. `INotificationSender` is a Domain abstraction (ADR 0003) with two Infrastructure implementations: `FcmNotificationSender` (pushes to every registered `DeviceToken`, decrypting each FID; a failure for one device or of FCM is logged and never fails the booking) and `LogNotificationSender` (used when no FCM key is configured). Editing a shipment's window does not re-notify.
+`POST /shipments` (optional `truckingCompanyId` for a direct Shipment) books the Shipment, saves it, then calls `INotificationSender.NotifyAllCompaniesAsync(summary)` for an open Shipment, or `NotifyCompanyAsync(companyId, summary)` for a direct one, synchronously — no event, no background service (ADR 0007). The summary is light: shipment id, required truck type, pickup location and window. `INotificationSender` is a Domain abstraction (ADR 0003) with two Infrastructure implementations: `FcmNotificationSender` (pushes to every registered `DeviceToken`, decrypting each FID; a failure for one device or of FCM is logged and never fails the booking) and `LogNotificationSender` (used when no FCM key is configured). The push data carries `kind` = `open` or `direct`, which also picks the title ("New shipment available" / "New shipment assigned to you").
+
+### UpdateShipmentWindowsHandler (Track B — built)
+
+`PATCH /shipments/{id}/windows` → `Shipment.UpdateWindows(...)` (restarts the 2-hour offer window) → reject every `Pending` offer on the Shipment → save → push again (every company, or only the direct company). This is how a shipper puts a "dead" Shipment — offer window passed, nothing accepted — back on the market.
 
 ### EvaluateShipmentForCompanyHandler (Track B — built, on-demand per-company evaluation)
 
@@ -396,14 +413,32 @@ Invoked by `POST /simulation/advance` with a tick count. For each requested tick
 
 Run only when a dispatcher asks ("Check eligibility"), never at booking time, and never against other companies' trucks.
 
-### SubmitOfferHandler / ApproveOfferHandler — **PLANNED, NOT BUILT (Track B)**
+### Offer workflow (Track B — built)
 
-Neither exists today. The target design (once built) is:
+All "now" values come from the simulation clock.
 
 ```
-SubmitOfferHandler: guard the 30-min submission window → ShipmentOffer.Create(...) → save
-ApproveOfferHandler: approve one offer → reject the rest → Shipment.AssignToCompany(...) → run the existing AssignShipmentToTruckHandler
+SendOffersHandler       POST /companies/{id}/shipments/{shipmentId}/offers  { offers: [{ truckId, priceEur, limitAt? }] }
+  guard: at least one truck, no truck twice; Shipment.IsOpenForOffers(now);
+         this company has no Pending offer on the Shipment; each limitAt in (now, OfferDeadline]
+  → ShipmentEvaluationEngine.EvaluateForCompanyAsync (once) → refuse trucks not owned or not feasible
+  → ShipmentOffer.Create(...) per truck, with the evaluated positions and added km → save once
+
+AcceptOfferHandler      POST /offers/{id}/accept   (the shipper)
+  → offer.Accept(now, OfferDeadline) → reject every other Pending offer on the Shipment
+  → Shipment.AcceptOffer(companyId, now) → save            (no stops yet; no concurrency guard)
+
+AddOfferToTripHandler   POST /offers/{id}/add-to-trip   (the winning company)
+  guard: offer Accepted, Shipment still Pending
+  → AssignShipmentToTruckHandler.AssignShipmentAsync(offer.TruckId, shipmentId,
+       offer.PickupInsertIndex, offer.DeliveryInsertIndex)      (unchanged; no re-check beforehand)
 ```
+
+**Reads:**
+- `GetCompanyShipmentBoardHandler` — `GET /companies/{id}/shipments/board`: the company's four lists, each Pending Shipment in at most one — **Direct** (booked to us), **Approved** (our offer accepted, ready for Add to trip), **Offered** (our offers still waiting), **Open** (open for offers, none sent by us). Shipments whose offers or offer window have run out are in none of them. Offers carry truck names.
+- `GetShipmentOffersHandler` — `GET /shipments/{id}/offers`: the shipper's view, waiting offers only, with company name, price, limit, and the Shipment's `OfferDeadline`.
+
+**Known problems (accepted):** no feasibility re-check on accept or Add to trip — if the route changed, Add to trip returns the assignment's own error; no guard against two simultaneous accepts.
 
 ---
 
@@ -439,8 +474,8 @@ Implemented by `OsrmRoutingService`, wrapped by `ThrottlingRoutingService` (rate
 
 ## 7. Repository & Persistence Pattern (EF Core)
 
-- **`IRepository<T>` per Aggregate Root** — `ITruckingCompanyRepository`, `IDeviceTokenRepository`, `IShipperRepository`, `ITruckRepository`, `ITripRepository`, `IDriverRepository`, `IShipmentRepository`. No repository for `Stop` — only ever accessed through `Trip`. (No `IShipmentOfferRepository` — that aggregate doesn't exist yet.)
-- **`IUnitOfWork`** exposes: `TruckingCompanies, DeviceTokens, Shippers, Trucks, Trips, Drivers, Shipments, SimulationClock` — one commit point (`SaveChangesAsync()`) per business transaction.
+- **`IRepository<T>` per Aggregate Root** — `ITruckingCompanyRepository`, `IDeviceTokenRepository`, `IShipperRepository`, `ITruckRepository`, `ITripRepository`, `IDriverRepository`, `IShipmentRepository`, `IShipmentOfferRepository` (by shipment, by several shipments, by company). No repository for `Stop` — only ever accessed through `Trip`.
+- **`IUnitOfWork`** exposes: `TruckingCompanies, DeviceTokens, Shippers, Trucks, Trips, Drivers, Shipments, ShipmentOffers, SimulationClock` — one commit point (`SaveChangesAsync()`) per business transaction.
 - **`SimulationClock`** is its own small persisted aggregate (`ISimulationClockRepository`) holding the app's simulated "now." Every booking/assignment/advance timestamp in the system is measured against this simulated clock, not wall-clock time — this is a foundational, load-bearing concept for the whole Track-A simulation and isn't just an incidental detail.
 - Repositories never call `SaveChanges` — they only track changes (`Add`, modify loaded entities).
 - Domain project has zero reference to EF Core.
@@ -456,5 +491,5 @@ Implemented by `OsrmRoutingService`, wrapped by `ThrottlingRoutingService` (rate
 - **Office Stop side effects**: pure waypoint, no automatic rest/refueling trigger.
 - **Stop-arrival trigger mechanism**: resolved — driven entirely by `POST /simulation/advance` (a pull-based, global tick advance), not GPS/telematics or manual per-stop confirmation.
 - **Multi-tenancy / auth**: out of scope. No `TenantId` or auth scaffolding exists.
-- **Competitive bidding (Track B)**: `ShipmentOffer` and its whole submit/approve workflow — see §2 above and `freight-build-plan.md` Slice 12.
+- **Push to companies when an offer is accepted or rejected**: not built — they see it in their shipment lists.
 - **Hazmat certification is unreachable from the API**: the domain method exists (`Truck.CertifyForHazmat`) but no handler/endpoint calls it yet.

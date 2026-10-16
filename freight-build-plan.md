@@ -5,7 +5,7 @@
 - `freight-domain-model.md` — exact entities/fields/methods and workflows drive *how* each slice is implemented.
 - `freight-ui-screens.md` — exact screens ship what's user-facing in each slice.
 
-**Status:** Slices 1–9 (**Track A — Truck Simulation**) are done and shipped, corrected below to match the actual implementation, and the fleet-management Android app was added on top of them. In **Track B — Bidding/Marketplace**, Slice 10 was replaced by an on-demand per-company evaluation and Slice 11 is built as "notify every company" (both per ADR 0007); Slice 12 (offers) is not built. Slice 13 (mobile route view) is partly covered by the Android truck screen.
+**Status:** Slices 1–9 (**Track A — Truck Simulation**) are done and shipped, corrected below to match the actual implementation, and the fleet-management Android app was added on top of them. In **Track B — Bidding/Marketplace**, Slice 10 was replaced by an on-demand per-company evaluation and Slice 11 is built as "notify every company" (both per ADR 0007); Slice 12 is built as priced offers that the shipper accepts, plus direct shipments booked to one company. Slice 13 (mobile route view) is partly covered by the Android truck screen.
 
 ---
 
@@ -31,9 +31,9 @@ This slice originally posed an open design question: should `Driver` get its own
 **Exit criteria (met):** a driver's compliance state correctly reflects each of the three (really four, including the two-week cap) clock tiers independently, and the active-driver swap on a team truck is one-directional, verified via `GET /drivers/{id}` and the scenario-matrix tests.
 
 ## Slice 5 — Shipment Booking ✅ Done
-`Shipment.Book(...)`, `UpdatePickupWindow(...)`. `Book` creates `Pending` status, no `TruckingCompanyId`, and sets `OfferDeadline = bookedAt + 30min` (a fixed system value, not a Shipper-entered field — see `freight-frd.md` FR2.2). `UpdatePickupWindow` is Pending-only and resets that same 30-minute deadline. Endpoints: `POST /shipments`, `PATCH /shipments/{id}/pickup-window`. UI: Shipment Booking screen with map pickers, per `freight-ui-screens.md`.
+`Shipment.Book(...)` creates a `Pending` shipment and sets `OfferDeadline = bookedAt + 2h` (a fixed system value, not a Shipper-entered field — see `freight-frd.md` FR2.2). Endpoint: `POST /shipments`. UI: Shipment Booking screen with map pickers, per `freight-ui-screens.md`.
 
-*(The window-edit's "restarts the matching process" effect described in the FRD has no effect: there is no matching engine (ADR 0007, see Slice 10), and editing the window does not re-notify companies.)*
+Slice 12 later extended booking: an optional company makes the shipment a **direct** shipment, and the shipper can change both windows (`Shipment.UpdateWindows`, `PATCH /shipments/{id}/windows`, which replaced the original pickup-window-only edit). See Slice 12.
 
 **Exit criteria (met):** a Shipper books a Shipment through the browser and sees it `Pending`.
 
@@ -51,7 +51,7 @@ This slice originally posed an open design question: should `Driver` get its own
   5. `ShipmentInsertionEvaluator.Evaluate(...)` — capacity + window feasibility (Slice 8's Q3, built alongside this)
   6. Commit: `Trip.AssignShipment(...)`, `Truck.SyncProgressToNextStop(...)`, `Shipment.AssignToCompany(...)`
 
-**This endpoint is not a temporary stand-in** — since Track B's Offers flow (originally-planned Slice 12) doesn't exist yet, direct-assignment via this handler is the real, current, permanent way a Shipment gets assigned to a Truck. Track B will eventually call this same handler as the final step of offer approval, reusing it as-is, rather than replacing it.
+**This endpoint is not a temporary stand-in** — it is the one place where a Shipment's stops are created. The apps use it for direct shipments, and Slice 12's **Add to trip** calls the same handler, unchanged, with the positions stored on the accepted offer. A shipment that already belongs to a company (direct, or an accepted offer) can only be assigned to that company's trucks (`Shipment.AssignToCompany`). The endpoint still accepts open shipments, which the seeder and the tests rely on; the apps no longer offer that.
 
 A companion dry-run entry point, `CheckFeasibilityAsync`, exposed as `POST /trucks/{truckId}/assign-shipment/feasibility`, runs the same evaluation without committing.
 
@@ -83,7 +83,7 @@ Also shipped: `PATCH /trips/{id}/start` → `RescheduleTripHandler` (`Trip.Resch
 The fleet-management features of the web app, as an Android app (`frontend/fleetmanagement/mobile`, Expo SDK 57 / React Native 0.86.3). Web and mobile share their logic through `@freight/fleetmanagement-core` (sim time, fleet and shipment rules, route geometry), so only the screens differ.
 
 - Built to Android conventions rather than the web layout: bottom tabs (Fleet, Shipments), sim clock as a top-bar chip, floating action buttons, bottom sheets for short choices, full-screen forms with Cancel/Save at the bottom.
-- Same features as the web app: trucks and drivers, activation, assign/remove drivers, driver eligibility, change trip start, assign a shipment with insert positions and live feasibility, and per-company "Check eligibility" for open shipments.
+- Same features as the web app: trucks and drivers, activation, assign/remove drivers, driver eligibility, change trip start, assign a shipment with insert positions and live feasibility, and the Slice 12 shipment lists (Open, Offered, Approved, Direct) with Check eligibility, Send offers, Add to trip and Assign.
 - Maps on OpenStreetMap via MapLibre (fleet, trip and shipment route), as static previews that open full screen.
 - Each device belongs to one company, chosen once on first launch.
 - Receives new-shipment push notifications (Slice 11); tapping one opens that shipment's details.
@@ -112,36 +112,58 @@ The originally planned automatic matching engine (an event-driven, fleet-wide se
 
 - **Domain/persistence:** `DeviceToken` — one registered device per company, holding the device's Firebase Installation ID (FID), stored encrypted (AES-GCM). Registering again replaces the company's FID. The FCM fields were kept off `TruckingCompany`.
 - **Endpoints:** `POST /companies/{id}/device-token` (register) and `DELETE /companies/{id}/device-token` (unregister; the FID must match).
-- **Sending:** `BookShipmentHandler` calls `INotificationSender.NotifyAllCompaniesAsync` synchronously after the booking is saved — no hosted/background service was needed. `FcmNotificationSender` sends the same light summary (shipment id, required truck type, pickup location and window) to every registered device; a failure for one device, or of FCM itself, is logged and never fails the booking.
+- **Sending:** `BookShipmentHandler` calls `INotificationSender.NotifyAllCompaniesAsync` synchronously after the booking is saved — no hosted/background service was needed. `FcmNotificationSender` sends the same light summary (shipment id, required truck type, pickup location and window) to every registered device; a failure for one device, or of FCM itself, is logged and never fails the booking. Slice 12 added `NotifyCompanyAsync` for direct shipments ("New shipment assigned to you", to that company only) and a `kind` field (`open`/`direct`) in the push data.
 - **Running without secrets:** with no FCM service-account key configured, `LogNotificationSender` only logs; with no device-token encryption key, `UnconfiguredDeviceTokenEncryptor` disables registration while the rest of the API keeps working (this is how CI runs).
 - **Mobile:** the Android app asks for notification permission, registers its FID for the device's company on start, unregisters when permission is switched off, and opens the shipment's details when a notification is tapped.
-- **Not built:** re-notifying companies when a shipment's window is edited, and FR3.5's per-company submission window (part of offers).
+- **Re-notifying:** added in Slice 12 — when the shipper changes a shipment's times, the push is sent again (to every company, or only to the direct company).
 
 **Exit criteria (met):** booking a Shipment delivers a push to every company with a registered device; a company with no device, or a failed send, does not affect the booking or the others.
 
-## Slice 12 — Offers & Approval — **Track B, not built**
+## Slice 12 — Offers, Approval & Direct Shipments ✅ Done
 
-**FRD:** FR4.1–FR4.7.
-**Domain doc:** `ShipmentOffer.Create`/`Approve`/`Reject`/`Expire`; `SubmitOfferHandler`/`ApproveOfferHandler`.
-**UI doc:** Offers Received screen (Shipper, web), Offer Submission screen (dispatcher, mobile).
+**FRD:** FR2.2, FR3.5, FR4.1–FR4.7.
 
-**1. Entities/Domain**
-- New `ShipmentOffer` aggregate (see `freight-domain-model.md` §2 for the planned shape) — `Create`/`Approve`/`Reject`/`Expire`, unit-tested for the one-Pending-offer-per-company rule and the Approve → auto-reject-others transition.
+A shipment now reaches a truck in one of two ways:
+- **Open shipment** (no company chosen at booking): companies check eligibility and send priced offers, the shipper accepts one, and the winning company presses **Add to trip**.
+- **Direct shipment** (the shipper picks a company at booking): only that company is notified and sees it; it checks eligibility and assigns it to a truck. No offers and no time limit.
+
+All times below are simulation-clock times.
+
+**Rules**
+- **Offer window:** an open shipment takes offers for **2 hours** from booking (`Shipment.OfferDeadline`). Offers can be sent and accepted only inside it.
+- **Offers:** one offer per truck per shipment; a company may offer several trucks, all sent **in one go**. Each offer has a price in **EUR** (fixed once sent) and an optional **limit** (a time before the offer deadline). The server re-runs the company's eligibility once and refuses trucks that can't take the shipment; it stores each truck's evaluated pickup/delivery positions and added distance on the offer — the client never sends positions. A company can't send more offers for the shipment while it has offers waiting.
+- **Accept:** the shipper accepts one waiting offer; every other Pending offer is rejected and the shipment belongs to the winning company (still `Pending`). No stops are created yet.
+- **Add to trip:** the winning company inserts the shipment at the offered truck and positions, by calling Slice 6's `AssignShipmentToTruckHandler` unchanged.
+- **Dead shipment:** if the 2 hours pass with nothing accepted, companies no longer see it and the shipper is asked to **change the times**. Changing the times (allowed while Pending, refused after an accept) restarts the 2 hours, rejects all Pending offers, and sends the push again. A direct shipment's times can be changed too; that pushes only its company.
+- **Hidden offers:** rejected offers, offers past their limit and offers past the deadline are hidden from every list but kept in the database. Expiry is computed when reading (`ShipmentOffer.IsWaiting`); nothing sweeps or rewrites old offers.
+
+**1. Domain**
+- `Shipment`: `IsDirect`; `Book(..., directCompanyId?)`; `IsOpenForOffers(now)`; `AcceptOffer(companyId, now)`; `UpdateWindows(pickup, delivery, now)`; `AssignToCompany` refuses a different company once the shipment belongs to one.
+- New `ShipmentOffer` (`Create`, `Accept`, `Reject`, `IsWaiting`) with status `Pending`/`Accepted`/`Rejected`; `IShipmentOfferRepository`.
+- `INotificationSender.NotifyCompanyAsync` for direct shipments.
 
 **2. Persistence**
-- EF mapping + migration for `ShipmentOffer`; `IShipmentOfferRepository`.
-- An EF optimistic-concurrency token on `Shipment` (needed by `ApproveOfferHandler`'s concurrent-double-approve race guard).
+- EF mapping and repository for `ShipmentOffer`; `IsDirect` column on `Shipment`; migration `AddShipmentOffersAndDirectShipments`.
 
 **3. API/Handlers**
-- `POST /shipments/{id}/offers` → `SubmitOfferHandler`: guard against a pre-existing Pending offer from this company on this Shipment, and against the company's own FR3.5 submission window having closed → `ShipmentOffer.Create(...)`.
-- `POST /offers/{id}/approve` → `ApproveOfferHandler`: guard `Shipment.Status == Pending` (the concurrency-token race guard) → `approvedOffer.Approve()` → reject every other Pending offer → `Shipment.AssignToCompany(...)` → run the **existing, already-built** `AssignShipmentToTruckHandler` (Slice 6) with `approvedOffer.ProposedTruckId` — reused as-is, not duplicated.
-- A periodic (or on-advance) expiry sweep for offers past `ExpiresAt`.
+- `POST /shipments` takes an optional `truckingCompanyId` (direct shipment) → `BookShipmentHandler` pushes to that company only, or to every company.
+- `PATCH /shipments/{id}/windows` → `UpdateShipmentWindowsHandler`.
+- `GET /shipments/{id}/offers` → `GetShipmentOffersHandler`: the shipper's waiting offers, with company name, price and limit.
+- `GET /companies/{id}/shipments/board` → `GetCompanyShipmentBoardHandler`: the company's four lists — **Open** (open for offers, none sent yet), **Offered** (our offers still waiting), **Approved** (our offer accepted, ready for Add to trip), **Direct** (booked to us). Each shipment is in at most one list.
+- `POST /companies/{id}/shipments/{shipmentId}/offers` → `SendOffersHandler`.
+- `POST /offers/{id}/accept` → `AcceptOfferHandler`; `POST /offers/{id}/add-to-trip` → `AddOfferToTripHandler`.
+- `GET /shipments/pending` is unchanged; the seeder and tests still use it, the company apps use the board.
 
 **4. UI**
-- **Web:** Offers Received screen — Pending/Approved/Rejected/Expired all visible, only Pending gets an Approve button.
-- **Mobile:** Offer Submission screen — eligible truck(s) with proposed Stop-insertion preview from Slice 10's evaluator output, `OfferedPickupTime`/`ExpiresAt` inputs.
+- **Fleet web and Android:** a Shipments view with the four lists. Open → Check eligibility → tick trucks, enter a price and optional limit → Send offers. Offered is information only. Approved → Add to trip. Direct → Check eligibility → Assign. The truck's own "Assign shipment" lists only Direct shipments; open shipments can no longer be assigned straight to a truck from the apps.
+- **Shipper web:** an optional "Assign to company" dropdown on the booking form; on each pending open shipment, the offer close time, **See offers (n)** with **Accept**, and **Change times** (also shown as "No offer accepted — change times" once the window has passed).
 
-**Exit criteria:** full negotiation loop, in the browser/app — book → match/notify (Slice 10/11) → offer submitted → Shipper sees it → approves → Stops created on the winning Truck via the existing Slice-6 handler → other offers auto-rejected.
+**Known problems (accepted):**
+- Neither accept nor Add to trip re-checks feasibility. If the truck's route has changed so the offered positions no longer fit, Add to trip shows the assignment's own error.
+- Two accepts at the same moment are not guarded against (no concurrency token).
+- Companies get no push when an offer is accepted or rejected; they see it in their lists.
+
+**Exit criteria (met in code; tests written):** book → every company notified → offers sent from two trucks → shipper accepts one, the others disappear → Add to trip creates the stops on the offered truck in the offered order; a direct shipment reaches only its company and is assigned through Check eligibility → Assign; after 2 hours with no accept the shipment disappears for companies until the shipper changes its times.
 
 ## Slice 13 — Route View (Mobile) — ⚠️ Partly covered
 
@@ -159,8 +181,8 @@ Track A (done):
   + Fleet-management Android app
 
 Track B (in progress):
-10 Shipment Evaluation (done) → 11 Notifications (done) → 12 Offers & Approval (not built)
+10 Shipment Evaluation (done) → 11 Notifications (done) → 12 Offers, Approval & Direct Shipments (done)
   → 13 Mobile Route View (partly covered)
 ```
 
-Slices 1–9 satisfy Track A's success criteria in full (`freight-frd.md` §5, items 1–5) — a complete direct-assignment demo with real compliance-aware ETAs and simulated movement, no negotiation layer — on both web and Android. Slices 10 and 11 deliver Track B's notification half; Slice 12 (offers) is the remaining marketplace step, designed to build on top of 1–11 without reworking them — in particular, its approval step is designed to call Slice 6's `AssignShipmentToTruckHandler` unchanged.
+Slices 1–9 satisfy Track A's success criteria in full (`freight-frd.md` §5, items 1–5) — a complete direct-assignment demo with real compliance-aware ETAs and simulated movement, no negotiation layer — on both web and Android. Slices 10–12 deliver Track B's marketplace loop — notify, evaluate, offer, accept, add to trip — built on top of 1–9 without reworking them: Add to trip calls Slice 6's `AssignShipmentToTruckHandler` unchanged. Slice 13 is the only Track B slice left, and it is partly covered.

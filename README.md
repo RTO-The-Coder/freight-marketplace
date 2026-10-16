@@ -4,7 +4,7 @@ A freight platform for European road transport. Shippers book cargo, and truckin
 
 ## What it is
 
-Shippers post shipments with a pickup and delivery location, a load and time windows. Trucking companies manage their trucks and drivers and put shipments on their trucks' routes. A simulation clock then moves the trucks along real roads, so routes, stops and driver hours change over time.
+Shippers post shipments with a pickup and delivery location, a load and time windows. Every trucking company is notified, checks the shipment against its own fleet and sends priced offers; the shipper accepts one, and the winning company adds the shipment to the offered truck's route. A shipper can also book a shipment directly to one company. Trucking companies manage their trucks and drivers in the same apps. A simulation clock then moves the trucks along real roads, so routes, stops and driver hours change over time.
 
 The hard part is the feasibility check. Before a shipment is added to a truck, the system works out whether the truck can really get there in time. It uses real road times from OSRM and the EU 561 rules for driver breaks and rest: the daily and weekly limits, split breaks, reduced rest, extended driving days and two-driver teams. It also checks the truck's capacity and every stop already on its route. [freight-overview.md](freight-overview.md) explains the problem and why getting the arrival time right matters.
 
@@ -26,7 +26,8 @@ This is a portfolio project. It shows a domain-driven .NET backend and a TypeScr
 
 **Fleet management, web**
 - Trucking companies, their trucks and drivers. Trucks are added, drivers assigned, and trucks activated.
-- Assigning a shipment to a truck: choose where the pickup and delivery go in the route, see the resulting route, and get a live feasibility answer before saving.
+- Shipments in four lists: **Open** (check which trucks could take it, then send priced offers), **Offered**, **Approved** (add the accepted offer to the truck's trip) and **Direct** (booked to this company).
+- Assigning a direct shipment to a truck: choose where the pickup and delivery go in the route, see the resulting route, and get a live feasibility answer before saving.
 - Changing a trip's start time until the truck starts moving.
 - Fleet, trip and shipment maps with road-following routes (Leaflet and OpenStreetMap).
 - A simulation clock that can be advanced by ticks or hours, or set to a time.
@@ -35,17 +36,21 @@ This is a portfolio project. It shows a domain-driven .NET backend and a TypeScr
 - The same fleet features, built to Android conventions: bottom tabs, a floating action button, bottom sheets and full-screen forms.
 - OpenStreetMap maps through MapLibre, with no map API key needed.
 - Each phone belongs to one company, chosen on first launch.
+- The same four shipment lists: send offers, add accepted offers to a trip, assign direct shipments.
 - Push notifications for new shipments, through Firebase Cloud Messaging.
 
 **Shipper, web**
-- Book a shipment with map pickers for pickup and delivery, and see each shipper's shipments.
+- Book a shipment with map pickers for pickup and delivery, open to every company or directly for one.
+- See each shipment's waiting offers and accept one, and change a shipment's times to get new offers.
 
 **Simulation engine (backend)**
 - A tick-based clock (5 minutes per tick). Trucks move along their routes, stops are reached, shipments are picked up and delivered, and each driver's compliance ledger advances.
 - A truck that arrives before a stop's time window opens parks and waits.
 
-**Notifications (backend)**
-- When a shipment is booked, every trucking company is notified by push. Each company can then check the shipment against its own fleet.
+**Marketplace (backend)**
+- When a shipment is booked, every trucking company is notified by push (or only the chosen company, for a direct shipment).
+- Each company can check the shipment against its own fleet: which trucks could take it, where it would go in their routes and how many km it adds.
+- Offers: one per truck, a price in EUR and an optional time limit, open for 2 hours (simulation time). The server re-checks the trucks when offers are sent. Accepting one rejects the others.
 
 ## Tech stack
 
@@ -182,7 +187,8 @@ GitHub Actions runs three workflows:
 
 The work is split into two tracks:
 - **Track A, Truck Simulation: built.** Fleet setup, direct assignment of shipments to trucks, compliance-aware feasibility and arrival times, and simulated movement. It works on web and Android.
-- **Track B, Marketplace: in progress.** Notifying every trucking company of a new shipment by push is built, and each company can check a shipment against its own fleet. Offers and shipper approval are not built yet.
+- **Track B, Marketplace: built.** Push to every trucking company, per-company fleet check, priced offers, shipper approval, Add to trip, and direct shipments, on web and Android. Known limits: accepting an offer and Add to trip don't re-check feasibility, and two simultaneous accepts aren't guarded against.
+- **Next:** per-stop arrival times in the apps (the API already provides them).
 
 ## Synthetic data
 
@@ -190,4 +196,4 @@ All shipments, companies, trucks, drivers and routes are synthetic demo data. Lo
 
 ## License
 
-[PolyForm Noncommercial 1.0.0](LICENSE). The code is public for review and learning, not for commercial use.
+[MIT](LICENSE) © 2026 Ritesh Totlani.

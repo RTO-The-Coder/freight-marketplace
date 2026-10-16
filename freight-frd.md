@@ -2,7 +2,7 @@
 
 **Companion documents:** `freight-domain-model.md` (domain/technical design), `freight-ui-screens.md` (screen specs), `freight-build-plan.md` (development slices).
 
-**Structure note:** requirements are split into two tracks (see `freight-overview.md`). **Track A — Truck Simulation** is built and working today. **Track B — Bidding / Marketplace** is in progress: notification of every company (FR3) and the per-company fleet check (FR4.1) are built; offers are not yet. Each Track B requirement is marked built or not built.
+**Structure note:** requirements are split into two tracks (see `freight-overview.md`). **Track A — Truck Simulation** is built and working today. **Track B — Bidding / Marketplace** is built: every company is notified (FR3), checks a shipment against its own fleet (FR4.1), sends priced offers, and the shipper accepts one (FR4); a shipper can also book a shipment directly to one company (FR2.4). Only the mobile route view with per-stop ETAs remains (see `freight-build-plan.md`, Slice 13).
 
 ---
 
@@ -12,9 +12,9 @@ A freight matching and fleet-tracking application connecting **Shippers** (who n
 
 | Actor | Description | Access |
 |---|---|---|
-| **Shipper** | Creates Shipments; (Track B, not built) reviews and approves offers from TruckCompanies | Shipper web app (React) |
-| **TruckingCompany (dispatcher)** | Manages fleet (Trucks, Drivers), assigns Shipments to Trucks, follows trips on maps (Track A); receives new-shipment notifications and checks them against the fleet (Track B); (not built) submits offers | Fleet-management web app (React) and Android app (React Native) — both have the full fleet features. Each Android device belongs to one company, chosen on first launch; push notifications arrive on the Android app. |
-| **System** | Computes ETAs and feasibility, tracks driver rest compliance, advances the simulation clock (Track A); notifies every company when a Shipment is booked (Track B) | Application-layer handlers, invoked on request — no background/scheduled jobs exist (see FR7.2) |
+| **Shipper** | Creates Shipments, optionally directly for one company; changes their times; reviews offers from TruckCompanies and accepts one (Track B) | Shipper web app (React) |
+| **TruckingCompany (dispatcher)** | Manages fleet (Trucks, Drivers), assigns Shipments to Trucks, follows trips on maps (Track A); receives new-shipment notifications, checks them against the fleet, sends offers and adds accepted ones to a trip (Track B) | Fleet-management web app (React) and Android app (React Native) — both have the full fleet features. Each Android device belongs to one company, chosen on first launch; push notifications arrive on the Android app. |
+| **System** | Computes ETAs and feasibility, tracks driver rest compliance, advances the simulation clock (Track A); notifies companies when a Shipment is booked or its times change, and hides offers that have run out (Track B) | Application-layer handlers, invoked on request — no background/scheduled jobs exist (see FR7.2) |
 
 TruckingCompany and Shipper accounts are **provisioned out-of-band** (administratively) — no self-service sign-up screens in Phase 1. Neither actor manages the other's account type.
 
@@ -33,8 +33,9 @@ TruckingCompany and Shipper accounts are **provisioned out-of-band** (administra
 
 ### FR2 — Shipment Booking
 - FR2.1: A Shipper can create a Shipment specifying: pickup location, delivery location, required truck type, load (weight + volume), pickup time window (earliest/latest), and delivery time window (earliest/latest).
-- FR2.2: A newly created Shipment has no assigned TruckingCompany and is in `Pending` status. It is also given a fixed 30-minute offer-submission deadline from the moment of booking (`OfferDeadline`) — this field is set automatically by the system, not entered by the Shipper, and today is only meaningful once Track B's offer flow exists; a Track-A direct assignment does not consult it.
-- FR2.3: A Shipper can edit the pickup window of a Shipment while it remains `Pending`. This resets the 30-minute offer-submission deadline from the moment of the edit. (Track B: this will also invalidate pending offers and restart matching — not applicable today since offers don't exist yet.)
+- FR2.2: A newly created Shipment is in `Pending` status. It is given a fixed **2-hour** offer window from the moment of booking (`OfferDeadline`) — set automatically by the system, not entered by the Shipper. Offers (FR4) can be sent and accepted only inside it. All times are simulation-clock times.
+- FR2.3: A Shipper can change both time windows (pickup and delivery) of a Shipment while it remains `Pending`, unless an offer has already been accepted. This restarts the 2-hour offer window, rejects every waiting offer (they were made for the old times), and sends the notification again (FR3).
+- FR2.4: When booking, a Shipper can optionally pick one TruckingCompany. This makes a **direct** Shipment: only that company is notified and sees it, there are no offers and no time limit, and the company assigns it to one of its Trucks (FR4.1 to check, then FR5 to assign). Without a company the Shipment is **open** and goes through offers (FR4).
 
 ### FR5 — Route Management
 - FR5.1: A Truck's route (its open Trip) is an ordered sequence of Stops (Pickup, Delivery, or Office/base-return), which can be inserted at any position, not only appended. Ordering uses gap-based sequence numbers, so a new Stop can always be inserted between two existing ones without renumbering the whole route (the route self-heals by renumbering only when a gap is exhausted).
@@ -45,7 +46,7 @@ TruckingCompany and Shipper accounts are **provisioned out-of-band** (administra
 ### FR6 — Dispatcher Visibility (the 4 core queries)
 - FR6.1: A dispatcher can see a Truck's current approximate location at any time — interpolated in a straight line between its last-reached Stop and its next Stop, or the company's office location if no Trip is open.
 - FR6.2: A dispatcher can see the estimated arrival time for each upcoming Stop on a Truck's route, accounting for driver rest requirements — including a Truck's status if it is currently parked, waiting for a Stop's time window to open.
-- FR6.3: A dispatcher can check whether a Truck could feasibly reach a given location within a given time window, at a position they specify (as a dry run before committing an assignment, or as part of committing one). *Not yet built:* the system does not automatically search for and propose the single best insertion position on its own — the dispatcher must choose the candidate position(s) to check.
+- FR6.3: A dispatcher can check whether a Truck could feasibly reach a given location within a given time window, at a position they specify (as a dry run before committing an assignment, or as part of committing one). The automatic search for the best insertion position exists in the per-company evaluation (FR4.1); this single-truck check still takes the position(s) the dispatcher chooses.
 - FR6.4: A dispatcher can see the estimated distance/time between any two locations (e.g., a Truck's current position and a target). *Not yet built as a single dedicated query:* today this requires composing FR6.1 (get the Truck's current position) with a generic point-to-point routing lookup, rather than one combined "distance from this Truck" endpoint.
 
 ### FR7 — Driver Compliance Tracking
@@ -56,27 +57,28 @@ TruckingCompany and Shipper accounts are **provisioned out-of-band** (administra
 
 ---
 
-## 3. Functional Requirements — Track B (Bidding / Marketplace, in progress)
+## 3. Functional Requirements — Track B (Bidding / Marketplace, built)
 
-FR3.1–FR3.4 and FR4.1 are built. The offer requirements (FR3.5, FR4.2–FR4.7) are not built yet.
+All of FR3 and FR4 are built. The original offer design (a per-company submission window, an offered pickup time, an Expired status, approval creating the stops) was replaced by the simpler rules below.
 
-### FR3 — Shipment Notification (built, except FR3.5)
+### FR3 — Shipment Notification (built)
 
 See `docs/adr/0007-shipment-evaluation-insertion-search.md` for the notification and on-demand insertion-search design behind this section.
 
-- FR3.1 *(built)*: When a Shipment is booked, every TruckingCompany is notified unconditionally — no automatic eligibility filtering happens at booking time (see ADR 0007). A dispatcher who wants to know whether the shipment fits their own fleet calls an on-demand, per-company evaluation (FR4.1) that runs the same feasibility engine Track A already built (FR6.3) against just their own trucks — not the whole fleet, and not automatically.
+- FR3.1 *(built)*: When an open Shipment is booked, every TruckingCompany is notified unconditionally — no automatic eligibility filtering happens at booking time (see ADR 0007). A dispatcher who wants to know whether the shipment fits their own fleet calls an on-demand, per-company evaluation (FR4.1) that runs the same feasibility engine Track A already built (FR6.3) against just their own trucks — not the whole fleet, and not automatically.
 - FR3.2 *(built)*: Notification is a Firebase Cloud Messaging push to the company's registered Android device (see ADR 0003). Each company has at most one registered device; the device registers when the app starts and can unregister (`POST`/`DELETE /companies/{id}/device-token`), and its Firebase Installation ID is stored encrypted. A failed push never fails the booking. If the API has no FCM key configured, it only logs the notification; if it has no device-token encryption key, device registration is disabled and everything else keeps working.
 - FR3.3/FR3.4 *(built)*: Feasibility for the on-demand, per-company evaluation (FR4.1) uses the exact same EU driving-time and two-driver-relay rules already implemented for Track A (FR7).
-- FR3.5 *(not built)*: Each eligible TruckingCompany should get a fixed 30-minute submission window from the moment they are notified to submit an offer (FR4.2) — independent of any other company's window and of the Shipment's own `OfferDeadline`.
+- FR3.5 *(built)*: A direct Shipment (FR2.4) notifies only its company ("New shipment assigned to you"). When a Shipper changes a Shipment's times (FR2.3), the notification is sent again — to every company, or only to the direct company. Companies are not notified when an offer is accepted or rejected; they see it in their shipment lists (FR4.8). There is one offer window per Shipment (FR2.2), not one per company.
 
-### FR4 — Offers (FR4.1 built; FR4.2–FR4.7 not built)
+### FR4 — Offers (built)
 - FR4.1 *(built)*: A TruckingCompany dispatcher, upon notification, can view Shipment details and run an on-demand evaluation against their own fleet — for every truck they own, whether it's feasible, where the Shipment's pickup/delivery would fall within that Truck's current route, and how much additional distance the insertion would add (see ADR 0007 — this is no longer computed automatically at booking time). Available as "Check eligibility" in the fleet-management web and Android apps.
-- FR4.2: A dispatcher should be able to submit an offer for a specific Truck, specifying their offered pickup time and an expiry time for the offer, only before their FR3.5 submission window closes.
-- FR4.3: A TruckingCompany should not be able to submit more than one active (Pending) offer for the same Shipment. Resubmission should be allowed after an earlier offer of theirs has expired or been rejected.
-- FR4.4: A Shipper should be able to view all offers submitted for their Shipment (Pending, Approved, Rejected, Expired) and approve exactly one.
-- FR4.5: Approving an offer should automatically reject all other Pending offers for that Shipment, assign the Shipment to the approved TruckingCompany, and reserve the corresponding Pickup/Delivery stops on the approved Truck's route — reusing Track A's existing assignment mechanism (FR5) as its final step.
-- FR4.6: An offer not approved before its expiry time should automatically expire.
-- FR4.7: Offers should not be withdrawable once submitted.
+- FR4.2 *(built)*: From the evaluation, a dispatcher can send offers for an open Shipment, **one per Truck**, for any number of their eligible Trucks, **all in one go**. Each offer has a price in **EUR** (more than 0) and an optional **limit** — a time before the offer window ends; without one, the offer is valid until the window ends. The system re-checks the Trucks when the offers are sent, refuses any that can't take the Shipment, and stores each Truck's pickup/delivery position and added distance on the offer.
+- FR4.3 *(built)*: While a TruckingCompany has offers waiting on a Shipment, it cannot send more for it. A new round is possible only after the Shipper changes the times (FR2.3), which rejects the waiting offers.
+- FR4.4 *(built)*: A Shipper sees the **waiting** offers for each open Shipment — company, price and limit — and accepts exactly one, while the offer window is open.
+- FR4.5 *(built)*: Accepting an offer rejects every other waiting offer and gives the Shipment to the winning company; it stays `Pending` and no stops are created yet. The winning company then presses **Add to trip**, which inserts the pickup and delivery stops on the offered Truck at the offered positions, using Track A's assignment mechanism (FR5). Neither step re-checks feasibility: if the Truck's route has changed so the positions no longer fit, Add to trip fails with the assignment's own error (known problem). Two accepts at the same instant are not guarded against (known limitation).
+- FR4.6 *(built)*: An offer stops waiting once its own limit or the Shipment's offer window has passed. Rejected and run-out offers are hidden from every list but kept for history. If the offer window passes with nothing accepted, the Shipment is hidden from companies and the Shipper is asked to change its times (FR2.3).
+- FR4.7 *(built)*: Offers cannot be changed or withdrawn once sent.
+- FR4.8 *(built)*: Each company sees its Shipments in four lists, in the fleet-management web and Android apps, each Shipment in at most one: **Open** (open for offers, none sent yet: Check eligibility → Send offers), **Offered** (our offers still waiting: information only), **Approved** (our offer accepted: Add to trip), **Direct** (booked to us: Check eligibility → Assign). Open Shipments can no longer be assigned straight to a Truck from the apps.
 
 ---
 
@@ -85,8 +87,8 @@ See `docs/adr/0007-shipment-evaluation-insertion-search.md` for the notification
 | Item | Status |
 |---|---|
 | Fine-grained EU rule nuance (split breaks/rests, reduced-rest limits, extended-daily-driving allowance, 90h/2-week vs 56h/week cap) | **Built** (Track A) — this is not deferred; it's implemented in the driver compliance ledger. |
-| Notifications (Track B) | **Built** — every company notified by FCM push on booking (FR3). |
-| Offers/bidding (Track B) | Not built — see FRD §3 above. |
+| Notifications (Track B) | **Built** — FCM push to every company on booking, or only to the chosen company for a direct Shipment (FR3). |
+| Offers (Track B) | **Built** — priced offers, shipper accepts one, company adds it to a trip (FR4). No feasibility re-check on accept or Add to trip, and no guard against two simultaneous accepts — both accepted known problems. |
 | Dispatcher mobile app | **Built** for Android (fleet management, maps, notifications). iOS is out of scope. |
 | Shipment cancellation workflow | Not modeled. |
 | Capacity validation across a Truck's full future planned route | **Built** — checked both at insertion time (across the whole remaining route) and again at actual pickup (FR5.2/FR5.4). |
@@ -107,7 +109,7 @@ See `docs/adr/0007-shipment-evaluation-insertion-search.md` for the notification
 4. A Shipment being directly assigned to a Truck and appearing on that Truck's route.
 5. Truck movement being simulated via the global simulation clock, a Stop being reached, and the Shipment's status updating accordingly.
 
-### Track B (partly achieved)
+### Track B (achieved)
 6. *(Achieved)* Every company being notified of a new Shipment by push, and able to check it against its own fleet on demand. This replaces the original criterion of the system automatically finding every eligible Truck across every company (dropped by ADR 0007).
-7. *(Not yet)* Companies submitting competing offers.
-8. *(Not yet)* A Shipper reviewing multiple offers and approving one, with the losing offers no longer active and the winning Truck's route updated via the existing Track-A assignment mechanism.
+7. *(Achieved)* Companies sending competing, priced offers for their eligible Trucks.
+8. *(Achieved)* A Shipper reviewing the waiting offers and accepting one, with the losing offers no longer active, and the winning company adding the Shipment to the offered Truck's route via the existing Track-A assignment mechanism.

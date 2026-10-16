@@ -2,7 +2,7 @@
 
 **Companion document to:** `freight-domain-model.md` (all domain methods referenced below are defined there).
 
-**Status:** Reflects the shipped UI: the company-first fleet-management web app (§1, built in the stages described in `docs/design/ui-redesign-plan.md`), the shipper web app (§2) and the fleet-management Android app (§3). Earlier drafts of this document described a per-company tree view, and later a flat global-nav design (standalone Trucks/Drivers screens) — **both are retired and no longer exist**. Track B offer screens are specified at the end (§6) as the not-yet-built target design.
+**Status:** Reflects the shipped UI: the company-first fleet-management web app (§1, built in the stages described in `docs/design/ui-redesign-plan.md`), the shipper web app (§2) and the fleet-management Android app (§3). Earlier drafts of this document described a per-company tree view, and later a flat global-nav design (standalone Trucks/Drivers screens) — **both are retired and no longer exist**. Track B (offers, approval, direct shipments) is built into these same apps: Screen 4 and M5 on the company side, §2 on the shipper side; §6 lists what is still open.
 
 ---
 
@@ -57,13 +57,13 @@ Drivers                                            [+ Add Driver]
 │  • Marek Wójcik   • Ola Zielińska   • Tomas Berg                │
 └─────────────────────────────────────────────────────────────────┘
 
-[ Show Open Shipments ]   → Screen 4
+[ Show shipments ]   → Screen 4
 ```
 - **Fleet map** — this company's trucks, real road-following route lines (via OSRM), office marker, current positions; clicking a truck navigates to its detail. Advancing the sim clock visibly moves the pins.
 - **Add Truck** modal — name, type picker, size picker (capacity shown live, derived from size). Creates the truck, then assigns it to this company.
 - **Fleet rows** — inline Active/Inactive toggle; disabled with "⚠ no driver" while the truck has no Primary driver (a truck cannot be activated without one — see FRD FR1.3).
 - **Drivers** section — assigned drivers (derived from this company's trucks) plus the global unassigned pool. **Add Driver** modal — first/last name + rule pickers (break style, daily-rest style, weekly-rest style) + an "extend daily driving when eligible" checkbox.
-- **Show Open Shipments** opens Screen 4.
+- **Show shipments** (next to the Fleet map heading) opens Screen 4.
 
 ### Screen 3 — Truck Detail
 ```
@@ -101,26 +101,32 @@ Driver Compliance (primary)
 - **Change trip start** — visible only while the truck hasn't yet moved on its current trip (no stop reached, no leg progress); lets a dispatcher reschedule the planned departure time.
 - **Assign a Shipment** opens Screen 5 with this truck preselected.
 
-### Screen 4 — Open Shipments (from Company Detail)
+### Screen 4 — Shipments (from Company Detail)
 ```
-Open Shipments (7)                                        [ × ]
-Pending shipments awaiting a carrier.
+Shipments                                                 [ × ]
+ [ Open (5) ] [ Offered (1) ] [ Approved (1) ] [ Direct (2) ]
 
 ┌─────────────────────────────────────────────────────────────────┐
 │ #a3f2  Flatbed                                                   │
 │  mini-map: pickup ─── road line ─── delivery (lazy, on expand)  │
-│  Load    9,000 kg / 45 m³   [███████░░░] vs Large               │
-│  Pickup  Aug 30, 09:00–14:00   (in 18h)                         │
-│  Deliver Aug 31, 08:00–18:00                                     │
-│  [ Assign to a truck → ]  [ Check eligibility ]                  │
-│  Truck 3f9a12c0 — feasible (+38.2 km to route)                   │
-├─────────────────────────────────────────────────────────────────┤
-│ #b71c  Refrigerated … (collapsed — click to expand map)         │
+│  Load         9,000 kg / 45 m³   [███████░░░] vs Large truck    │
+│  Pickup       Aug 30, 09:00–14:00   (in 18h)                    │
+│  Deliver      Aug 31, 08:00–18:00                                │
+│  Offers close Aug 1, 08:00                                       │
+│  [ Check eligibility ]                                           │
+│   ☑ FL-07  +38.2 km   Price (€) [ 450 ]  Limit (optional) [   ] │
+│   ☐ FL-12  +61.0 km                                              │
+│   [ Send offer ]  Offers close Aug 1, 08:00. Times are           │
+│                   simulation-clock times (UTC).                  │
 └─────────────────────────────────────────────────────────────────┘
 ```
-Lists all `Pending` shipments (`GET /shipments/pending`) with capacity fill vs. a Large truck, both windows with a relative-time hint. No truck routes drawn here — only each shipment's own pickup→delivery line, lazily on expand.
-- **Check eligibility** — runs the per-company evaluation (`GET /companies/{id}/shipments/{id}/evaluate`, ADR 0007) and lists this company's trucks that could feasibly take the shipment, with the distance each would add. (The web list shows the start of each truck's id; the Android app shows truck names.)
-- **Assign to a truck** — opens Screen 5.
+The company's shipments in four tabs, each with a count (`GET /companies/{id}/shipments/board`). Each shipment is in at most one tab; shipments whose offer window has run out with nothing accepted are in none. Every card shows capacity fill vs. a Large truck and both windows with a relative-time hint; the map shows only the shipment's own pickup→delivery line, lazily on expand. The tabs reload when the sim clock moves.
+- **Open** — open for offers, and this company hasn't sent any yet. Shows when offers close. **Check eligibility** runs the per-company evaluation (`GET /companies/{id}/shipments/{id}/evaluate`, ADR 0007) and lists the eligible trucks with the distance each would add. Each row has a tick box; a ticked row gets a **Price (€)** and an optional **Limit**. One button — **Send offer** / **Send N offers** — sends them all (`POST /companies/{id}/shipments/{id}/offers`); the shipment then moves to Offered.
+- **Offered** — our offers still waiting for the shipper. Information only: per offer, the truck, the pickup and delivery positions, the price and its limit ("ends …" or "until offers close").
+- **Approved** — the shipper accepted our offer. Shows the truck, positions and price, and **Add to trip** (`POST /offers/{id}/add-to-trip`), which inserts the stops at the offered positions. If the route has changed so they no longer fit, the assignment's error is shown on the card.
+- **Direct** — booked directly to this company ("Directly to …"). **Check eligibility** lists the eligible trucks, each with an **Assign** button that assigns at the evaluated positions; **Assign to a truck →** opens Screen 5 instead, to choose the positions by hand.
+
+The web eligibility list shows the start of each truck's id; the Android app shows truck names.
 
 ### Screen 5 — Assign Shipment
 ```
@@ -131,7 +137,7 @@ Step 1 — Pick a truck
  (•) FL-12  BoxVan · Medium · Idle · 9t/45m³
 
 Step 2 — Relevant shipments for FL-12
- filtered: type = BoxVan · fits 9t/45m³ · pending
+ filtered: booked directly to us · type = BoxVan · fits 9t/45m³
  ┌─────────────────────────────────────────────────────────────┐
  │  FL-12 route + candidate #c19 pickup/delivery                │
  └─────────────────────────────────────────────────────────────┘
@@ -146,7 +152,7 @@ Step 3 — Where in the route
  [ Assign ]   → POST /trucks/{id}/assign-shipment
 ```
 - **Step 1** — only trucks that are active, have at least a Primary driver, and belong to a company are selectable.
-- **Step 2** — client-side filtered by truck type + rated capacity + pending status (this is a coarse pre-filter, not a full feasibility search — see FRD FR6.3 on what's not yet automated).
+- **Step 2** — only shipments booked **directly** to this company (open shipments go through offers, Screen 4), then client-side filtered by truck type + rated capacity. This is a coarse pre-filter; Step 3 does the real feasibility check.
 - **Step 3** — shows the candidate on the map alongside the truck's route; re-checks real feasibility (`POST /trucks/{id}/assign-shipment/feasibility`) live as insertion positions or trip-start time change, surfacing the same pass/fail + reason the commit call would give. For a truck with no open trip yet, a "trip start" time is also chosen here. On submit, calls the real assign endpoint and shows the result.
 
 ### Screen 6 — Driver Detail
@@ -169,12 +175,23 @@ Read-only. Shows the ledger block only once the driver has a `ComplianceState` (
 
 ---
 
-## 2. Shipper Web App (Track A, shipped)
+## 2. Shipper Web App (shipped)
 
-A separate small web app (`frontend/shipment`) for the shipper side. Shippers are provisioned out-of-band; there is no login.
+A separate small web app (`frontend/shipment`) for the shipper side. Shippers are provisioned out-of-band; there is no login. Dates are shown in UTC, the simulation clock's time zone.
 
 - **Shippers** — list of all shippers; selecting one opens its detail.
-- **Shipper detail** — the shipper's shipments with their status, and a **New shipment** form: pickup and delivery locations chosen on a map (click to place a pin), required truck type, load (weight + volume), pickup and delivery windows. Submitting books the shipment (`POST /shipments`), which also notifies every trucking company (Track B).
+- **New shipment** form — pickup and delivery locations chosen on a map (click to place a pin), required truck type, load (weight + volume), pickup and delivery windows, and an optional **Assign to company** dropdown ("None — open to offers from all companies"). Submitting books the shipment (`POST /shipments`): with no company it is open and every trucking company is notified; with a company it is direct and only that company is notified.
+- **Shipper detail** — the shipper's shipments with their status. A pending shipment's card shows one of:
+```
+│ Pending  Flatbed                                                │
+│ Offers close Aug 1, 08:00.        [ See offers (2) ] [ Change times ] │   open, offers possible
+│ No offer accepted — change times to get new offers. [ Change times ] │   offer window passed
+│ Offer accepted — Kessler Logistik is adding it to a trip.            │   accepted
+│ Booked directly to Kessler Logistik.               [ Change times ] │   direct
+```
+- **See offers (n)** opens the **Offers** window: each waiting offer with its company, price and "Valid until …" (or "Valid until offers close"), and an **Accept** button. Accepting one rejects all the others (`POST /offers/{id}/accept`).
+- **Change times** opens a window with both windows (pickup and delivery earliest/latest). Saving (`PATCH /shipments/{id}/windows`) restarts the 2-hour offer window, drops the waiting offers and notifies the companies again. Not offered once an offer is accepted.
+- The list reloads after each action and when the screen is opened again; it does not follow the sim clock on its own.
 
 ---
 
@@ -218,18 +235,32 @@ Northwind Freight                         [⏱ Aug 1, 06:00]
 - **Add** (floating button) — expands to **Add truck** and **Add driver**, each a full-screen form.
 
 ### Screen M3 — Truck
-Truck details with type, size and capacity; the activation switch; the drivers with **Change drivers** / **Remove drivers** buttons (the assign-drivers form can also add a new driver on the spot); the trip map (preview → full screen) and the route stops (reached time or "Pending", leg distance and time); **Change trip start** while the truck has not moved; the primary driver's compliance with **Check eligibility**; and an **Assign shipment** floating button that opens the full-screen assign form (shipments that fit, insert positions, resulting route, trip start for a new trip, live feasibility).
+Truck details with type, size and capacity; the activation switch; the drivers with **Change drivers** / **Remove drivers** buttons (the assign-drivers form can also add a new driver on the spot); the trip map (preview → full screen) and the route stops (reached time or "Pending", leg distance and time); **Change trip start** while the truck has not moved; the primary driver's compliance with **Check eligibility**; and an **Assign shipment** floating button that opens the full-screen assign form (Direct shipments that fit, insert positions, resulting route, trip start for a new trip, live feasibility).
 
 ### Screen M4 — Driver
 Read-only: the driver's fixed compliance rules, assigned truck and compliance ledger, as on web (Screen 6).
 
 ### Screen M5 — Shipments tab
-Open shipments as cards, earliest pickup first. Expanding a card shows the pickup → delivery route map, load and windows, with two actions for **this device's company**:
-- **Check eligibility** — a sheet listing the company's trucks that could take it, with the distance each would add.
-- **Assign to a truck** — a sheet of the company's ready trucks that fit the shipment, then the full-screen assign form with the shipment preselected.
+```
+ [ Open 5 | Offered 1 | Approved 1 | Direct 2 ]
+ ┌───────────────────────────────────────────┐
+ │ Flatbed                                   │
+ │ Pickup Aug 30, 09:00–14:00                │
+ │ (expanded) route map · Load · Pickup ·    │
+ │ Deliver · Offers close Aug 1, 08:00       │
+ │ [ Check eligibility ]                     │
+ └───────────────────────────────────────────┘
+```
+The same four lists as web Screen 4, as segmented buttons with counts (`GET /companies/{id}/shipments/board`), for **this device's company**; reloads on sim-clock changes and pull to refresh. Expanding a card shows the pickup → delivery route map, load and windows.
+- **Open** — "Offers close …" and **Check eligibility**, which opens the **Eligibility at …** sheet: each eligible truck with the km it adds and a tick box; a ticked truck gets a **Price (€)** field and a **No limit** button that opens the sim date/time picker for an optional limit. **Send offer** / **Send N offers** sends them all.
+- **Offered** — "Our offers": truck, positions, price and limit. No buttons.
+- **Approved** — "Accepted offer" and **Add to trip**.
+- **Direct** — "Booked directly to …" and **Check eligibility**, whose sheet has an **Assign** button per eligible truck.
+
+The truck screen's **Assign shipment** form (M3) lists only Direct shipments for that truck.
 
 ### Screen M6 — Shipment details (from a notification)
-When a shipment is booked, the device gets a "New shipment available" push notification. With the app closed, Android shows it; with the app open, a banner appears above the tab bar with **View**. Either opens this screen: that one shipment's details only, read from the open shipments — if it has been taken in the meantime, the screen says so.
+When an open shipment is booked (or its times change), every company's device gets a "New shipment available" push notification; a direct shipment sends "New shipment assigned to you" to its company only. With the app closed, Android shows it; with the app open, a banner with the notification's title appears above the tab bar with **View**. Either opens this screen: that one shipment's details with **Check eligibility** (view only — offers and assigning are done from the Shipments tab), read from the company's four lists. If the shipment is in none of them any more, the screen says "This shipment is no longer available."
 
 ---
 
@@ -251,15 +282,12 @@ When a shipment is booked, the device gets a "New shipment available" push notif
 
 ---
 
-## 6. Track B (Bidding / Marketplace) — offer screens, not yet built
+## 6. Track B (Bidding / Marketplace) — what is still open
 
-These describe the target design for the offer step (see `freight-frd.md` §3, `freight-build-plan.md` Slice 12). Neither offer screen exists today — there is no offer/bid concept anywhere in the shipped apps yet. The notification half of Track B is built (§3, Screens M5–M6).
+The offer screens are built: sending offers in Screen 4 and M5, the shipper's See offers and Change times in §2. The original separate "Offer Submission" and "Offers Received" screens were not built as such; their jobs live in those screens. Still open:
 
-### Offers Received Screen (Shipper-facing, web)
-A query view listing all `ShipmentOffer`s for a given Shipment, letting the Shipper approve one — Pending/Approved/Rejected/Expired all visible, only Pending gets an Approve button, refreshing periodically since offers would arrive asynchronously. Approve would call the (not-yet-built) `ApproveOfferHandler`.
-
-### Offer Submission Screen (TruckingCompany-facing)
-Reached from a shipment the company was notified about: shows the shipment, the company's eligible truck(s), where the pickup/delivery would land in each truck's route (reusing the already-built per-company evaluation), and lets the dispatcher pick a truck and submit `OfferedPickupTime`/`ExpiresAt`.
+- No push to a company when its offer is accepted or rejected — it sees the change in its lists.
+- The shipper's list does not refresh on its own while offers arrive.
 
 ### Route View (TruckingCompany-facing) — partly covered
 The Android truck screen (Screen M3) already shows the current position on the trip map, the truck status and the stops. Still missing: per-stop ETAs from the already-built Q2 query (`GET /trucks/{id}/etas`).

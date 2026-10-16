@@ -28,7 +28,7 @@ The platform is being built as two separate, deliberately independent end-goals 
 | Track | What it demonstrates | Status |
 |---|---|---|
 | **A — Truck Simulation** | A single truck's journey, simulated tick-by-tick: fleet setup, a dispatcher assigning a shipment to a specific truck, the system calculating a feasible ETA that correctly accounts for mandatory rest breaks, and the truck's simulated movement/compliance state advancing over time. | **Built.** This is the working core of the platform today. |
-| **B — Bidding / Marketplace** | The multi-company vision: a shipment is posted, every trucking company is notified, companies offer to take it, and the shipper picks one. | **In progress.** Notifying every company by push, and each company checking a shipment against its own fleet, are built. Offers are next — see `freight-frd.md` and `freight-build-plan.md`. |
+| **B — Bidding / Marketplace** | The multi-company vision: a shipment is posted, every trucking company is notified, companies offer to take it, and the shipper picks one. | **Built.** Push to every company, the per-company fleet check, priced offers, shipper approval and direct shipments all work — see `freight-frd.md` and `freight-build-plan.md`. |
 
 Track A's simulation isn't a placeholder for a future "real GPS tracking" mode — it's intended to remain a first-class, permanent part of the product (and is planned to eventually support an AI layer on top, tracked separately). Track B builds on top of Track A's engine rather than replacing it: the same feasibility/ETA calculation that powers a single simulated truck today is what a company uses to see which of its trucks could take a newly posted shipment.
 
@@ -40,11 +40,11 @@ A trucking company sets up their trucks and drivers in the system. Each truck ha
 
 ### 2. Shippers post what they need moved
 
-A shipper describes their shipment: where it needs to be picked up, where it needs to go, how big/heavy it is, what kind of truck it needs, and roughly when they need it picked up and delivered.
+A shipper describes their shipment: where it needs to be picked up, where it needs to go, how big/heavy it is, what kind of truck it needs, and roughly when they need it picked up and delivered. They can leave it open to every company (Track B's offers) or book it directly to one company.
 
 ### 3. A dispatcher assigns the shipment to a specific truck — and the system checks whether it can really make it
 
-A dispatcher picks a truck for the shipment and asks the system a genuinely hard question: **"Could this specific truck actually get to the pickup location in time — not in theory, but for real, accounting for the fact that its driver will legally need to stop and rest along the way?"**
+For a shipment booked to their company, a dispatcher picks a truck and asks the system a genuinely hard question: **"Could this specific truck actually get to the pickup location in time — not in theory, but for real, accounting for the fact that its driver will legally need to stop and rest along the way?"**
 
 This isn't just checking a map distance. A truck that looks close by might actually be *unable* to make it in time once you factor in that its driver has already been driving for 4 hours and needs a mandatory break soon. The system does this calculation properly, the way a human dispatcher with deep experience and a stopwatch would — except instantly. It also checks the assignment won't overload the truck's capacity, now or later in its route, and won't cause any of the truck's other already-committed stops to miss their window. A dispatcher can dry-run this feasibility check before committing to the assignment.
 
@@ -56,14 +56,14 @@ Once assigned, the shipment's pickup and delivery become stops on the truck's ro
 
 Building on top of everything in Track A, the marketplace layer adds:
 
-1. **Notifications** *(built)* — the moment a shipment is booked, every trucking company gets a push notification on its phone. The system does not filter companies in advance; whether a shipment fits is the dispatcher's call (see ADR 0007).
+1. **Notifications** *(built)* — the moment an open shipment is booked, every trucking company gets a push notification on its phone (a direct shipment notifies only its company). The system does not filter companies in advance; whether a shipment fits is the dispatcher's call (see ADR 0007).
 2. **Fleet check on demand** *(built)* — a dispatcher can ask which of their own trucks could take the shipment, where its pickup and delivery would fall in each truck's route, and how much distance it would add — using the same rest-rule-aware feasibility engine from Track A.
-3. **Offers** *(not built)* — notified companies offer to take the shipment.
-4. **Approval** *(not built)* — the shipper approves one offer, and the shipment is placed on the winning truck's route using the assignment mechanism Track A already has.
+3. **Offers** *(built)* — within 2 hours of booking, a company offers some of its eligible trucks, each with a price in EUR and an optional time limit.
+4. **Approval** *(built)* — the shipper accepts one offer and the others are rejected. The winning company then presses **Add to trip**, which places the shipment on the offered truck's route using the assignment mechanism Track A already has. If nothing is accepted in time, the shipper changes the shipment's times to get new offers.
 
 ## Who uses what
 
 | Who | What they do | Where |
 |---|---|---|
-| Shipper | Post shipments; (Track B, not built) review offers, approve one | Web browser |
-| Trucking company dispatcher | Manage fleet, assign shipments to trucks, follow trips on maps (Track A); receive new-shipment notifications and check them against the fleet (Track B); (not built) send offers | Web browser and Android app — both have the full fleet features; each phone belongs to one company, chosen on first launch |
+| Shipper | Post shipments, open or direct to one company; review offers and accept one; change times (Track B) | Web browser |
+| Trucking company dispatcher | Manage fleet, assign shipments to trucks, follow trips on maps (Track A); receive new-shipment notifications, check them against the fleet, send offers and add accepted ones to a trip (Track B) | Web browser and Android app — both have the full fleet features; each phone belongs to one company, chosen on first launch |
