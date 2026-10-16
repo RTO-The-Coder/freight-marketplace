@@ -1,495 +1,388 @@
-# Freight Domain Model — DDD Design Reference
+# Freight Marketplace — Domain Model
 
-**Status:** Reflects the actual shipped code: Track A — Truck Simulation, plus Track B — Bidding/Marketplace (device registration and push, per-company evaluation, offers, shipper approval and direct shipments). See `freight-overview.md`/`freight-frd.md` for the two-track split.
-**Companion document:** `freight-ui-screens.md` covers all screens built on top of this model.
-
----
-
-## 1. Aggregate Overview
-
-```
-TruckingCompany (Aggregate Root)
-Shipper (Aggregate Root)
-Truck (Aggregate Root)
-  └── DriverAssignment (Value Object)
-Trip (Aggregate Root, one open Trip per Truck at a time)
-  └── Stop (Child Entity, owned by Trip)
-Shipment (Aggregate Root)
-Driver (Aggregate Root)
-  └── ComplianceState (Value Object, Tracking subsystem)
-DeviceToken (Aggregate Root — a company's registered push device, Track B notifications)
-ShipmentOffer (Aggregate Root — a company's priced offer for one truck, Track B)
-
-Value Objects: GeoLocation, TimeWindow, DrivingRules, RouteProgress, Capacity
-Simulation: SimulationClock (its own small aggregate, holds the global simulated "now")
-```
-
-**Ownership rule used throughout:** an aggregate owns a child entity only when it must enforce invariants across that child as a single transactional unit (e.g. Stop sequencing within a Trip's route). Everything else is a plain reference (`Guid` / `Guid?`), resolved via repository queries — not nested object graphs.
-
-**Key structural fact that shaped the model as it exists today:** a **`Trip`** aggregate sits between `Truck` and `Stop` — a `Truck` does not own `Stop`s directly. `Trip` represents one truck's journey: it owns the ordered `Stop` collection, tracks running distance/time totals, and is a **permanent record** — stops are never deleted from a Trip, only marked `Reached` (see FR5.3 in the FRD). A `Truck` has at most one *open* Trip at a time.
+How the domain works, mostly in diagrams: the shared model (§1), **Track A — Truck Simulation** (§2–§6) and **Track B — Bidding / Marketplace** (§7–§12). The code in `backend/src/Freight.Domain` is the field-by-field reference; [§13](#13-where-to-find-it-in-the-code) points to it.
 
 ---
 
-## 2. Entities & Fields
-
-### TruckingCompany (Aggregate Root)
-| Field | Type | Notes |
-|---|---|---|
-| Id | Guid | |
-| Name | string | |
-| OfficeLocation | GeoLocation | Company base/HQ |
-
-No owned collections — Trucks reference back via `TruckingCompanyId`, not the other way around. Provisioned out-of-band (backend/admin) — no UI screen creates a TruckingCompany. Push-notification registration is **not** stored on TruckingCompany; it lives in the separate `DeviceToken` aggregate below.
-
----
-
-### DeviceToken (Aggregate Root) — Track B notifications, built
-| Field | Type | Notes |
-|---|---|---|
-| Id | Guid | |
-| TruckingCompanyId | Guid | The company this device receives notifications for |
-| Fid | string | The device's Firebase Installation ID, which FCM pushes are addressed to. Stored **encrypted** (AES-GCM, by `IDeviceTokenEncryptor` in Infrastructure); the entity just stores the string it is given. |
-| RegisteredAt | DateTime | |
-
-Methods: `Create(id, truckingCompanyId, fid, registeredAt)`, `ReplaceFid(fid, registeredAt)`. **One device per company:** registering again for a company replaces its FID. Registered and removed through `POST`/`DELETE /companies/{id}/device-token` (`RegisterDeviceTokenHandler`/`UnregisterDeviceTokenHandler`; unregister requires the same FID). See ADR 0003/0007.
-
----
-
-### Shipper (Aggregate Root)
-| Field | Type | Notes |
-|---|---|---|
-| Id | Guid | |
-| Name | string | |
-| ContactEmail | string | Validated to contain `@` |
-
-Simple identity + contact info. No location, no complex behavior. Provisioned out-of-band, same as TruckingCompany. A Shipper only ever creates Shipments.
-
----
-
-### Truck (Aggregate Root)
-| Field | Type | Notes |
-|---|---|---|
-| Id | Guid | |
-| TruckName | string | |
-| TruckingCompanyId | Guid? | Nullable — a truck can exist without a company |
-| IsActive | bool | Administrative flag — "can this truck accept shipments at all." `Activate()` throws unless `TruckingCompanyId` **and** `DriverAssignment` are both set. |
-| Status | `TruckStatus` (computed, not stored) | `AtOffice \| Running \| Parked \| Idle`. Derived via `DetermineStatus()` (parameterless, or the richer overload `DetermineStatus(Trip?, DateTime? simulatedNow, TimeWindow? nextStopWindow)`). `Parked` means the truck has finished its current leg but is waiting for the next Stop's time window to open — see `RouteProgress`/`Stop.WaitTimeTick` below. |
-| Type | enum: Flatbed \| Refrigerated \| BoxVan \| Tanker | Property name is `Type`, not `TruckType`. Fixed classification; must match `Shipment.RequiredTruckType` at assignment time |
-| Size | enum: Small \| Medium \| Large | Property name is `Size`, not `TruckSize`. Fixed classification; **determines Capacity** (no override) via `Capacity.ForTruckSize(size)` |
-| Capacity | Capacity | Derived from Size at creation, not independently entered: Small = 2,800 kg / 20 m³, Medium = 9,000 kg / 45 m³, Large = 24,000 kg / 90 m³ |
-| DriverAssignment | DriverAssignment? | Wires Primary/Secondary/Active driver through a single typed value object holding references to the actual `Driver` entities |
-| CurrentProgress | RouteProgress? | Fully wired. Tracks progress along the truck's *current leg* (the hop toward its next Stop). Kept in sync with the Trip via `SyncProgressToNextStop(Trip, Guid? previousNextStopId)`. |
-| HazmatCertified | bool | Toggled via `CertifyForHazmat()`/`RevokeHazmatCertification()`. **Present in the domain but not yet exposed by any API endpoint** — currently unreachable except by direct domain manipulation (e.g. in tests/seeding). |
-
-**There is no `Truck.Stops`/`RouteStops` collection and no `Truck.RemainingCapacity`.** Both responsibilities now live on `Trip`:
-- Stops: `Trip.Stops` (an ordered, read-only list, see Stop below).
-- On-board load: `Trip.CurrentLoad` — a computed `Capacity` summing `Stop.ShipmentLoad` across stops that are picked-up-but-not-yet-delivered on that Trip.
-
-**Truck location is never stored directly.** Always derived:
-- Active leg in progress → interpolated between the last-reached Stop's `GeoLocation` and the next Stop's `GeoLocation`, using `CurrentProgress.GetProgressFraction()` and `GeoLocation.InterpolateTo(target, fraction)` (a real method on `GeoLocation` — not "no behavior beyond construction validation").
-- No Stops / no open Trip → falls back to `TruckingCompany.OfficeLocation`.
-
-**Only `Large` trucks may have a second driver.** `DriverAssignment.Team(...)` throws if constructed for a non-`Large` `Size`.
-
-**Other Truck methods not on the original list:** `BeginTripCompliance(DateTime tripStartedAt)` (resets both assigned drivers' compliance ledgers for a new trip — see Driver below), `RemoveDrivers()` (clears the whole `DriverAssignment`, forcing `IsActive = false`; rejected while a Trip is open), `SyncProgressToNextStop(Trip, Guid? previousNextStopId)` (keeps `CurrentProgress` correct across mid-route insertions).
-
----
-
-### DriverAssignment (Value Object, owned by Truck)
-
-| Field | Type | Notes |
-|---|---|---|
-| ConfigurationType | enum: Single \| Team | |
-| PrimaryDriver | Driver | Reference to the independent `Driver` aggregate (not owned) |
-| SecondaryDriver | Driver? | Only non-null when `ConfigurationType == Team`; only constructible when the owning `Truck.Size == Large` |
-| ActiveDriverId | Guid? | **Sticky, one-directional**: null → Primary → Secondary → null (stopped). Never moves backward. |
-| ActiveDriver | Driver? (computed) | Resolves `ActiveDriverId` to the actual `Driver` reference. |
-| HasDriverAbleToDrive | bool (computed) | **Currently a hardcoded stub returning `true`** — compliance state isn't wired into this check yet, so any assigned driver is assumed able to drive. `Truck.DetermineStatus()`'s `Idle` branch depends on this; it can't currently go `Idle` purely from a driver becoming compliance-ineligible. |
-
-Constructed via `Single(Driver driver)` or `Team(Driver first, Driver second, TruckSize truckSize)` (the latter throws if `truckSize != Large` or if `first.Id == second.Id`). `AdvanceActiveDriver(Guid? candidateDriverId)` enforces the stickiness invariant — throws `ArgumentException` if the candidate isn't Primary/Secondary, throws `InvalidOperationException` on an attempted backward move. There is no `DriverSelector` domain service — the equivalent one-directional-swap decision logic lives inline in `Tracking/Services/DriverRuleEngine.EvaluateTeam` (per simulated tick), which computes the candidate id that callers then pass into `AdvanceActiveDriver`.
-
----
-
-### Trip (Aggregate Root)
-
-*(Not in earlier drafts of this doc — this is the real aggregate that owns a Truck's route.)*
-
-| Field | Type | Notes |
-|---|---|---|
-| Id | Guid | |
-| TruckId | Guid | |
-| TruckingCompanyId | Guid | |
-| StartedAt | DateTime | Simulated time the trip began |
-| CompletedAt | DateTime? | Null while open |
-| DistanceTravelledSoFar / TimeElapsedSoFar | running totals | Banked totals across completed legs, plus the current in-progress leg |
-| Stops | IReadOnlyList\<Stop\> | Ordered by `Sequence` (gap-based, see Stop below) |
-| NextStop | Stop? (computed) | First `Pending` stop in sequence order |
-| CurrentLoad | Capacity (computed) | Sum of `ShipmentLoad` across stops picked-up-but-not-yet-delivered — the real analog of what earlier drafts called `Truck.RemainingCapacity` |
-
-Key methods: `AssignShipment(shipmentId, shipmentSize, pickupLocation, deliveryLocation, officeLocation, pickupInsertIndex, deliveryInsertIndex, LegPlan)` — creates and inserts the Pickup + Delivery `Stop` pair (and, on a truck's first assignment, an implicit Office return stop via the private `EnsureOfficeStop`), computing gap-based `Sequence` values via `SequenceForInsertAt` (falling back to `RenumberStops()` if a gap is exhausted). `MarkStopReached(Guid stopId, DateTime reachedAt)` flips a Stop's status to `Reached` — it is never removed from the collection. `Clone()` produces a deep copy used for feasibility previews (see `ShipmentInsertionEvaluator` below) and ETA projection, so hypothetical insertions never mutate live state.
-
-There is no standalone `Truck.RemoveShipment`/mid-route-removal capability today — once picked up, a Shipment's stops stay on the Trip until reached.
-
-Repository: `ITripRepository` (`unitOfWork.Trips`), including `GetOpenTripByTruckIdAsync`.
-
----
-
-### Stop (Child Entity of Trip)
-
-| Field | Type | Notes |
-|---|---|---|
-| Id | Guid | |
-| ShipmentId | Guid? | Null for Office-type stops |
-| TruckingCompanyId | Guid? | Set only for Office-type stops |
-| Kind | enum: Pickup \| Delivery \| Office | |
-| Status | enum: Pending \| Reached | A Stop is never deleted — only transitioned to `Reached` via `MarkReached` |
-| Location | GeoLocation | Fully implemented |
-| Sequence | int | Fully implemented — gap-based (steps of 10; a fixed `OfficeStopSequence = 1000` always sorts the return-to-office stop last). `Trip.RenumberStops()` self-heals if a gap between neighbors is exhausted. |
-| IncomingLegDistanceKm | double | Distance of the hop from the immediately preceding stop |
-| IncomingLegTimeTick | int | Time (in 5-minute simulation ticks) of that same hop |
-| ReachedAt | DateTime? | Set by `MarkReached` |
-| WaitTimeTick / WaitTimeTickElapsed | int | Planned vs. already-served wait ticks — used when a truck arrives before this Stop's time window opens and must park and wait (see `IsWaitComplete`) |
-| ShipmentLoad | Capacity? | The shipment's load, carried on its Pickup and Delivery stops so `Trip.CurrentLoad` can be derived. Null for Office stops. |
-
-There is no `ExpectedArrivalTime` field — arrival timing is derived (via `RouteEtaCalculator`, see §6) from `IncomingLegDistanceKm`/`IncomingLegTimeTick` plus driver-compliance state, not stored on the Stop itself.
-
-Created via `Stop.ForShipment(shipmentId, shipmentLoad, kind, location, sequence, incomingLegDistanceKm, incomingLegTimeTick)` and `Stop.ForOffice(truckingCompanyId, location, sequence, incomingLegDistanceKm, incomingLegTimeTick)` — both take a real `GeoLocation`. Called from `Trip.AssignShipment`/`Trip.EnsureOfficeStop`, not from `Truck`.
-
----
-
-### RouteProgress (Value Object, held by Truck as `CurrentProgress`)
-
-| Field | Type | Notes |
-|---|---|---|
-| TotalDistanceKm | double | Distance for the *current leg* |
-| CurrentDrivingTimeTick | int | **The real, stored/mutated value** — ticks the driver has actually spent driving on this leg |
-| TotalTimeTick | int | Total time (from OSRM, in ticks) for this leg |
-| CurrentDistanceKm | double (computed) | `TotalDistanceKm * GetProgressFraction()` — **derived from time, not the other way around** |
-
-**Important causality note:** there is no GPS/odometer feed in this system — the only real observable signal is driving-ticks-elapsed, which is exactly what the driver-compliance ledger already tracks. So `RouteProgress` is **time-tick-driven**: `GetProgressFraction() = CurrentDrivingTimeTick / TotalTimeTick` (falls back to `1.0` if `TotalTimeTick == 0`), and `CurrentDistanceKm` is derived from that fraction — the reverse of a naive "distance in, time derived" model. `IsLegComplete()` is correspondingly **tick-based**: `CurrentDrivingTimeTick >= TotalTimeTick`, not a distance comparison.
-
-Methods: `AdvanceByTicks(int drivingTicks)` (advances `CurrentDrivingTimeTick`, clamped to `TotalTimeTick`), `IsLegComplete()`, `StartNewLeg(double totalDistanceKm, int totalTimeTick)` (resets `CurrentDrivingTimeTick` to 0 for the next leg).
-
-**Current Truck location is derived by linear interpolation**, not stored:
-```
-GetProgressFraction() = CurrentDrivingTimeTick / TotalTimeTick
-GeoLocation.InterpolateTo(target, fraction):
-    lat = this.Latitude  + (target.Latitude  - this.Latitude)  * fraction
-    lng = this.Longitude + (target.Longitude - this.Longitude) * fraction
-```
-This interpolates along the **straight line** between the last-reached Stop and the next Stop — not the actual curved road path. Accepted simplification for "roughly where is my truck," not pixel-accurate road position. (The map UI separately fetches and draws real OSRM road geometry for display — that's a rendering concern, unrelated to this derived-position calculation.)
-
----
-
-### Shipment (Aggregate Root)
-
-| Field | Type | Notes |
-|---|---|---|
-| Id | Guid | |
-| ShipperId | Guid | |
-| TruckingCompanyId | Guid? | The company that holds the Shipment: set at booking for a direct Shipment, when the shipper accepts an offer, or when a Truck is assigned. Null for an open Shipment no company holds yet. |
-| IsDirect | bool | Booked straight to one company by the shipper — no offers, no offer window |
-| PickupLocation | GeoLocation | |
-| DeliveryLocation | GeoLocation | |
-| Load | Capacity | Weight + volume |
-| RequiredTruckType | enum: Flatbed \| Refrigerated \| BoxVan \| Tanker | Hard constraint at assignment |
-| PickupWindow | TimeWindow | |
-| DeliveryWindow | TimeWindow | |
-| OfferDeadline | DateTime | Fixed **2 hours** after `Book(...)`, restarted by `UpdateWindows(...)`. Offers can be sent and accepted only before it. Set on direct Shipments too, but never consulted for them; a direct assignment doesn't consult it either. |
-| ScheduledPickupWindow / ScheduledDeliveryWindow | TimeWindow? | Committed windows, calculated later — both null by default |
-| EstimatedPickup | DateTime? | Set (to the actual pickup time) when `MarkPickedUp(actualPickupAt)` is called |
-| Status | enum: Pending \| Booked \| InTransit \| Delivered | See lifecycle below |
-
-**Status lifecycle:**
-- `Pending` — created by Shipper, not yet on any Truck's route. It may already belong to a company (direct, or an accepted offer awaiting Add to trip).
-- `Booked` — on a Truck's route (stops created), awaiting pickup
-- `InTransit` — Pickup Stop reached
-- `Delivered` — Delivery Stop reached
-
-**Deliberately NOT stored:** `TruckId`. Derived by finding which Truck's Trip owns a Stop referencing this `ShipmentId`.
-
-`Shipment` does not raise any domain events (it doesn't inherit the `HasDomainEvents` base used elsewhere in the codebase) — see the Domain Events note under Trip/Tracking below.
-
----
-
-### ShipmentOffer (Aggregate Root) — Track B, built
-
-A trucking company's priced offer to carry an open Shipment on one of its Trucks. Created only by `SendOffersHandler` (§5), which runs the company's eligibility once and stores the evaluated positions on the offer — the client never supplies positions.
-
-| Field | Type | Notes |
-|---|---|---|
-| Id | Guid | |
-| ShipmentId | Guid | |
-| TruckingCompanyId | Guid | |
-| TruckId | Guid | One offer per Truck per Shipment (enforced by the sending handler) |
-| PickupInsertIndex / DeliveryInsertIndex | int | Where the stops go in the Truck's route, from the evaluation at send time. Add to trip inserts at these positions without re-checking. |
-| AddedDistanceKm | double | From the same evaluation |
-| PriceEur | decimal | Typed by the dispatcher; > 0; fixed once sent |
-| LimitAt | DateTime? | The company's own limit; null = valid until the Shipment's `OfferDeadline` |
-| CreatedAt | DateTime | Simulation-clock time |
-| Status | enum: Pending \| Accepted \| Rejected | There is no Expired status — see `IsWaiting` |
-
-**Waiting vs. stored status:** an offer is *waiting* while it is `Pending`, before its `LimitAt` (if set) and before the Shipment's `OfferDeadline`. Expiry is computed when reading; nothing sweeps or rewrites old offers, so a run-out offer stays `Pending` in storage but is shown nowhere. Rejected and run-out offers are kept for history.
-
----
-
-### Driver (Aggregate Root)
-
-| Field | Type | Notes |
-|---|---|---|
-| Id | Guid | |
-| FirstName | string | |
-| LastName | string | |
-| Rules | DrivingRules | Chosen once at creation, immutable thereafter |
-| ComplianceState | DriverComplianceState? | **Null until the driver's truck starts its first trip.** This is the real, permanent integration between `Driver` and the `Tracking/` compliance-ledger subsystem — not a placeholder. |
-
-Methods: `Create(firstName, lastName, rules)`, `ResetComplianceForNewTrip(DateTime tripStartedAt)` (constructs a fresh, fully-rested `DriverComplianceState` for this driver — called by `Truck.BeginTripCompliance` for both assigned drivers whenever a new Trip starts).
-
-The `Tracking/` subsystem (`DriverRuleEngine`, `DriverComplianceState`, `RestRuleLimits`, team-alternation logic) is the actual, permanent implementation of EU compliance tracking — it is **not** a separate, unrelated system living alongside a simpler `Driver`-level clock. `Driver.ComplianceState` + `ResetComplianceForNewTrip` is the integration point; `DriverRuleEngine` (a domain service, not a `Driver` instance method) is what advances that ledger forward, tick by tick, consulting `Driver.Rules` for which rule variants apply.
-
----
-
-## 3. Value Objects
-
-### GeoLocation
-| Field | Type |
-|---|---|
-| Latitude | decimal |
-| Longitude | decimal |
-
-Construction validates lat/lng ranges. Also has real behavior: `InterpolateTo(GeoLocation target, double fraction)` — linear interpolation, used to derive a Truck's current position (see RouteProgress above).
-
-### Capacity
-| Field | Type |
-|---|---|
-| WeightKg | double |
-| VolumeCubicMeters | double |
-
-A `record`, not a plain class. Used both as `Truck.Capacity` and `Shipment.Load` — any capacity comparison checks both dimensions. Static factory `Capacity.ForTruckSize(TruckSize size)` returns the fixed tiers (Small/Medium/Large → the weight/volume pairs listed under Truck above).
-
-### TimeWindow
-| Field | Type |
-|---|---|
-| Earliest | DateTime |
-| Latest | DateTime |
-
-Reused for pickup and delivery, requested and committed variants. `Create(...)` validates `Earliest < Latest`.
-
-### DrivingRules
-
-| Field | Type | Notes |
-|---|---|---|
-| BreakRule | enum: FullBreak \| SplitBreak | |
-| DailyRestRule | enum: FullRest \| ReducedRest \| SplitRest | |
-| WeeklyRestRule | enum: FullWeeklyRest \| ReducedWeeklyRest | |
-| ExtendDailyDrivingWhenEligible | bool | |
-
-Constructed via `DrivingRules.Create(breakRule, dailyRestRule, weeklyRestRule, extendDailyDrivingWhenEligible)` — this matches the shipped code exactly (enum types live under `ValueObjects/RuleVariants/`). The actual minute values for each variant (e.g. `ReducedDailyRestMinutes`, `FullDailyRestMinutes`, the 90h/2-week cap) live separately in `Tracking/RestRuleLimits`, a single shared constants table consumed by `Tracking/DriverRuleEngine`.
-
----
-
-## 4. Domain Methods (selected)
-
-### TruckingCompany
-| Method | Purpose |
-|---|---|
-| `Create(Guid id, string name, GeoLocation officeLocation)` | Factory |
-
-### Truck
-| Method | Purpose |
-|---|---|
-| `Create(string truckName, TruckType type, TruckSize size)` | Factory — `Capacity` derived internally |
-| `AssignToCompany(Guid truckingCompanyId)` / `UnassignFromCompany()` | |
-| `Activate()` | Throws unless both `TruckingCompanyId` and `DriverAssignment` are set |
-| `Deactivate()` | Always allowed |
-| `AssignDrivers(Driver primary, Driver? secondary)` | Builds/replaces `DriverAssignment` |
-| `RemoveDrivers()` | Clears `DriverAssignment` entirely; rejected while a Trip is open |
-| `SetActiveDriver(Guid? driverId)` | Delegates to `DriverAssignment.AdvanceActiveDriver` |
-| `DetermineStatus()` / `DetermineStatus(Trip?, DateTime?, TimeWindow?)` | Derives `TruckStatus` |
-| `BeginTripCompliance(DateTime tripStartedAt)` | Resets both drivers' compliance ledgers for a new trip |
-| `SyncProgressToNextStop(Trip, Guid? previousNextStopId)` | Keeps `CurrentProgress` correct across mid-route insertion |
-| `CertifyForHazmat()` / `RevokeHazmatCertification()` | Not exposed via API yet |
-
-**Assignment/removal of shipments and stops now lives on `Trip`, not `Truck`** — see Trip's `AssignShipment(...)` above. There is no `Truck.InsertStop`/`RemoveStop`/`GetNextStop`/`EnsureCapacityAvailable`/`EnsureCanAcceptShipments`/`EnsureTypeMatches` as standalone methods; the equivalent precondition checks are inline guard clauses in the `AssignShipmentToTruckHandler` application handler and in `ShipmentInsertionEvaluator` (see §6).
-
-### Trip
-| Method | Purpose |
-|---|---|
-| `AssignShipment(shipmentId, shipmentSize, pickupLocation, deliveryLocation, officeLocation, pickupInsertIndex, deliveryInsertIndex, LegPlan)` | Inserts a Pickup + Delivery Stop pair |
-| `MarkStopReached(stopId, reachedAt)` | Flips a Stop to `Reached` — never removes it |
-| `Clone()` | Deep copy for feasibility/ETA previews |
-| `Reschedule(DateTime newStart, bool truckHasStartedDriving)` | Changes a not-yet-departed Trip's planned start time; rejected once any stop is reached or the truck has started driving |
-
-### Shipment
-| Method | Purpose |
-|---|---|
-| `Book(shipperId, pickupLocation, deliveryLocation, load, requiredTruckType, pickupWindow, deliveryWindow, bookedAt, directCompanyId = null)` | Factory — `Pending`, `OfferDeadline = bookedAt + 2h`. With `directCompanyId`, sets `TruckingCompanyId` and `IsDirect`. |
-| `IsOpenForOffers(now)` | `Pending`, no company holds it, and `now < OfferDeadline` |
-| `AcceptOffer(truckingCompanyId, now)` | Requires `IsOpenForOffers`; sets `TruckingCompanyId`. Status stays `Pending` — no stops yet. |
-| `UpdateWindows(newPickupWindow, newDeliveryWindow, updatedAt)` | Changes both windows; Pending-only, refused once an offer has been accepted (allowed for direct Shipments); validates delivery after pickup; restarts `OfferDeadline = updatedAt + 2h` |
-| `AssignToCompany(truckingCompanyId)` | `Pending → Booked`, as the stops are added to a Truck's trip. Throws if not `Pending`, or if the Shipment already belongs to a *different* company. |
-| `MarkPickedUp(DateTime actualPickupAt)` | → `InTransit`; sets `EstimatedPickup` |
-| `MarkDelivered(DateTime actualDeliveryAt)` | → `Delivered` |
-
-### ShipmentOffer
-| Method | Purpose |
-|---|---|
-| `Create(shipmentId, truckingCompanyId, truckId, pickupInsertIndex, deliveryInsertIndex, addedDistanceKm, priceEur, limitAt, createdAt)` | Factory — `Pending`. Price > 0, positions and distance not negative, `limitAt` in the future |
-| `IsWaiting(now, offerDeadline)` | `Pending`, before `LimitAt` (if set) and before the Shipment's `OfferDeadline` |
-| `Accept(now, offerDeadline)` | Waiting → `Accepted` |
-| `Reject()` | `Pending` → `Rejected` |
-
-### Driver
-| Method | Purpose |
-|---|---|
-| `Create(firstName, lastName, rules)` | Factory |
-| `ResetComplianceForNewTrip(DateTime tripStartedAt)` | Seeds a fresh compliance ledger for a new trip |
-
-### GeoLocation / Capacity / TimeWindow / DrivingRules
-| Method | Purpose |
-|---|---|
-| `GeoLocation.Create(lat, lng)` / `.InterpolateTo(target, fraction)` | Validates ranges / linear interpolation |
-| `Capacity.Create(weightKg, volumeCubicMeters)` / `.ForTruckSize(size)` | Validates non-negative / fixed-tier factory |
-| `TimeWindow.Create(earliest, latest)` | Validates `earliest < latest` |
-| `DrivingRules.Create(breakRule, dailyRestRule, weeklyRestRule, extendDailyDrivingWhenEligible)` | Validates + pairs with `RestRuleLimits` |
-
-### Domain Services (Fleet + Tracking)
-| Service | Purpose |
-|---|---|
-| `Fleet/Services/RouteEtaCalculator` | Walks a route leg-by-leg, projecting arrival times while consuming driver compliance state to inject breaks/rests/team-swaps. See §6 (Q2). |
-| `Fleet/Services/ShipmentInsertionEvaluator` (`IShipmentInsertionEvaluator`) | The feasibility gate — evaluates a hypothetical Stop insertion for both window and capacity violations. See §6 (Q3). |
-| `Tracking/Services/DriverRuleEngine` (`IDriverRuleEngine`) | The EU rules engine — eligibility checks, advancing a ledger by elapsed ticks, team-driver swap decisions, and voluntary-stop (wait) crediting. |
-
-There is no `DriverSelector.SelectActiveDriver` domain service — the equivalent logic is inline in `DriverRuleEngine.EvaluateTeam` (see Driver/DriverAssignment above).
-
-### Domain Events
-
-The codebase has a small domain-event base (`IDomainEvent`, `HasDomainEvents`), used by `DriverComplianceState`, which raises four Tracking-scoped events: `TruckArrivedAtDestination`, `TruckResumedDriving`, `TruckTookBreak`, `TruckWentIntoRest`. **`Shipment` does not raise any domain events.** The `ShipmentCreatedEvent`/`ShipmentPickupWindowUpdatedEvent` once planned to trigger an automatic matching engine were never needed: ADR 0007 dropped that engine, and booking calls the notification sender directly (see §5).
-
----
-
-## 5. Key Workflows (Application-Layer Orchestration)
-
-### AssignShipmentToTruckHandler (Track A — built, the real direct-assignment path)
-
-This is the one place a Shipment's stops are created. The apps call it directly for a **direct** Shipment (Check eligibility → Assign), and Track B's **Add to trip** calls it, unchanged, with the positions stored on the accepted offer. The endpoint still accepts open Shipments (the seeder and tests use that); the apps no longer offer it for them.
-
-1. Load Truck + Shipment; validate the Truck belongs to a company, is active, its `Type` matches `Shipment.RequiredTruckType`, and it has a `DriverAssignment`.
-2. Load or open the Truck's Trip (`ITripRepository.GetOpenTripByTruckIdAsync`, opening a new one if none exists).
-3. Call OSRM (`IRoutingService`) to measure every new/rewritten road leg the insertion would create.
-4. Clone the Trip (`Trip.Clone()`) and preview the insertion on the clone.
-5. Run `IShipmentInsertionEvaluator.Evaluate(InsertionContext)` — checks capacity (across the full remaining route) and window feasibility (via `RouteEtaCalculator`) for the previewed insertion. Rejects with a human-readable reason if infeasible.
-6. If feasible: commit via `Trip.AssignShipment(...)`, `Truck.SyncProgressToNextStop(...)`, and `Shipment.AssignToCompany(truck.TruckingCompanyId)` — which refuses a Truck of another company if the Shipment already belongs to one.
-
-A separate dry-run entry point, `CheckFeasibilityAsync`, runs the same evaluation (steps 1–5) without committing — exposed as `POST /trucks/{id}/assign-shipment/feasibility`.
-
-### SimulationAdvanceHandler (Track A — built, drives all truck movement)
-
-Invoked by `POST /simulation/advance` with a tick count. For each requested tick (5 simulated minutes), for **every currently-open Trip** (not just one truck): advances the active driver's (or team's) compliance ledger via `IDriverRuleEngine.Advance`/`EvaluateTeam`, decides whether the truck actually drove that tick, advances `RouteProgress`, serves any pending Stop-wait (`AccrueStopWait`/`RecordVoluntaryStop` — a truck arriving before a window opens), and marks Stops reached when a leg completes (updating `Shipment` status and re-validating capacity at that exact moment, per FR5.4). This is a global, tick-based simulation-clock advance across the whole fleet at once — not a per-truck "simulate one stop" call.
-
-### CheckDriverEligibilityHandler (Track A — built, on-demand compliance check)
-
-`POST /drivers/{id}/eligibility-check` — an on-demand probe of whether a driver would still be eligible to drive after N more simulated minutes, using `IDriverRuleEngine.IsEligibleToDriveFuture`. Pull-based, not a periodic background job (see FR7.2 — no `IHostedService`/`BackgroundService` exists anywhere in the codebase).
-
-### BookShipmentHandler → notify companies (Track B — built)
-
-`POST /shipments` (optional `truckingCompanyId` for a direct Shipment) books the Shipment, saves it, then calls `INotificationSender.NotifyAllCompaniesAsync(summary)` for an open Shipment, or `NotifyCompanyAsync(companyId, summary)` for a direct one, synchronously — no event, no background service (ADR 0007). The summary is light: shipment id, required truck type, pickup location and window. `INotificationSender` is a Domain abstraction (ADR 0003) with two Infrastructure implementations: `FcmNotificationSender` (pushes to every registered `DeviceToken`, decrypting each FID; a failure for one device or of FCM is logged and never fails the booking) and `LogNotificationSender` (used when no FCM key is configured). The push data carries `kind` = `open` or `direct`, which also picks the title ("New shipment available" / "New shipment assigned to you").
-
-### UpdateShipmentWindowsHandler (Track B — built)
-
-`PATCH /shipments/{id}/windows` → `Shipment.UpdateWindows(...)` (restarts the 2-hour offer window) → reject every `Pending` offer on the Shipment → save → push again (every company, or only the direct company). This is how a shipper puts a "dead" Shipment — offer window passed, nothing accepted — back on the market.
-
-### EvaluateShipmentForCompanyHandler (Track B — built, on-demand per-company evaluation)
-
-`GET /companies/{companyId}/shipments/{shipmentId}/evaluate` → `ShipmentEvaluationEngine.EvaluateForCompanyAsync`. Replaces the originally planned automatic `ShipmentMatchingEngine`/`ShipmentMatchingBackgroundService`, which ADR 0007 dropped. For each of **one** company's Trucks:
-
-```
-1. Cheap gate, no OSRM: Type matches, IsActive, has a DriverAssignment (capacity is NOT pre-checked —
-   load depends on where in the route the shipment would go)
-2. Insertion-position search via ShipmentInsertionPlanner + ShipmentInsertionEvaluator (the same
-   window, capacity and EU-rule checks as a real assignment)
-3. Result per truck: feasible or not, pickup/delivery insert positions, added distance and time
+## 1. The model at a glance
+
+```mermaid
+classDiagram
+    direction LR
+
+    class TruckingCompany {
+        Name
+        OfficeLocation
+    }
+    class Truck {
+        Type, Size, Capacity
+        IsActive
+        Status, derived
+    }
+    class DriverAssignment {
+        Primary, Secondary?
+        ActiveDriver
+    }
+    class Driver {
+        Name
+        DrivingRules
+        ComplianceState
+    }
+    class Trip {
+        StartedAt
+        Stops, ordered
+        CurrentLoad, derived
+    }
+    class Stop {
+        Kind: Pickup | Delivery | Office
+        Status: Pending | Reached
+        Location, Sequence
+    }
+    class Shipper {
+        Name
+    }
+    class Shipment {
+        Pickup, Delivery
+        Load, TruckType
+        PickupWindow, DeliveryWindow
+        IsDirect, OfferDeadline
+        Status
+    }
+    class ShipmentOffer {
+        Truck, PriceEur, LimitAt?
+        Pickup/Delivery position
+        Status
+    }
+    class DeviceToken {
+        Fid, encrypted
+    }
+    class SimulationClock {
+        CurrentTime
+    }
+
+    TruckingCompany "1" <.. "*" Truck : belongs to
+    Truck *-- DriverAssignment
+    DriverAssignment ..> "1..2" Driver
+    Truck "1" <.. "0..1 open" Trip : runs
+    Trip *-- "*" Stop
+    Stop ..> Shipment : pickup / delivery of
+    Shipper "1" <.. "*" Shipment : books
+    Shipment "1" <.. "*" ShipmentOffer : offers for
+    ShipmentOffer ..> Truck : offers
+    TruckingCompany "1" <.. "0..1" DeviceToken : push device
 ```
 
-Run only when a dispatcher asks ("Check eligibility"), never at booking time, and never against other companies' trucks.
+**How to read it:** a filled diamond (◆) means *owns* — saved and changed together. A dotted arrow means *refers to by id*. Only two things are owned: a Truck's driver assignment, and a Trip's stops.
 
-### Offer workflow (Track B — built)
+**The parts of the domain:**
 
-All "now" values come from the simulation clock.
+```mermaid
+flowchart LR
+    Client["Client<br/>Shipper · Shipment · ShipmentOffer"]
+    Fleet["Fleet<br/>TruckingCompany · Truck · Driver · Trip · Stop · DeviceToken"]
+    Tracking["Tracking<br/>EU rule engine · compliance ledger · route progress"]
+    Sim["Simulation<br/>SimulationClock"]
+    Routing["Routing<br/>OSRM road distance and time"]
+    Notify["Notifications<br/>push to companies"]
 
+    Client -->|assigned to trucks in| Fleet
+    Fleet -->|driver hours from| Tracking
+    Sim -->|current time for| Client & Fleet & Tracking
+    Fleet -->|leg distance/time from| Routing
+    Client -->|on booking| Notify
 ```
-SendOffersHandler       POST /companies/{id}/shipments/{shipmentId}/offers  { offers: [{ truckId, priceEur, limitAt? }] }
-  guard: at least one truck, no truck twice; Shipment.IsOpenForOffers(now);
-         this company has no Pending offer on the Shipment; each limitAt in (now, OfferDeadline]
-  → ShipmentEvaluationEngine.EvaluateForCompanyAsync (once) → refuse trucks not owned or not feasible
-  → ShipmentOffer.Create(...) per truck, with the evaluated positions and added km → save once
-
-AcceptOfferHandler      POST /offers/{id}/accept   (the shipper)
-  → offer.Accept(now, OfferDeadline) → reject every other Pending offer on the Shipment
-  → Shipment.AcceptOffer(companyId, now) → save            (no stops yet; no concurrency guard)
-
-AddOfferToTripHandler   POST /offers/{id}/add-to-trip   (the winning company)
-  guard: offer Accepted, Shipment still Pending
-  → AssignShipmentToTruckHandler.AssignShipmentAsync(offer.TruckId, shipmentId,
-       offer.PickupInsertIndex, offer.DeliveryInsertIndex)      (unchanged; no re-check beforehand)
-```
-
-**Reads:**
-- `GetCompanyShipmentBoardHandler` — `GET /companies/{id}/shipments/board`: the company's four lists, each Pending Shipment in at most one — **Direct** (booked to us), **Approved** (our offer accepted, ready for Add to trip), **Offered** (our offers still waiting), **Open** (open for offers, none sent by us). Shipments whose offers or offer window have run out are in none of them. Offers carry truck names.
-- `GetShipmentOffersHandler` — `GET /shipments/{id}/offers`: the shipper's view, waiting offers only, with company name, price, limit, and the Shipment's `OfferDeadline`.
-
-**Known problems (accepted):** no feasibility re-check on accept or Add to trip — if the route changed, Add to trip returns the assignment's own error; no guard against two simultaneous accepts.
 
 ---
 
-## 6. Where the 4 Dispatcher Calculations Live
+# Track A — Truck Simulation
 
-Read-only queries. Application-layer handlers, reading from the aggregates and calling infrastructure (OSRM) for raw distance/time.
+## 2. A truck's route: Trip and Stops
 
-### OSRM — `IRoutingService`
+A truck has at most one **open Trip**. The Trip owns the ordered stops. Stops are **never deleted**, only marked `Reached`, so a Trip is the permanent record of the journey.
 
-```csharp
-public interface IRoutingService
-{
-    Task<RouteResult> GetRouteAsync(GeoLocation from, GeoLocation to, CancellationToken ct);
-}
+A real route interleaves shipments. Here a Large truck (24 t) carries A and B, and shipment **C is being inserted** in the middle of the route while the truck is already driving:
+
+```mermaid
+flowchart LR
+    S(["Start<br/>office"]) -->|0 t| PA["Pickup A · 8 t<br/>✓ Reached"]
+    PA -->|8 t| PB["Pickup B · 6 t<br/>✓ Reached"]
+    PB -->|14 t| DB["Delivery B<br/>✓ Reached"]
+    DB -->|"8 t · 🚚 truck is here"| PC["Pickup C · 10 t<br/>NEW"]
+    PC -->|18 t| DA["Delivery A<br/>Pending"]
+    DA -->|10 t| DC["Delivery C<br/>NEW"]
+    DC -->|0 t| O(["Office<br/>always last"])
+    classDef reached fill:#2e7d32,stroke:#1b5e20,color:#ffffff
+    classDef added fill:#1565c0,stroke:#0d47a1,color:#ffffff
+    class PA,PB,DB reached
+    class PC,DC added
 ```
-Implemented by `OsrmRoutingService`, wrapped by `ThrottlingRoutingService` (rate-limits to ~1 req/sec, suitable for the free public OSRM demo server; production would self-host OSRM with a config-only endpoint change). `AddMemoryCache()` is used for route-geometry caching on the read side.
 
-### Q1 — "Where is my Truck right now?"
-`GetTruckPositionHandler.GetTruckPositionAsync` — `GET /trucks/{id}/position`. Interpolates between last-reached and next Stop's `GeoLocation` using `CurrentProgress.GetProgressFraction()`. Falls back to `TruckingCompany.OfficeLocation` if no open Trip.
+*Numbers on the arrows: the load on board for that leg.*
 
-### Q2 — "When will my Truck reach Stop A, B, C?"
-`Fleet/Services/RouteEtaCalculator` (`CalculateEtas` for a single driver, `CalculateEtasForTeam` for two) — `GET /trucks/{id}/etas` via `GetTruckEtasHandler`. Walks the route leg-by-leg, consulting compliance state to inject breaks/rests/team-swaps, and reports each Stop's projected arrival plus whether the truck would be waiting (parked) for a window to open.
-
-### Q3 — "Can my Truck reach a new Stop within a time window, at a position I specify?"
-`Fleet/Services/ShipmentInsertionEvaluator.Evaluate(InsertionContext)` — the single class doing both capacity and window feasibility checking (there is no separate `RouteInsertionEvaluator`/`FeasibilityChecker` pair). Exposed via `POST /trucks/{id}/assign-shipment/feasibility` (dry run) and as the gate inside `POST /trucks/{id}/assign-shipment` (commit); for these two the caller specifies the insertion positions. The automatic "try every position" search exists in the per-company evaluation (`ShipmentEvaluationEngine`, see §5), which calls this same evaluator for each position it tries.
-
-### Q4 — "How far is my Truck from a particular GeoLocation?"
-**Not built as a single dedicated query.** No truck-aware distance endpoint exists. The closest building blocks are generic OSRM passthroughs: `GET /routing/leg` (point-to-point distance/time) and `GET /routing/geometry` (full polyline, for map drawing) — a caller composes Q1 (get the truck's current position) with `/routing/leg` to get the same answer today.
-
-**Dependency chain:** Q1 feeds a hypothetical Q4. Q2's `RouteEtaCalculator` is the engine Q3's `ShipmentInsertionEvaluator` calls internally. Driver-rule state (`DriverComplianceState`, advanced via `IDriverRuleEngine`) is the shared input that makes Q2/Q3 possible without full historical simulation.
+- **Shipments interleave:** B is picked up and delivered while A is still on board.
+- **Inserted anywhere, not only appended:** C's pickup and delivery go between existing stops, ahead of A's delivery. Sequence numbers leave gaps (10, 20, 30…), so an insert never renumbers the whole route.
+- **Every later stop is re-checked:** inserting C adds driving time, so Delivery A must still make its window, with the driver's breaks and rests included (§6).
+- **Capacity is checked on every leg:** the peak is 18 t of 24 t, so C fits. It is checked again at the real moment of pickup.
+- **Stops are never deleted:** reached stops stay on the Trip. The **office** stop is added with the first shipment and always stays last.
 
 ---
 
-## 7. Repository & Persistence Pattern (EF Core)
+## 3. One clock for everything
 
-- **`IRepository<T>` per Aggregate Root** — `ITruckingCompanyRepository`, `IDeviceTokenRepository`, `IShipperRepository`, `ITruckRepository`, `ITripRepository`, `IDriverRepository`, `IShipmentRepository`, `IShipmentOfferRepository` (by shipment, by several shipments, by company). No repository for `Stop` — only ever accessed through `Trip`.
-- **`IUnitOfWork`** exposes: `TruckingCompanies, DeviceTokens, Shippers, Trucks, Trips, Drivers, Shipments, ShipmentOffers, SimulationClock` — one commit point (`SaveChangesAsync()`) per business transaction.
-- **`SimulationClock`** is its own small persisted aggregate (`ISimulationClockRepository`) holding the app's simulated "now." Every booking/assignment/advance timestamp in the system is measured against this simulated clock, not wall-clock time — this is a foundational, load-bearing concept for the whole Track-A simulation and isn't just an incidental detail.
-- Repositories never call `SaveChanges` — they only track changes (`Add`, modify loaded entities).
-- Domain project has zero reference to EF Core.
+There is no real time in the system. A single **SimulationClock** holds "now", and every booking, offer and deadline uses it. Advancing the clock moves the whole fleet at once, in **5-minute ticks**:
+
+```mermaid
+flowchart TD
+    A["Advance the clock by N ticks"] --> B{"For each tick,<br/>for every open Trip"}
+    B --> C["Advance the driver's<br/>compliance ledger"]
+    C --> D{"Is the driver<br/>allowed to drive?"}
+    D -- "no: break / rest" --> B
+    D -- yes --> E{"Waiting for a<br/>stop's window?"}
+    E -- "yes: Parked" --> B
+    E -- no --> F["Drive one tick<br/>along the current leg"]
+    F --> G{"Leg complete?"}
+    G -- no --> B
+    G -- yes --> H["Stop → Reached<br/>Shipment → InTransit / Delivered<br/>re-check capacity at pickup"]
+    H --> B
+```
 
 ---
 
-## 8. Deferred / Out of Scope
+## 4. Where is the truck? Derived from driving time
 
-- **Daily/weekly clock fine print**: actually **built** — split breaks/rests, reduced-rest variants with usage caps, the extended-daily-driving allowance, and the 90h/2-week cap are all implemented in `RestRuleLimits`/`DriverRuleEngine`. Not deferred.
-- **Shipment cancellation**: not modeled.
-- **Capacity over-booking across the planned route**: **built**, not deferred — `ShipmentInsertionEvaluator.EvaluateCapacity` walks the truck's entire remaining planned route at insertion time, and `SimulationAdvanceHandler.EnsureCapacityAtPickup` re-checks for real at the actual moment of pickup. Both checks exist.
-- **Loading/unloading time**: assumed 0. (Separately, a truck *can* incur simulated wait time at a Stop while parked for a window to open — a different concept, already built.)
-- **Office Stop side effects**: pure waypoint, no automatic rest/refueling trigger.
-- **Stop-arrival trigger mechanism**: resolved — driven entirely by `POST /simulation/advance` (a pull-based, global tick advance), not GPS/telematics or manual per-stop confirmation.
-- **Multi-tenancy / auth**: out of scope. No `TenantId` or auth scaffolding exists.
-- **Push to companies when an offer is accepted or rejected**: not built — they see it in their shipment lists.
-- **Hazmat certification is unreachable from the API**: the domain method exists (`Truck.CertifyForHazmat`) but no handler/endpoint calls it yet.
+There is no GPS. The only fact the system knows is **how long the driver has driven on the current leg**. Distance and position are derived from that:
+
+```mermaid
+flowchart LR
+    T["Driving ticks on this leg"] --> F["Progress = ticks driven ÷ leg ticks (from OSRM)"]
+    F --> P["Position = straight line between<br/>last-reached stop and next stop, at that fraction"]
+    F --> K["Distance so far = leg km × progress"]
+```
+
+No open trip means the truck is at its company's office. The maps still draw the real road route; only the *position dot* uses the straight line.
+
+---
+
+## 5. Drivers: compliance ledger and team swap
+
+Each driver has fixed **driving rules**, chosen once (full or split break, full / reduced / split daily rest, full or reduced weekly rest, extended driving days). The **compliance ledger** tracks their continuous, daily, weekly and two-week driving under the EU 561 rules. It starts fully rested when the truck's trip starts. Details are in [freight-driving-rules.md](freight-driving-rules.md).
+
+A **Large** truck can have two drivers. The active driver only ever moves forward:
+
+```mermaid
+stateDiagram-v2
+    direction LR
+    [*] --> Primary : trip starts
+    Primary --> Secondary : Primary must rest
+    Secondary --> Stopped : Secondary must rest too
+    note right of Secondary : Never switches back to Primary,<br/>even when Primary is rested again
+```
+
+---
+
+## 6. Can this truck take the shipment? (feasibility)
+
+Every assignment is first tried on a **copy** of the trip, so a "no" never changes anything:
+
+```mermaid
+flowchart LR
+    A["Truck + Shipment<br/>+ pickup/delivery position"] --> G{"Right type, active,<br/>has a driver?"}
+    G -- no --> X["Rejected, with the reason"]
+    G -- yes --> R["OSRM: road distance and<br/>time for the new legs"]
+    R --> C["Copy the trip,<br/>insert the two stops"]
+    C --> E{"Walk the route with the EU rules:<br/>every stop still inside its window?<br/>capacity never exceeded?"}
+    E -- no --> X
+    E -- yes --> OK["Feasible: arrival times<br/>and added km"]
+```
+
+The dispatcher can run this as a dry run first, and it runs again when they press Assign.
+
+---
+
+# Track B — Bidding / Marketplace
+
+## 7. Two ways to book, and who gets a push
+
+```mermaid
+flowchart LR
+    B["Shipper books a shipment<br/>or changes its times"] --> Q{"Company chosen<br/>at booking?"}
+    Q -- "no: open shipment" --> A["Push 'New shipment available'<br/>to every company"]
+    Q -- "yes: direct shipment" --> D["Push 'New shipment assigned to you'<br/>to that company only"]
+    A --> P[["Each company's registered phone<br/>(one phone per company)"]]
+    D --> P
+```
+
+- **Open:** every company may bid for it during the 2-hour offer window.
+- **Direct:** only the chosen company sees it. No offers, no time limit; it assigns a truck itself.
+- A failed push never fails the booking. Without Firebase keys the API only logs the push.
+
+---
+
+## 8. Check eligibility: which of our trucks could take it?
+
+A dispatcher asks this for **their own** fleet, on demand. Nothing is calculated at booking time.
+
+```mermaid
+flowchart TD
+    S["Check eligibility<br/>(one shipment, one company)"] --> T["For each of the company's trucks"]
+    T --> G{"Right type, active,<br/>has a driver?<br/>(no road lookups yet)"}
+    G -- no --> N["Not eligible"]
+    G -- yes --> Z["Skip the stops the truck reaches<br/>before the pickup window opens<br/>(from its known timing)"]
+    Z --> TRY["Try pickup/delivery positions,<br/>nearest first"]
+    TRY --> F{"Feasibility check (§6)"}
+    F -- no --> M{"More positions<br/>to try?"}
+    M -- yes --> TRY
+    M -- no --> N
+    F -- yes --> R["Eligible: the first position that fits,<br/>and the km and time it adds"]
+```
+
+---
+
+## 9. The offer window
+
+Every open shipment has **one 2-hour window** (simulation time), starting at booking. Offers can be sent and accepted only inside it. An example:
+
+```mermaid
+gantt
+    title One open shipment, booked at 08:00
+    dateFormat HH:mm
+    axisFormat %H:%M
+    section Shipment
+    Offer window, 2 h              :active, w1, 08:00, 2h
+    Dead, hidden from companies    :crit, d1, 10:00, 1h
+    New window after Change times  :active, w2, 11:00, 2h
+    section Company 1
+    Offer for truck X, limit 09:30 :o1, 08:20, 09:30
+    section Company 2
+    Offer for truck Y, no limit    :o2, 08:40, 10:00
+```
+
+- **One offer per truck**, with a price in **EUR** and an optional **limit**. A company sends all its offers for a shipment **in one go**; the server re-checks the trucks and stores each truck's positions on the offer.
+- An offer is **waiting** until its limit or the window's end, whichever comes first.
+- **Nothing accepted by 10:00:** the shipment is *dead* — companies no longer see it, and the shipper is asked to change the times.
+- **Change times** (11:00 here) starts a new 2-hour window, rejects all waiting offers and pushes again. Companies can then send new offers.
+
+**An offer's life.** Only three statuses are stored. "Waiting" is **calculated** when read; nothing ever sweeps old offers.
+
+```mermaid
+stateDiagram-v2
+    direction LR
+    [*] --> Pending : company sends it
+    Pending --> Accepted : shipper accepts it
+    Pending --> Rejected : another offer accepted,<br/>or the times changed
+    Pending --> Pending : limit or window passes<br/>(no longer waiting, hidden)
+```
+
+---
+
+## 10. A company's four lists
+
+Each company sees every pending shipment in **at most one** list:
+
+```mermaid
+flowchart TD
+    S["A pending shipment"] --> D{"Booked directly<br/>to us?"}
+    D -- yes --> LD[["Direct<br/>Check eligibility → Assign"]]
+    D -- no --> A{"Shipper accepted<br/>our offer?"}
+    A -- yes --> LA[["Approved<br/>Add to trip"]]
+    A -- no --> O{"Do we have offers<br/>still waiting?"}
+    O -- yes --> LO[["Offered<br/>information only"]]
+    O -- no --> W{"Window open, no company<br/>holds it, no offer from us?"}
+    W -- yes --> LOP[["Open<br/>Check eligibility → Send offers"]]
+    W -- no --> H["Not shown<br/>(another company has it, or it's dead)"]
+```
+
+---
+
+## 11. A shipment's life
+
+```mermaid
+stateDiagram-v2
+    direction LR
+    state "Pending" as Pending {
+        direction LR
+        state "Open for offers<br/>(2 h window)" as Open
+        state "Offer accepted" as Accepted
+        state "Direct<br/>(booked to one company)" as Direct
+        state "Dead<br/>(window passed)" as Dead
+        [*] --> Open : booked, no company
+        [*] --> Direct : booked to a company
+        Open --> Accepted : shipper accepts an offer
+        Open --> Dead : 2 h pass, nothing accepted
+        Dead --> Open : shipper changes the times
+    }
+    Accepted --> Booked : company presses "Add to trip"
+    Direct --> Booked : company assigns a truck
+    Booked --> InTransit : pickup stop reached
+    InTransit --> Delivered : delivery stop reached
+    Delivered --> [*]
+```
+
+`Booked` means the stops are on a truck's trip (Track A takes over from there).
+
+---
+
+## 12. The two flows end to end
+
+**Open shipment: offers → accept → Add to trip**
+
+```mermaid
+sequenceDiagram
+    actor S as Shipper
+    participant API
+    actor C as Trucking company
+    S->>API: Book shipment (no company)
+    API-->>C: Push "New shipment available" (every company)
+    C->>API: Check eligibility
+    API-->>C: Eligible trucks, positions, added km
+    C->>API: Send offers (one per truck: € price, optional limit)
+    Note over API: Re-checks the trucks,<br/>stores the positions on each offer
+    S->>API: See offers → Accept one
+    Note over API: Other offers rejected,<br/>shipment now belongs to the company
+    C->>API: Add to trip
+    Note over API: Inserts the stops at the offered<br/>positions (same path as assigning)
+```
+
+**Direct shipment: booked to one company**
+
+```mermaid
+sequenceDiagram
+    actor S as Shipper
+    participant API
+    actor C as Chosen company
+    S->>API: Book shipment for company C
+    API-->>C: Push "New shipment assigned to you" (only C)
+    C->>API: Check eligibility
+    API-->>C: Eligible trucks
+    C->>API: Assign to a truck
+    Note over API: Feasibility check (§6),<br/>then the stops are added
+```
+
+**Known limits:** accepting and Add to trip don't re-check feasibility (if the route changed, Add to trip returns the assignment's error), and two accepts at the same moment aren't guarded against.
+
+---
+
+## 13. Where to find it in the code
+
+| Concept | Code (`backend/src`) |
+|---|---|
+| Shipment, ShipmentOffer, Shipper | `Freight.Domain/Client/` |
+| TruckingCompany, Truck, Driver, Trip, Stop, DeviceToken | `Freight.Domain/Fleet/` |
+| Feasibility check (§6) and arrival times | `Freight.Domain/Fleet/Services/ShipmentInsertionEvaluator.cs`, `RouteEtaCalculator.cs` |
+| EU rule engine, compliance ledger, route progress | `Freight.Domain/Tracking/` |
+| Simulation clock | `Freight.Domain/Simulation/SimulationClock.cs` |
+| Clock advance loop (§3) | `Freight.Application/Simulation/` |
+| Check eligibility (§8) | `Freight.Application/Evaluation/`, `Freight.Application/Fleet/ShipmentInsertionPlanner.cs` |
+| Offers: send, accept, Add to trip, company lists | `Freight.Application/Offers/` |
+| Assign a shipment to a truck | `Freight.Application/Fleet/` |
+| OSRM client, FCM push, EF Core persistence | `Freight.Infrastructure/` |
+
+---
+
+## 14. Design rules
+
+- **Aggregates refer to each other by id**, never by holding the other object. Only a Truck's driver assignment and a Trip's stops are owned.
+- **One use case = one handler = one save.** Repositories only track changes; the handler commits once.
+- **The Domain project has no framework dependencies** — no EF Core, no ASP.NET.
+- **Derived, not stored:** truck status, truck position, current load, arrival times, and whether an offer is still waiting.
+- **No background jobs.** Everything happens on a request, including advancing the clock.

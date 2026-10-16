@@ -22,35 +22,22 @@ This is a portfolio project. It shows a domain-driven .NET backend and a TypeScr
 | ![Android fleet map and trucks](docs/images/android-fleet.png) | ![Android open shipments](docs/images/android-shipments.png) |
 -->
 
-## What works today
+## Features
 
-**Fleet management, web**
-- Trucking companies, their trucks and drivers. Trucks are added, drivers assigned, and trucks activated.
-- Shipments in four lists: **Open** (check which trucks could take it, then send priced offers), **Offered**, **Approved** (add the accepted offer to the truck's trip) and **Direct** (booked to this company).
-- Assigning a direct shipment to a truck: choose where the pickup and delivery go in the route, see the resulting route, and get a live feasibility answer before saving.
-- Changing a trip's start time until the truck starts moving.
-- Fleet, trip and shipment maps with road-following routes (Leaflet and OpenStreetMap).
-- A simulation clock that can be advanced by ticks or hours, or set to a time.
+**For shippers (web)**
+- Book a shipment with map pickers: open to every trucking company, or directly to one.
+- Compare waiting offers and accept one; change the times to get new offers.
 
-**Fleet management, Android**
-- The same fleet features, built to Android conventions: bottom tabs, a floating action button, bottom sheets and full-screen forms.
-- OpenStreetMap maps through MapLibre, with no map API key needed.
-- Each phone belongs to one company, chosen on first launch.
-- The same four shipment lists: send offers, add accepted offers to a trip, assign direct shipments.
-- Push notifications for new shipments, through Firebase Cloud Messaging.
+**For trucking companies (web and Android)**
+- Manage trucks and drivers, with fleet, trip and shipment maps on OpenStreetMap.
+- Get a push notification for each new shipment and see which of your trucks could take it, where it would fit in their routes and how many km it adds.
+- Send priced offers (one per truck, optional time limit), then add an accepted offer to the trip.
+- Assign shipments booked directly to you, with a live feasibility check.
+- The Android app follows Android conventions; each phone belongs to one company.
 
-**Shipper, web**
-- Book a shipment with map pickers for pickup and delivery, open to every company or directly for one.
-- See each shipment's waiting offers and accept one, and change a shipment's times to get new offers.
-
-**Simulation engine (backend)**
-- A tick-based clock (5 minutes per tick). Trucks move along their routes, stops are reached, shipments are picked up and delivered, and each driver's compliance ledger advances.
-- A truck that arrives before a stop's time window opens parks and waits.
-
-**Marketplace (backend)**
-- When a shipment is booked, every trucking company is notified by push (or only the chosen company, for a direct shipment).
-- Each company can check the shipment against its own fleet: which trucks could take it, where it would go in their routes and how many km it adds.
-- Offers: one per truck, a price in EUR and an optional time limit, open for 2 hours (simulation time). The server re-checks the trucks when offers are sent. Accepting one rejects the others.
+**Engine (backend)**
+- Feasibility and arrival times that follow the EU 561 driving and rest rules, checked against capacity and every stop already on the route.
+- A simulation clock (5-minute ticks) that moves trucks along real roads, reaches stops and advances each driver's hours.
 
 ## Tech stack
 
@@ -66,26 +53,7 @@ This is a portfolio project. It shows a domain-driven .NET backend and a TypeScr
 
 ## Architecture
 
-The backend is a layered, domain-driven solution:
-
-- **Domain:** aggregates (Truck, Driver, Trip, Shipment, TruckingCompany), value objects and the driving-rule engine. No framework dependencies.
-- **Application:** one handler per use case: assign a shipment, advance the simulation, evaluate a shipment for a company, and so on.
-- **Infrastructure:** EF Core persistence, the OSRM routing client and the FCM notification sender.
-- **Api:** ASP.NET Core controllers.
-
-The frontend is an npm workspace. The web and Android fleet apps share one logic package, so screens differ by platform but the rules don't:
-
-```
-@freight/api-client           typed client for the REST API
-  └─ @freight/fleetmanagement-core   shared logic: sim time, fleet and shipment rules, routing
-       ├─ fleetmanagement/web        React + Vite
-       └─ fleetmanagement/mobile     Expo / React Native (Android)
-frontend/shipment             shipper web app
-```
-
-The whole repository uses one React version (19.2.3), because Expo requires it exactly.
-
-Architectural decisions are recorded in [docs/adr/](docs/adr/).
+A layered, domain-driven .NET backend (Domain, Application, Infrastructure, Api) and an npm workspace of three apps, where the web and Android fleet apps share one logic package. Diagrams, a request traced end to end, and the cross-cutting decisions are in [freight-architecture.md](freight-architecture.md); the reasons behind each decision are in [docs/adr/](docs/adr/).
 
 ## Repository layout
 
@@ -160,7 +128,6 @@ See [frontend/fleetmanagement/mobile/README.md](frontend/fleetmanagement/mobile/
 |---|---|
 | Backend (all projects; needs Docker running) | `dotnet test backend/Freight.slnx` |
 | Shared fleet logic | `npm test -w @freight/fleetmanagement-core` |
-| Fleet web unit tests | `npm test -w fleetmanagement-web` |
 | Android component tests | `npm test -w fleetmanagement-mobile` |
 | Fleet web end-to-end (Playwright) | `npm run test:e2e -w fleetmanagement-web` |
 
@@ -176,19 +143,13 @@ GitHub Actions runs three workflows:
 | Document | Contents |
 |---|---|
 | [freight-overview.md](freight-overview.md) | The problem, the two tracks, and who uses what |
-| [freight-frd.md](freight-frd.md) | Functional requirements and what is built |
-| [freight-domain-model.md](freight-domain-model.md) | Aggregates, value objects and queries |
+| [freight-ui-screens.md](freight-ui-screens.md) | App tour: every screen of the three apps |
+| [freight-architecture.md](freight-architecture.md) | The moving parts, a request end to end, and the cross-cutting decisions |
+| [freight-domain-model.md](freight-domain-model.md) | The domain model in diagrams: aggregates, lifecycles and key flows |
 | [freight-driving-rules.md](freight-driving-rules.md) | The EU 561 driving and rest rules the simulation follows |
-| [freight-ui-screens.md](freight-ui-screens.md) | Screens of the web and Android apps |
-| [freight-build-plan.md](freight-build-plan.md) | Build slices: done and next |
+| [freight-frd.md](freight-frd.md) | Functional requirements, scope decisions and accepted limitations |
+| [freight-build-plan.md](freight-build-plan.md) | The vertical slices the project was built in |
 | [docs/adr/](docs/adr/) | Architecture decision records |
-
-## Status and roadmap
-
-The work is split into two tracks:
-- **Track A, Truck Simulation: built.** Fleet setup, direct assignment of shipments to trucks, compliance-aware feasibility and arrival times, and simulated movement. It works on web and Android.
-- **Track B, Marketplace: built.** Push to every trucking company, per-company fleet check, priced offers, shipper approval, Add to trip, and direct shipments, on web and Android. Known limits: accepting an offer and Add to trip don't re-check feasibility, and two simultaneous accepts aren't guarded against.
-- **Next:** per-stop arrival times in the apps (the API already provides them).
 
 ## Synthetic data
 
