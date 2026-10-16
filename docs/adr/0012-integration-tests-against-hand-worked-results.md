@@ -22,7 +22,7 @@ A common shortcut is to run the code once and paste its output into the test as 
 - **Coverage by dimension, not by combination:** one scenario per type, so that every value of every dimension (break rule, daily and weekly rest rule, extension, team, stop pattern, waits, mid-trip insertions, start day) is covered at least once, plus the combinations that interact. The list is in `backend/tests/Freight.Integration.Tests/SCENARIOS.md`.
 
 ## Consequences
-- The 33 scenarios prove the rules end to end, through the same HTTP path the apps use.
+- The 32 scenarios prove the rules end to end, through the same HTTP path the apps use.
 - "Forecast = actual" guarantees the arrival times a dispatcher sees are the times the simulation really produces — one engine, no second implementation of the rules.
 - Hand-working a 30-day team trip is slow; writing a scenario costs far more than a unit test. The coverage-by-dimension rule keeps the number of scenarios manageable.
 - When a rule changes, its hand-worked tables must be redone, which makes rule changes deliberate.

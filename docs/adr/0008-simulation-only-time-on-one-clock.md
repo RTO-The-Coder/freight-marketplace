@@ -18,7 +18,7 @@ Everything interesting in this domain depends on time: driver breaks and rests, 
 
 ## Consequences
 - Every answer in the system is consistent: arrival forecasts, feasibility, the driver ledgers, the offer window and the shipment lists all use the same "now".
-- A whole multi-day scenario can be replayed tick by tick, which is what makes the 33 hand-worked integration scenarios (ADR 0012) and the e2e tests possible.
+- A whole multi-day scenario can be replayed tick by tick, which is what makes the 32 hand-worked integration scenarios (ADR 0012) and the e2e tests possible.
 - Both fleet apps share the clock: advancing it on one screen refreshes every screen, so trucks visibly drive.
 - Truck movement is driven by time, not distance: a truck's progress on a leg is the driving ticks spent on it, and its position and distance travelled are derived from that.
 - The system can't run against real time as it stands. Adding a real-time mode would mean putting an interface in front of "now" with two implementations — a contained change, because every handler already reads time in one place.

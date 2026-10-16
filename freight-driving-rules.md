@@ -245,7 +245,7 @@ With two drivers on full rules this gives a 27h cycle: A 4.5h, B 4.5h, A 4.5h, B
 |---|---|
 | Rule engine | `backend/tests/Freight.Domain.Tests/Tracking/Services/DriverRuleEngineTests.cs` |
 | Forecast | `backend/tests/Freight.Domain.Tests/Fleet/Services/RouteEtaCalculatorTests.cs` |
-| Whole trips through the API | `backend/tests/Freight.Integration.Tests` - 33 scenarios of 3 days to 30 days, each checked against a hand-worked table in `Results/`. Coverage: `SCENARIOS.md`. |
+| Whole trips through the API | `backend/tests/Freight.Integration.Tests` - 32 scenarios of 3 days to 30 days, each checked against a hand-worked table in `Results/`. Coverage: `SCENARIOS.md`. |
 
 ## 9. Decisions
 

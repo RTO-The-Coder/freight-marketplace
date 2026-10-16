@@ -71,7 +71,6 @@ frontend/
     mobile/              fleet-management Android app
 docs/
   adr/                   architecture decision records
-  design/                design notes
 freight-*.md             product and domain documentation
 ```
 

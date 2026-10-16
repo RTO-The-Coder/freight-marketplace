@@ -17,7 +17,7 @@ A fuller bidding design was considered earlier (a platform-calculated base price
 **Offer rules.**
 
 - **One window per shipment:** an open shipment takes offers for **2 hours** of simulation time after booking (`Shipment.OfferDeadline`). Offers can be sent and accepted only inside it.
-- **One offer per truck**, with a price in **EUR** typed by the dispatcher and an optional **time limit** before the window ends. A company sends all its offers for a shipment **in one go**, and can't send more while any are waiting. Offers can't be changed or withdrawn.
+- **One offer per truck**, with a price in **EUR** typed by the dispatcher and an optional **time limit** before the window ends. A company sends all its offers for a shipment **in one go**, and can't send more while any of them is still Pending, even one past its own limit; a new round needs the shipper to change the times. Offers can't be changed or withdrawn.
 - **The server re-checks the trucks** when offers are sent (the per-company evaluation, ADR 0007), refuses any that can't take the shipment, and stores each truck's pickup and delivery positions on its offer. The client never sends positions.
 - **Accepting** one offer rejects every other waiting offer and gives the shipment to the winning company. It stays `Pending`; no stops are created yet.
 - **Add to trip:** the winning company inserts the shipment at the offered truck and positions, through the normal assignment path (ADR 0009) — the only place stops are ever created.
@@ -28,7 +28,8 @@ A fuller bidding design was considered earlier (a platform-calculated base price
 
 ## Consequences
 - The shipper decides between competing quotes, and companies can't take open shipments without being chosen. The truck-assignment endpoint still accepts open shipments, for the seeder and tests; the apps don't offer it.
-- **No feasibility re-check on accept or Add to trip.** If the truck's route changed after the offer was sent, Add to trip fails with the assignment's own error. Accepted as a known limitation.
+- **No feasibility check on accept, and no new search on Add to trip.** Accepting checks nothing. Add to trip runs the assignment's normal feasibility check, but only at the positions stored on the offer: if the truck's route changed so they no longer fit, it fails with the assignment's error instead of looking for another position. Accepted as a known limitation.
+- **Run-out offers block a new round.** If a company's offers pass their own limits while the window is still open, they stay Pending: the shipment drops out of that company's lists and it can't send new offers until the shipper changes the times.
 - **No concurrency guard.** Two accepts at the same moment are not prevented. Accepted for a demo with no concurrent shippers.
 - **No automatic withdrawal.** A truck can have offers waiting on several shipments; winning one doesn't withdraw the others, and the later Add to trip simply fails if the truck no longer fits.
 - **No push on accept or reject.** Companies see the change in their lists, which refresh with the sim clock and on pull to refresh.

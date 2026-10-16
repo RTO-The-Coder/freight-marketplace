@@ -287,9 +287,9 @@ flowchart TD
     A -- yes --> LA[["Approved<br/>Add to trip"]]
     A -- no --> O{"Do we have offers<br/>still waiting?"}
     O -- yes --> LO[["Offered<br/>information only"]]
-    O -- no --> W{"Window open, no company<br/>holds it, no offer from us?"}
+    O -- no --> W{"Window open, no company<br/>holds it, no Pending offer from us?"}
     W -- yes --> LOP[["Open<br/>Check eligibility → Send offers"]]
-    W -- no --> H["Not shown<br/>(another company has it, or it's dead)"]
+    W -- no --> H["Not shown<br/>(another company has it, it's dead,<br/>or our offers ran out)"]
 ```
 
 ---
@@ -358,7 +358,7 @@ sequenceDiagram
     Note over API: Feasibility check (§6),<br/>then the stops are added
 ```
 
-**Known limits:** accepting and Add to trip don't re-check feasibility (if the route changed, Add to trip returns the assignment's error), and two accepts at the same moment aren't guarded against.
+**Known limits:** accepting checks nothing; Add to trip re-checks only the offered positions (if the route changed so they no longer fit, it returns the assignment's error rather than finding another position); and two accepts at the same moment aren't guarded against.
 
 ---
 

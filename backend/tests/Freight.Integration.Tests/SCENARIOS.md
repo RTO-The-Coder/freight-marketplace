@@ -38,7 +38,7 @@ value of every dimension is covered at least once, plus the combinations that in
 
 ## Scenarios
 
-All 34 scenarios pass (2026-09-27), each at both step sizes.
+32 scenarios, each run at both step sizes. I6 is part of T2 (the same test class).
 
 ### Short trips (3-4 days, single driver, Saturday start)
 

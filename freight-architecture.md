@@ -155,7 +155,7 @@ flowchart BT
     A["<b>Application tests</b><br/>handlers, with Moq"]
     I["<b>Infrastructure tests</b><br/>EF Core round trips on PostgreSQL"]
     P["<b>API tests</b><br/>controllers over HTTP"]
-    S["<b>33 integration scenarios</b><br/>3- to 30-day trips through the real API,<br/>checked against hand-worked tables"]
+    S["<b>32 integration scenarios</b><br/>3- to 30-day trips through the real API,<br/>checked against hand-worked tables"]
     E["<b>Playwright e2e</b><br/>fleet web app against a running API"]
     U --> A --> I --> P --> S --> E
 ```
