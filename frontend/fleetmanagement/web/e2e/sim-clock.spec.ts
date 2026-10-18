@@ -159,18 +159,16 @@ test('advancing the clock moves a truck along its route (a Pending stop becomes 
   })
 
   await test.step('assign the first matching pending shipment to a new trip', async () => {
-    // Seeded shipments are open (offers only); book a direct copy of a seeded BoxVan
-    // shipment to this company, so the full assign form lists it.
-    const boxVan = (await pendingShipments()).find((s) => s.requiredTruckType === 'BoxVan')
-    expect(boxVan, 'No BoxVan shipment is pending in the seed data — this test needs at least one.').toBeDefined()
+    // Book a direct copy of a seeded open BoxVan shipment to this company, so the full assign
+    // form lists it next to the company's own seeded direct shipments.
+    const boxVan = (await pendingShipments()).find((s) => s.requiredTruckType === 'BoxVan' && !s.isDirect)
+    expect(boxVan, 'No open BoxVan shipment is pending in the seed data — this test needs at least one.').toBeDefined()
     await bookDirectCopy(boxVan!, companyId)
     await openDirectAssignModal(page)
 
     // Step 2 filters to shipments matching the SELECTED truck's own type and
-    // capacity (see AssignShipmentModal's `relevant` filter) — so picking
-    // Clock-Truck (BoxVan/Large — the roomiest tier) first, then whichever
-    // shipment Step 2 lists, is guaranteed to be a fitting BoxVan shipment,
-    // regardless of which shipment happened to be expanded in the panel.
+    // capacity (see AssignShipmentModal's `relevant` filter). The company also has
+    // seeded direct shipments of its own, so pick the copy by its load, not the first row.
     await page.locator('.assign-radio', { hasText: 'Clock-Truck' }).click()
     await expect(page.getByRole('heading', { name: /Relevant shipments for Clock-Truck/ })).toBeVisible()
 
@@ -179,9 +177,11 @@ test('advancing the clock moves a truck along its route (a Pending stop becomes 
       'The direct BoxVan copy booked above should match Clock-Truck.',
     ).toHaveCount(0)
 
-    const firstShipment = page.locator('.assign-shipment-list .assign-radio').first()
-    await expect(firstShipment).toBeVisible({ timeout: 10_000 })
-    await firstShipment.click()
+    const copy = page
+      .locator('.assign-shipment-list .assign-radio', { hasText: `${Math.round(boxVan!.loadWeightKg).toLocaleString('en-US')} kg` })
+      .first()
+    await expect(copy).toBeVisible({ timeout: 10_000 })
+    await copy.click()
 
     await expect(page.getByText('This shipment fits — ready to assign.')).toBeVisible({ timeout: 30_000 })
     await page.getByRole('button', { name: 'Assign shipment' }).click()

@@ -17,7 +17,7 @@ const API_BASE_URL = 'http://localhost:5017'
 type ShipmentSummary = PendingShipment
 
 async function findLongHaulShipment(): Promise<ShipmentSummary> {
-  const shipments = await pendingShipments()
+  const shipments = (await pendingShipments()).filter((s) => !s.isDirect)
 
   const spanDays = (s: ShipmentSummary) =>
     (new Date(s.deliveryWindowEarliest).getTime() - new Date(s.pickupWindowLatest).getTime()) /
@@ -80,9 +80,16 @@ async function findTruckByName(companyId: string, truckName: string): Promise<st
 }
 
 test('a 10-14 day team-driver shipment runs the sim clock to full trip completion', async ({ page }) => {
-  test.slow() // this drives the sim clock across ~2 weeks of ticks server-side
-
   const shipment = await findLongHaulShipment()
+
+  // The seed puts the long haul's pickup anywhere in the first two weeks, so the clock may
+  // need well over 20 days to finish the trip: until its delivery window closes, plus up to
+  // 6 days to drive back to the office. Size the step budget (and the timeout) from that.
+  const STEP_HOURS = 12
+  const simNow = new Date(((await (await fetch(`${API_BASE_URL}/simulation/time`)).json()) as { currentTime: string }).currentTime)
+  const hoursToDeliveryClose = (new Date(shipment.deliveryWindowLatest).getTime() - simNow.getTime()) / 3_600_000
+  const MAX_STEPS = Math.ceil(hoursToDeliveryClose / STEP_HOURS) + (6 * 24) / STEP_HOURS
+  test.setTimeout(120_000 + MAX_STEPS * 10_000)
   const companyId = await firstCompanyId()
 
   await page.goto('/')
@@ -143,7 +150,7 @@ test('a 10-14 day team-driver shipment runs the sim clock to full trip completio
   })
 
   await test.step('assign the 10-14 day shipment to a new trip', async () => {
-    // Seeded shipments are open (offers only); assign a direct copy booked to this company.
+    // The long haul is an open shipment (offers only); assign a direct copy booked to this company.
     await bookDirectCopy(shipment, companyId)
     await openDirectAssignModal(page)
 
@@ -167,7 +174,7 @@ test('a 10-14 day team-driver shipment runs the sim clock to full trip completio
 
   await test.step('run the simulation clock forward in visible 12-hour steps until the trip completes', async () => {
     // Advances in small, watchable steps (12h = 144 ticks at a time, with a
-    // pause between each) instead of one giant jump straight to the end — so
+    // short pause between each) instead of one giant jump straight to the end — so
     // a headed run actually shows the clock and stop statuses progressing
     // across the full 10-14 day trip instead of appearing to do nothing for
     // ~10s and then just being done.
@@ -187,9 +194,8 @@ test('a 10-14 day team-driver shipment runs the sim clock to full trip completio
     await page.goto('/')
     const clock = page.locator('.simclock')
 
-    const STEP_TICKS = 144 // 12 hours at 5 min/tick
-    const STEP_PAUSE_MS = 5_000
-    const MAX_STEPS = 40 // generous margin over ~28 steps for a 14-day trip
+    const STEP_TICKS = (STEP_HOURS * 60) / 5 // 5 min per tick
+    const STEP_PAUSE_MS = 2_000
 
     for (let step = 0; step < MAX_STEPS; step++) {
       if (!(await tripIsOpen(truckId))) break

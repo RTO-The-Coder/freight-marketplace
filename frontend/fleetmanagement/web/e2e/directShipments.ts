@@ -5,11 +5,15 @@ export const API_BASE_URL = 'http://localhost:5017'
 /** The pending-shipment fields a direct copy needs (GET /shipments/pending returns them all). */
 export interface PendingShipment {
   shipmentId: string
+  /** Booked straight to one company; the rest are open for offers. */
+  isDirect: boolean
   requiredTruckType: string
   pickupLatitude: number
   pickupLongitude: number
+  pickupPlaceName: string
   deliveryLatitude: number
   deliveryLongitude: number
+  deliveryPlaceName: string
   loadWeightKg: number
   loadVolumeCubicMeters: number
   pickupWindowEarliest: string
@@ -32,9 +36,11 @@ export async function firstCompanyId(): Promise<string> {
 }
 
 /**
- * Seeded shipments are all open (offers only), so a test that assigns one through the
- * full assign form first books a copy - same route, load, type and windows - straight to
- * the test's company. Only direct shipments can be assigned there. Returns the copy's id.
+ * Only direct shipments can be assigned through the full assign form, so a test that assigns
+ * a seeded open shipment first books a copy - same route, place names, load, type and windows -
+ * straight to the test's company. Copy an open one (`!isDirect`): the seed also books shipments
+ * directly to companies, and copying one of those would put two identical rows in the form.
+ * Returns the copy's id.
  */
 export async function bookDirectCopy(shipment: PendingShipment, companyId: string): Promise<string> {
   const shippersRes = await fetch(`${API_BASE_URL}/shippers`)
@@ -47,8 +53,10 @@ export async function bookDirectCopy(shipment: PendingShipment, companyId: strin
       shipperId: shippers[0].shipperId,
       pickupLatitude: shipment.pickupLatitude,
       pickupLongitude: shipment.pickupLongitude,
+      pickupPlaceName: shipment.pickupPlaceName,
       deliveryLatitude: shipment.deliveryLatitude,
       deliveryLongitude: shipment.deliveryLongitude,
+      deliveryPlaceName: shipment.deliveryPlaceName,
       loadWeightKg: shipment.loadWeightKg,
       loadVolumeCubicMeters: shipment.loadVolumeCubicMeters,
       requiredTruckType: shipment.requiredTruckType,
