@@ -1,6 +1,7 @@
 using Freight.Domain.Client;
 using Freight.Domain.Client.Enums;
 using Freight.Domain.Fleet.Enums;
+using Freight.Domain.ValueObjects;
 
 namespace Freight.Application.Client;
 
@@ -9,7 +10,8 @@ namespace Freight.Application.Client;
 /// Shared by <see cref="GetShipmentsByShipperHandler"/>, <see cref="GetPendingShipmentsHandler"/>
 /// and the company shipment board - build it with <see cref="From"/> so the projection lives in
 /// one place. <see cref="OffersOpen"/> is as of the simulation clock's "now" passed to From;
-/// <see cref="WaitingOfferCount"/> is only filled for the shipper's own list.
+/// <see cref="WaitingOfferCount"/> and <see cref="CurrentLatitude"/>/<see cref="CurrentLongitude"/>
+/// (where the shipment is now) are only filled for the shipper's own list.
 /// </summary>
 public sealed record ShipmentSummaryDto(
     Guid ShipmentId,
@@ -31,9 +33,12 @@ public sealed record ShipmentSummaryDto(
     ShipmentStatus Status,
     bool IsDirect,
     bool OffersOpen,
-    int WaitingOfferCount)
+    int WaitingOfferCount,
+    double? CurrentLatitude,
+    double? CurrentLongitude)
 {
-    public static ShipmentSummaryDto From(Shipment shipment, DateTime now, int waitingOfferCount = 0) => new(
+    public static ShipmentSummaryDto From(
+        Shipment shipment, DateTime now, int waitingOfferCount = 0, GeoLocation? currentPosition = null) => new(
         shipment.Id,
         shipment.TruckingCompanyId,
         shipment.PickupLocation.Latitude,
@@ -53,5 +58,7 @@ public sealed record ShipmentSummaryDto(
         shipment.Status,
         shipment.IsDirect,
         shipment.IsOpenForOffers(now),
-        waitingOfferCount);
+        waitingOfferCount,
+        currentPosition?.Latitude,
+        currentPosition?.Longitude);
 }

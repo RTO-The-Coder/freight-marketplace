@@ -1,5 +1,4 @@
 using Freight.Domain.Common;
-using Freight.Domain.Fleet.Enums;
 
 namespace Freight.Application.Fleet;
 
@@ -14,12 +13,8 @@ public sealed record TruckPositionDto(
     double LegProgressFraction);
 
 /// <summary>
-/// Q1 - "where is my truck right now?". A truck with no open trip sits at its trucking
-/// company's office. A truck on an open trip is somewhere along the leg toward its next
-/// pending stop: the point <see cref="RouteProgress.GetProgressFraction"/> of the way
-/// from the last stop it reached (or the office, if it has not reached one yet) to that
-/// next stop. Straight-line interpolation - the route model assumes distance covered
-/// tracks time elapsed (see <see cref="RouteProgress"/>); no OSRM call.
+/// Q1 - "where is my truck right now?" - see <see cref="TruckPositionLocator"/> for how the
+/// position is worked out (office when no open trip, otherwise along the current leg).
 /// </summary>
 public sealed class GetTruckPositionHandler(IUnitOfWork unitOfWork)
 {
@@ -36,21 +31,15 @@ public sealed class GetTruckPositionHandler(IUnitOfWork unitOfWork)
         var company = await unitOfWork.TruckingCompanies.GetByIdAsync(truck.TruckingCompanyId.Value, cancellationToken)
             ?? throw new InvalidOperationException($"Trucking company '{truck.TruckingCompanyId.Value}' was not found.");
 
-        var office = company.OfficeLocation;
-
         var trip = await unitOfWork.Trips.GetOpenTripByTruckIdAsync(truck.Id, cancellationToken);
-        var nextStop = trip?.NextStop;
-
-        if (trip is null || nextStop is null || truck.CurrentProgress is null)
-        {
-            return new TruckPositionDto(truck.Id, trip?.Id, office.Latitude, office.Longitude, null, 0);
-        }
-
-        var legStart = trip.Stops.LastOrDefault(stop => stop.Status == StopStatus.Reached)?.Location ?? office;
-        var fraction = truck.CurrentProgress.GetProgressFraction();
-        var position = legStart.InterpolateTo(nextStop.Location, fraction);
+        var location = TruckPositionLocator.Locate(truck, trip, company.OfficeLocation);
 
         return new TruckPositionDto(
-            truck.Id, trip.Id, position.Latitude, position.Longitude, nextStop.Id, fraction);
+            truck.Id,
+            trip?.Id,
+            location.Position.Latitude,
+            location.Position.Longitude,
+            location.HeadingToStopId,
+            location.LegProgressFraction);
     }
 }
