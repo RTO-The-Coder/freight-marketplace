@@ -26,13 +26,20 @@ export function AssignDriversSheet({ truckId, truckSize, visible, onClose, onAss
   const [error, setError] = useState<string | null>(null)
   const [busy, setBusy] = useState(false)
   const [addingDriver, setAddingDriver] = useState(false)
+  /** The truck's company: only its drivers are offered, and a driver added here joins it. */
+  const [companyId, setCompanyId] = useState<string | null>(null)
 
-  const fetchPool = () =>
-    Promise.all([fleetApi.getDrivers({ unassigned: true }), fleetApi.getTruckDetail(truckId)]).then(
-      ([pool, detail]) => ({ drivers: mergeDriverPool(detail, pool.drivers), detail }),
-    )
+  // The truck first: only drivers of its own company may drive it.
+  const fetchPool = async () => {
+    const detail = await fleetApi.getTruckDetail(truckId)
+    if (detail.truckingCompanyId === null) {
+      throw new Error('This truck does not belong to a company, so it cannot be given drivers.')
+    }
+    const pool = await fleetApi.getDrivers({ unassigned: true, truckingCompanyId: detail.truckingCompanyId })
+    return { drivers: mergeDriverPool(detail, pool.drivers), detail }
+  }
 
-  // Load each time the form opens: the truck's current drivers plus the unassigned pool.
+  // Load each time the form opens: the truck's current drivers plus its company's unassigned drivers.
   useEffect(() => {
     if (!visible) return
     let cancelled = false
@@ -42,6 +49,7 @@ export function AssignDriversSheet({ truckId, truckSize, visible, onClose, onAss
       .then(({ drivers: all, detail }) => {
         if (cancelled) return
         setDrivers(all)
+        setCompanyId(detail.truckingCompanyId)
         setPrimaryId(detail.primaryDriver?.driverId ?? null)
         setSecondaryId(detail.secondaryDriver?.driverId ?? null)
       })
@@ -98,7 +106,7 @@ export function AssignDriversSheet({ truckId, truckSize, visible, onClose, onAss
       {drivers && drivers.length === 0 && (
         <Text variant="bodyMedium">No drivers available yet. Add a new driver to assign them.</Text>
       )}
-      {drivers && (
+      {drivers && companyId && (
         <Button mode="outlined" icon="account-plus" style={styles.addDriver} onPress={() => setAddingDriver(true)}>
           Add new driver
         </Button>
@@ -128,7 +136,14 @@ export function AssignDriversSheet({ truckId, truckSize, visible, onClose, onAss
           )}
         </>
       )}
-      <AddDriverSheet visible={addingDriver} onClose={() => setAddingDriver(false)} onAdded={onDriverAdded} />
+      {companyId && (
+        <AddDriverSheet
+          companyId={companyId}
+          visible={addingDriver}
+          onClose={() => setAddingDriver(false)}
+          onAdded={onDriverAdded}
+        />
+      )}
     </FormSheet>
   )
 }

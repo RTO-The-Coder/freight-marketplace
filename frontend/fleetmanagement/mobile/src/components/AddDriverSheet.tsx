@@ -10,13 +10,15 @@ const DAILY_REST_RULES: readonly DailyRestRule[] = ['FullRest', 'ReducedRest', '
 const WEEKLY_REST_RULES: readonly WeeklyRestRule[] = ['FullWeeklyRest', 'ReducedWeeklyRest']
 
 interface Props {
+  /** The trucking company the new driver joins. */
+  companyId: string
   visible: boolean
   onClose: () => void
   /** Called with the new driver's id. */
   onAdded: (driverId: string) => void
 }
 
-export function AddDriverSheet({ visible, onClose, onAdded }: Props) {
+export function AddDriverSheet({ companyId, visible, onClose, onAdded }: Props) {
   const theme = useTheme()
   const [firstName, setFirstName] = useState('')
   const [lastName, setLastName] = useState('')
@@ -46,6 +48,7 @@ export function AddDriverSheet({ visible, onClose, onAdded }: Props) {
         dailyRestRule,
         weeklyRestRule,
         extendDailyDrivingWhenEligible: extend,
+        truckingCompanyId: companyId,
       })
       setFirstName('')
       setLastName('')

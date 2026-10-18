@@ -192,7 +192,7 @@ export function CompanyDetailScreen({ companyId, onLoaded, onSelectTruck }: Prop
           void loadFleet()
         }}
       />
-      <AddDriverSheet visible={sheet === 'addDriver'} onClose={() => setSheet(null)} onAdded={() => setSheet(null)} />
+      <AddDriverSheet companyId={companyId} visible={sheet === 'addDriver'} onClose={() => setSheet(null)} onAdded={() => setSheet(null)} />
     </View>
   )
 }

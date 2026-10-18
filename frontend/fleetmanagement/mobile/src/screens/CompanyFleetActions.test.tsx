@@ -70,7 +70,7 @@ describe('activation switch', () => {
   })
 
   it('explains why a truck without a driver cannot be activated, and offers to assign one', async () => {
-    const api = installFakeApi(routes({ 'GET /drivers?unassigned=true': { drivers: [] } }))
+    const api = installFakeApi(routes({ 'GET /drivers?unassigned=true&truckingCompanyId=c1': { drivers: [] } }))
     const onSelectTruck = jest.fn()
     renderWithApp(<CompanyDetailScreen companyId="c1" onLoaded={jest.fn()} onSelectTruck={onSelectTruck} />)
 
@@ -168,6 +168,7 @@ describe('add driver (FAB → full-screen form)', () => {
         dailyRestRule: 'ReducedRest',
         weeklyRestRule: 'FullWeeklyRest',
         extendDailyDrivingWhenEligible: true,
+        truckingCompanyId: 'c1',
       }),
     )
     await waitFor(() => expect(screen.queryByRole('button', { name: 'Save' })).toBeNull())

@@ -54,7 +54,7 @@ describe('assign drivers (full-screen form)', () => {
   it('Medium truck: picks a primary from search, no secondary slot, saves and reloads', async () => {
     const api = installFakeApi({
       'GET /trucks/t1': truck(),
-      'GET /drivers?unassigned=true': { drivers: [petra, marek] },
+      'GET /drivers?unassigned=true&truckingCompanyId=c1': { drivers: [petra, marek] },
       'PATCH /trucks/t1/drivers': {},
     })
     renderTruck()
@@ -83,7 +83,7 @@ describe('assign drivers (full-screen form)', () => {
     const api = installFakeApi({
       'GET /trucks/t1': truck({ truckSize: 'Large', primaryDriver: jan, isActive: true }),
       'GET /drivers/d1': driverDetail,
-      'GET /drivers?unassigned=true': { drivers: [petra] },
+      'GET /drivers?unassigned=true&truckingCompanyId=c1': { drivers: [petra] },
       'PATCH /trucks/t1/drivers': {},
     })
     renderTruck()
@@ -107,7 +107,7 @@ describe('assign drivers (full-screen form)', () => {
   it('shows the API error and stays open', async () => {
     installFakeApi({
       'GET /trucks/t1': truck(),
-      'GET /drivers?unassigned=true': { drivers: [petra] },
+      'GET /drivers?unassigned=true&truckingCompanyId=c1': { drivers: [petra] },
       'PATCH /trucks/t1/drivers': new Error('Driver already assigned elsewhere'),
     })
     renderTruck()
@@ -122,7 +122,7 @@ describe('assign drivers (full-screen form)', () => {
     let created = false
     const api = installFakeApi({
       'GET /trucks/t1': truck(),
-      'GET /drivers?unassigned=true': () => ({ drivers: created ? [petra, erika] : [petra] }),
+      'GET /drivers?unassigned=true&truckingCompanyId=c1': () => ({ drivers: created ? [petra, erika] : [petra] }),
       'POST /drivers': () => {
         created = true
         return { driverId: 'd9' }
@@ -148,7 +148,7 @@ describe('assign drivers (full-screen form)', () => {
     const slow = { timeout: 5000 }
     await waitFor(() => expect(callsTo(api, 'POST', '/drivers')).toBe(1), slow)
     await waitFor(() => expect(screen.queryByLabelText('First name')).toBeNull(), slow)
-    await waitFor(() => expect(callsTo(api, 'GET', '/drivers?unassigned=true')).toBe(2), slow)
+    await waitFor(() => expect(callsTo(api, 'GET', '/drivers?unassigned=true&truckingCompanyId=c1')).toBe(2), slow)
     const save = screen.getByRole('button', { name: 'Save' })
     expect(save).toBeEnabled()
     fireEvent.press(save)
