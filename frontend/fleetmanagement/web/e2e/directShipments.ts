@@ -73,13 +73,20 @@ export async function bookDirectCopy(shipment: PendingShipment, companyId: strin
 }
 
 /**
- * From the company page's Shipments column: Direct tab -> expand a card -> "Assign to a truck →",
- * which opens the full assign form (the shipment itself is picked in the form's own step 2).
+ * From the company page's Shipments column: Direct tab -> select the card whose load starts with
+ * `weightLabel` (e.g. "3,522 kg") -> "Choose positions by hand →", which opens the full assign
+ * form with that shipment already picked (the form then only asks for the truck and positions).
  */
-export async function openDirectAssignModal(page: Page): Promise<void> {
+export async function openDirectAssignModal(page: Page, weightLabel: string): Promise<void> {
   const shipments = page.getByRole('region', { name: 'Shipments', exact: true })
   await shipments.getByRole('tab', { name: /^Direct/ }).click()
-  await shipments.locator('.shipment-card__head').first().click()
-  await shipments.getByRole('button', { name: 'Assign to a truck →' }).click()
+  // Anchored, so "4,000 kg" never matches a "14,000 kg" card.
+  const escaped = weightLabel.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
+  const card = shipments
+    .locator('.shipment-card')
+    .filter({ has: page.locator('.ship-row__load', { hasText: new RegExp(`^${escaped}`) }) })
+    .first()
+  await card.locator('.shipment-card__head').click()
+  await card.getByRole('button', { name: 'Choose positions by hand →' }).click()
   await expect(page.getByRole('heading', { name: 'Assign a shipment' })).toBeVisible()
 }

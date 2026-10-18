@@ -1,5 +1,6 @@
 import type {
   FleetCompanyDriverDto,
+  ShipmentSummaryDto,
   TruckDetailDto,
   TruckingCompanySummaryDto,
   TruckPositionDto,
@@ -14,8 +15,8 @@ import { AssignShipmentModal } from '../components/AssignShipmentModal'
 import { Chevron } from '../components/Chevron'
 import { DriverDetailModal } from '../components/DriverDetailModal'
 import { DriversPanel } from '../components/DriversPanel'
-import { fleetDriverLabel, orderCompanyDrivers } from '@freight/fleetmanagement-core'
-import { FleetMap, type FleetMapTruck } from '../components/FleetMap'
+import { fleetDriverLabel, orderCompanyDrivers, splitPlaceName } from '@freight/fleetmanagement-core'
+import { FleetMap, type FleetMapShipment, type FleetMapTruck } from '../components/FleetMap'
 import { OpenShipmentsPanel } from '../components/OpenShipmentsPanel'
 import { StatusPill } from '../components/StatusPill'
 import { TruckSelector } from '../components/TruckSelector'
@@ -60,6 +61,12 @@ export function TruckingCompanyDetailScreen({
   const [viewingDriver, setViewingDriver] = useState<{ driverId: string; name: string } | null>(null)
   /** The truck hovered in the Fleet list — highlighted on the map and in the Drivers list. */
   const [hoveredTruckId, setHoveredTruckId] = useState<string | null>(null)
+  /** The shipment expanded in the Shipments column. */
+  const [selectedShipment, setSelectedShipment] = useState<ShipmentSummaryDto | null>(null)
+  /** The shipment the assign form was opened for (null = the form picks one, e.g. ?panel=assign). */
+  const [assigningShipment, setAssigningShipment] = useState<ShipmentSummaryDto | null>(null)
+  /** Bumped after the assign form assigns - the Shipments column reloads. */
+  const [shipmentsReloadKey, setShipmentsReloadKey] = useState(0)
 
   const loadFleet = useCallback(() => {
     fleetApi
@@ -152,6 +159,25 @@ export function TruckingCompanyDetailScreen({
     [activeTrucks, truckDetails, hiddenTruckIds, hideAtOffice],
   )
 
+  // The shipment selected in the Shipments column, drawn over the fleet.
+  const mapShipment = useMemo<FleetMapShipment | null>(
+    () =>
+      selectedShipment && {
+        pickup: {
+          latitude: selectedShipment.pickupLatitude,
+          longitude: selectedShipment.pickupLongitude,
+          placeName: selectedShipment.pickupPlaceName,
+        },
+        delivery: {
+          latitude: selectedShipment.deliveryLatitude,
+          longitude: selectedShipment.deliveryLongitude,
+          placeName: selectedShipment.deliveryPlaceName,
+        },
+        label: `${splitPlaceName(selectedShipment.pickupPlaceName).name} → ${splitPlaceName(selectedShipment.deliveryPlaceName).name}`,
+      },
+    [selectedShipment],
+  )
+
   const mapEmptyMessage =
     activeTrucks.length === 0
       ? 'No active trucks.'
@@ -205,6 +231,8 @@ export function TruckingCompanyDetailScreen({
               highlightedTruckId={hoveredTruckId}
               emptyMessage={mapEmptyMessage}
               onSelectTruck={onSelectTruck}
+              shipment={mapShipment}
+              onClearShipment={() => setSelectedShipment(null)}
             />
           ) : (
             <div className="skeleton skeleton--map" />
@@ -330,8 +358,14 @@ export function TruckingCompanyDetailScreen({
             <OpenShipmentsPanel
               companyId={companyId}
               companyName={company?.name ?? 'this company'}
+              selectedShipmentId={selectedShipment?.shipmentId ?? null}
+              onSelectShipment={setSelectedShipment}
+              reloadKey={shipmentsReloadKey}
               onFleetChanged={loadFleet}
-              onAssign={() => setModal('assignShipment')}
+              onAssign={(shipment) => {
+                setAssigningShipment(shipment)
+                setModal('assignShipment')
+              }}
             />
           </SidePanel>
         </div>
@@ -351,11 +385,18 @@ export function TruckingCompanyDetailScreen({
       {modal === 'assignShipment' && trucks && truckDetails && (
         <AssignShipmentModal
           companyId={companyId}
+          shipment={assigningShipment}
           trucks={trucks}
           truckDetails={truckDetails}
-          onClose={() => setModal(null)}
+          onClose={() => {
+            setModal(null)
+            setAssigningShipment(null)
+          }}
           onAssigned={() => {
             setModal(null)
+            setAssigningShipment(null)
+            setSelectedShipment(null)
+            setShipmentsReloadKey((k) => k + 1)
             loadFleet()
           }}
         />

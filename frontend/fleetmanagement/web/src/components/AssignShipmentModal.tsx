@@ -12,18 +12,24 @@ import {
   offersApi,
   pendingRouteStops,
   shipmentsFittingTruck,
+  TRUCK_STATUS_LABELS,
   trucksReadyForAssignment,
 } from '@freight/fleetmanagement-core'
 import { useSimClock } from '@freight/fleetmanagement-core'
 import { datetimeLocalToIso, isoToDatetimeLocal } from '@freight/fleetmanagement-core'
 import { resolveInsertionIndices } from '@freight/fleetmanagement-core'
 import { ShipmentRouteMap } from './ShipmentRouteMap'
-import { capacityFill, fmtWindow } from '@freight/fleetmanagement-core'
+import { ShipmentStops } from './shipments/ShipmentStops'
 import { Modal } from '@freight/web-ui'
 
 interface AssignShipmentModalProps {
   /** Only shipments booked directly to this company can be assigned here - open ones go through offers. */
   companyId: string
+  /**
+   * Opened from a shipment's card: that shipment is already picked, so the form only asks for
+   * the truck (of its type, big enough) and the positions. Null: pick a truck, then a shipment.
+   */
+  shipment?: ShipmentSummaryDto | null
   trucks: TruckSummaryDto[]
   truckDetails: Map<string, TruckDetailDto>
   onClose: () => void
@@ -37,14 +43,14 @@ type FeasibilityState =
   | { kind: 'infeasible'; reason: string }
   | { kind: 'error'; message: string }
 
-/** Screen 5 — pick a truck, see only shipments that could fit it, place on route. */
-export function AssignShipmentModal({ companyId, trucks, truckDetails, onClose, onAssigned }: AssignShipmentModalProps) {
+/** Screen 5 — pick a truck (and, without a shipment given, one that fits it), place on route. */
+export function AssignShipmentModal({ companyId, shipment: given = null, trucks, truckDetails, onClose, onAssigned }: AssignShipmentModalProps) {
   const { currentTime } = useSimClock()
   const [shipments, setShipments] = useState<ShipmentSummaryDto[] | null>(null)
   const [loadError, setLoadError] = useState<string | null>(null)
 
   const [truckId, setTruckId] = useState<string | null>(null)
-  const [shipmentId, setShipmentId] = useState<string | null>(null)
+  const [shipmentId, setShipmentId] = useState<string | null>(given?.shipmentId ?? null)
 
   // Trip start (new trips only). datetime-local string; '' means "use sim now".
   const [startInput, setStartInput] = useState('')
@@ -59,8 +65,12 @@ export function AssignShipmentModal({ companyId, trucks, truckDetails, onClose, 
       .catch((err) => setLoadError(err instanceof Error ? err.message : 'Failed to load shipments.'))
   }, [companyId])
 
-  // Only trucks that can legally take a shipment: active, has a driver, on a company.
-  const eligibleTrucks = useMemo(() => trucksReadyForAssignment(trucks), [trucks])
+  // Only trucks that can legally take a shipment: active, has a driver, on a company -
+  // and, for a given shipment, of its type and big enough for it.
+  const eligibleTrucks = useMemo(
+    () => trucksReadyForAssignment(trucks).filter((t) => !given || shipmentsFittingTruck(t, [given]).length > 0),
+    [trucks, given],
+  )
 
   const truck = truckId ? trucks.find((t) => t.truckId === truckId) ?? null : null
   const detail = truckId ? truckDetails.get(truckId) ?? null : null
@@ -72,7 +82,7 @@ export function AssignShipmentModal({ companyId, trucks, truckDetails, onClose, 
     [truck, shipments],
   )
 
-  const shipment = shipmentId ? relevant.find((s) => s.shipmentId === shipmentId) ?? null : null
+  const shipment = given ?? (shipmentId ? relevant.find((s) => s.shipmentId === shipmentId) ?? null : null)
 
   // The pending, non-Office stops already on the truck's route — the list both
   // insert indices are measured against (0 = before all of them, N = after all).
@@ -165,12 +175,26 @@ export function AssignShipmentModal({ companyId, trucks, truckDetails, onClose, 
       <div className="stack">
         {loadError && <p className="alert">{loadError}</p>}
 
+        {given && (
+          <div className="ship-row assign-shipment-summary">
+            <span className="ship-row__head">
+              <span className="ship-row__type">{given.requiredTruckType}</span>
+              <span className="ship-row__load">
+                {given.loadWeightKg.toLocaleString()} kg · {given.loadVolumeCubicMeters} m³
+              </span>
+            </span>
+            <ShipmentStops shipment={given} />
+          </div>
+        )}
+
         {/* Step 1 — pick a truck */}
         <div className="assign-step">
           <h4>Step 1 — Pick a truck</h4>
           {eligibleTrucks.length === 0 ? (
             <p className="notice">
-              No truck in this fleet is ready. A truck must be active and have a driver assigned.
+              {given
+                ? `No ${given.requiredTruckType} truck in this fleet is ready and big enough. A truck must be active and have a driver assigned.`
+                : 'No truck in this fleet is ready. A truck must be active and have a driver assigned.'}
             </p>
           ) : (
             <ul className="assign-truck-list">
@@ -185,11 +209,11 @@ export function AssignShipmentModal({ companyId, trucks, truckDetails, onClose, 
                         checked={truckId === t.truckId}
                         onChange={() => {
                           setTruckId(t.truckId)
-                          setShipmentId(null)
+                          if (!given) setShipmentId(null)
                         }}
                       />
                       <span>
-                        <strong>{t.truckName}</strong> · {t.truckType} · {t.truckSize} · {t.status}
+                        <strong>{t.truckName}</strong> · {t.truckType} · {t.truckSize} · {TRUCK_STATUS_LABELS[t.status]}
                         <span className="muted">
                           {' '}
                           · {cap.weightKg.toLocaleString()} kg / {cap.volumeCubicMeters} m³
@@ -203,8 +227,8 @@ export function AssignShipmentModal({ companyId, trucks, truckDetails, onClose, 
           )}
         </div>
 
-        {/* Step 2 — relevant shipments */}
-        {truck && (
+        {/* Step 2 — relevant shipments (only when no shipment was given) */}
+        {truck && !given && (
           <div className="assign-step">
             <h4>Step 2 — Relevant shipments for {truck.truckName}</h4>
             <p className="muted" style={{ fontSize: 'var(--text-sm)', margin: 0 }}>
@@ -218,27 +242,24 @@ export function AssignShipmentModal({ companyId, trucks, truckDetails, onClose, 
               <p className="notice">No shipment booked directly to this company matches this truck.</p>
             ) : (
               <ul className="assign-shipment-list">
-                {relevant.slice(0, 20).map((s) => {
-                  const cap = capacityFill(s)
-                  return (
-                    <li key={s.shipmentId}>
-                      <label className="assign-radio">
-                        <input
-                          type="radio"
-                          name="assign-shipment"
-                          checked={shipmentId === s.shipmentId}
-                          onChange={() => setShipmentId(s.shipmentId)}
-                        />
-                        <span>
-                          <strong>
-                            {cap.weightLabel} / {cap.volumeLabel}
-                          </strong>
-                          <span className="muted"> · pickup {fmtWindow(s.pickupWindowEarliest, s.pickupWindowLatest)}</span>
+                {relevant.slice(0, 20).map((s) => (
+                  <li key={s.shipmentId}>
+                    <label className="assign-radio assign-radio--shipment">
+                      <input
+                        type="radio"
+                        name="assign-shipment"
+                        checked={shipmentId === s.shipmentId}
+                        onChange={() => setShipmentId(s.shipmentId)}
+                      />
+                      <span className="assign-radio__shipment">
+                        <span className="ship-row__load">
+                          {s.loadWeightKg.toLocaleString()} kg · {s.loadVolumeCubicMeters} m³
                         </span>
-                      </label>
-                    </li>
-                  )
-                })}
+                        <ShipmentStops shipment={s} />
+                      </span>
+                    </label>
+                  </li>
+                ))}
               </ul>
             )}
             {relevant.length > 20 && (
@@ -252,7 +273,7 @@ export function AssignShipmentModal({ companyId, trucks, truckDetails, onClose, 
         {/* Step 3 — candidate on the map + feasibility */}
         {truck && shipment && (
           <div className="assign-step">
-            <h4>Step 3 — Where in the route</h4>
+            <h4>{given ? 'Step 2' : 'Step 3'} — Where in the route</h4>
             <ShipmentRouteMap
               pickup={{ latitude: shipment.pickupLatitude, longitude: shipment.pickupLongitude }}
               delivery={{ latitude: shipment.deliveryLatitude, longitude: shipment.deliveryLongitude }}

@@ -5,10 +5,22 @@ import {
   STOP_KIND_COLOR,
   collectFitPoints,
   fleetRouteChains,
+  shipmentRoute,
   useRouteGeometry,
   type LatLng,
 } from '@freight/fleetmanagement-core'
 import { dotIcon, FitBounds, fleetTruckIcon, InvalidateSizeOnResize, officeIcon, OSM_ATTRIBUTION, OSM_TILE_URL } from '@freight/web-ui'
+
+/** The shipment selected in the Shipments column, drawn over the fleet. */
+export interface FleetMapShipment {
+  pickup: { latitude: number; longitude: number; placeName: string }
+  delivery: { latitude: number; longitude: number; placeName: string }
+  /** Shown in the note over the map, e.g. "Depot → Store". */
+  label: string
+}
+
+/** The selected shipment's line: dark, so it stands apart from every truck's route colour. */
+const SHIPMENT_LINE_COLOR = '#1a1620'
 
 /** A truck to draw on the fleet map, in its route colour. */
 export interface FleetMapTruck {
@@ -31,6 +43,10 @@ interface FleetMapProps {
   /** Shown over the map when there is nothing to draw (e.g. "No active trucks"). */
   emptyMessage: string | null
   onSelectTruck: (truckId: string, truckName: string) => void
+  /** The selected shipment: its route is drawn on top and every truck fades. */
+  shipment?: FleetMapShipment | null
+  /** The note's "back to fleet": clears the selected shipment. */
+  onClearShipment?: () => void
 }
 
 /** Pixel radius of the ring trucks parked at the office are fanned out on. */
@@ -43,6 +59,8 @@ export function FleetMap({
   highlightedTruckId,
   emptyMessage,
   onSelectTruck,
+  shipment = null,
+  onClearShipment,
 }: FleetMapProps) {
   const onTrip = useMemo(() => trucks.filter((t) => t.detail.stops.length > 0), [trucks])
   const atOffice = useMemo(() => trucks.filter((t) => t.detail.stops.length === 0), [trucks])
@@ -60,12 +78,23 @@ export function FleetMap({
     [onTrip, positions],
   )
 
+  // The selected shipment: a two-stop route of its own, never joined to a truck's.
+  const shipmentStops = useMemo(
+    () => (shipment ? shipmentRoute(shipment.pickup, shipment.delivery) : []),
+    [shipment],
+  )
+  const { legs: shipmentLegs } = useRouteGeometry(shipmentStops)
+
   const allPoints = useMemo(
-    () => collectFitPoints([...allStops, ...(office ? [office] : []), ...truckPositions], legs),
-    [allStops, office, truckPositions, legs],
+    () =>
+      collectFitPoints([...allStops, ...(office ? [office] : []), ...truckPositions, ...shipmentStops], [
+        ...(legs ?? []),
+        ...(shipmentLegs ?? []),
+      ]),
+    [allStops, office, truckPositions, shipmentStops, legs, shipmentLegs],
   )
 
-  if (!office && trucks.length === 0) {
+  if (!office && trucks.length === 0 && !shipment) {
     return (
       <div className="map-placeholder">
         <span className="map-placeholder__badge">Map</span>
@@ -78,7 +107,9 @@ export function FleetMap({
     ? [office.latitude, office.longitude]
     : [allStops[0]?.latitude ?? 51, allStops[0]?.longitude ?? 10]
 
-  const isFaded = (truckId: string) => highlightedTruckId !== null && highlightedTruckId !== truckId
+  // A hovered truck stands out; otherwise, with a shipment selected, every truck fades behind it.
+  const isFaded = (truckId: string) =>
+    highlightedTruckId !== null ? highlightedTruckId !== truckId : shipment !== null
 
   return (
     <div className="tripmap fleetmap">
@@ -165,13 +196,42 @@ export function FleetMap({
             )
           })}
 
+        {shipment && (
+          <>
+            {(shipmentLegs ?? []).map((leg, i) => (
+              <Polyline
+                key={`shipment-${i}`}
+                positions={leg.path}
+                pathOptions={{ color: SHIPMENT_LINE_COLOR, weight: 5, opacity: 0.9, dashArray: leg.road ? undefined : '6 8' }}
+              />
+            ))}
+            <Marker position={[shipment.pickup.latitude, shipment.pickup.longitude]} icon={dotIcon(STOP_KIND_COLOR.Pickup)}>
+              <Tooltip>{`Pickup · ${shipment.pickup.placeName}`}</Tooltip>
+            </Marker>
+            <Marker position={[shipment.delivery.latitude, shipment.delivery.longitude]} icon={dotIcon(STOP_KIND_COLOR.Delivery)}>
+              <Tooltip>{`Delivery · ${shipment.delivery.placeName}`}</Tooltip>
+            </Marker>
+          </>
+        )}
+
         <FitBounds points={allPoints} />
         <InvalidateSizeOnResize />
       </MapContainer>
 
       {/* Notes float over the map so showing or clearing one never resizes it. */}
       <div className="fleetmap__notes">
-        {emptyMessage && <p className="fleetmap__note">{emptyMessage}</p>}
+        {shipment ? (
+          <p className="fleetmap__note fleetmap__note--shipment">
+            <span>{shipment.label}</span>
+            {onClearShipment && (
+              <button type="button" className="fleetmap__note-action" onClick={onClearShipment}>
+                ✕ back to fleet
+              </button>
+            )}
+          </p>
+        ) : (
+          emptyMessage && <p className="fleetmap__note">{emptyMessage}</p>
+        )}
         {legs === null && onTrip.length > 0 && <p className="fleetmap__note">Loading fleet routes…</p>}
         {anyStraightLine && (
           <p className="fleetmap__note fleetmap__note--warn">

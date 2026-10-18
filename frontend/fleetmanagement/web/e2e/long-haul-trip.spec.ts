@@ -152,12 +152,9 @@ test('a 10-14 day team-driver shipment runs the sim clock to full trip completio
   await test.step('assign the 10-14 day shipment to a new trip', async () => {
     // The long haul is an open shipment (offers only); assign a direct copy booked to this company.
     await bookDirectCopy(shipment, companyId)
-    await openDirectAssignModal(page)
+    await openDirectAssignModal(page, weightLabel(shipment))
 
     await page.locator('.assign-radio', { hasText: 'LongHaul-Truck' }).click()
-    await page
-      .locator('.assign-shipment-list .assign-radio', { hasText: weightLabel(shipment) })
-      .click()
 
     await expect(page.getByText('This shipment fits — ready to assign.')).toBeVisible({ timeout: 30_000 })
     await page.getByRole('button', { name: 'Assign shipment' }).click()

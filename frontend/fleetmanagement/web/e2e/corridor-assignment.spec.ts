@@ -100,7 +100,7 @@ async function buildActivatedFlatbedTruck(page: import('@playwright/test').Page,
   await expect(truckRow.getByRole('button', { name: 'Deactivate' })).toBeVisible()
 }
 
-/** Opens the full Assign-Shipment form from a Direct card in the Shipments column. */
+/** Opens the full Assign-Shipment form from the shipment's Direct card in the Shipments column. */
 const openAssignModal = openDirectAssignModal
 
 async function assignShipment(
@@ -108,9 +108,8 @@ async function assignShipment(
   shipment: ShipmentSummary,
   insertIndex?: number,
 ) {
-  await openAssignModal(page)
+  await openAssignModal(page, weightLabel(shipment))
   await page.locator('.assign-radio', { hasText: 'Corridor-Truck' }).click()
-  await page.locator('.assign-shipment-list .assign-radio', { hasText: weightLabel(shipment) }).click()
 
   if (insertIndex !== undefined) {
     const selects = page.locator('.assign-index__controls select')
@@ -146,9 +145,8 @@ test.skip('interleave 3 corridor shipments onto one Flatbed truck via the insert
   })
 
   await test.step('assigns corridor-1 (Berlin -> Munich) as a fresh trip', async () => {
-    await openAssignModal(page)
+    await openAssignModal(page, weightLabel(corridor1))
     await page.locator('.assign-radio', { hasText: 'Corridor-Truck' }).click()
-    await page.locator('.assign-shipment-list .assign-radio', { hasText: weightLabel(corridor1) }).click()
     await expect(page.getByText('This starts a new trip: pickup then delivery.')).toBeVisible()
     await expect(page.getByText('This shipment fits — ready to assign.')).toBeVisible({ timeout: 30_000 })
     await page.getByRole('button', { name: 'Assign shipment' }).click()
@@ -220,9 +218,8 @@ test.skip('regression: the corridor-3 insertion that used to hang (G15) now reso
   await assignShipment(page, corridor2, 1)
 
   // This used to hang; it must now resolve to feasible within a normal timeout.
-  await openAssignModal(page)
+  await openAssignModal(page, weightLabel(corridor3))
   await page.locator('.assign-radio', { hasText: 'Corridor-Truck' }).click()
-  await page.locator('.assign-shipment-list .assign-radio', { hasText: weightLabel(corridor3) }).click()
   const selects = page.locator('.assign-index__controls select')
   await selects.first().selectOption('3')
   await selects.nth(1).selectOption('3')

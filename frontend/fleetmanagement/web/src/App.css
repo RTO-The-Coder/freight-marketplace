@@ -257,6 +257,30 @@
   border-color: var(--c-danger);
 }
 
+/* The selected shipment's note: its route, and a way back to the plain fleet view. */
+.fleetmap__note--shipment {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-3);
+  color: var(--c-text);
+  font-weight: 600;
+  pointer-events: auto;
+}
+
+.fleetmap__note-action {
+  padding: 0;
+  background: none;
+  border: none;
+  color: var(--c-accent);
+  font: inherit;
+  font-weight: 400;
+  cursor: pointer;
+}
+
+.fleetmap__note-action:hover {
+  text-decoration: underline;
+}
+
 /* A truck on the fleet map, ringed in its route colour. */
 .fleetmap-truck {
   display: flex;
@@ -700,7 +724,6 @@ p[role='alert'] {
 }
 
 /* --- Open Shipments panel --------------------------------------- */
-.shipment-list,
 .assign-truck-list,
 .assign-shipment-list {
   list-style: none;
@@ -711,77 +734,200 @@ p[role='alert'] {
   gap: var(--space-2);
 }
 
-.shipment-card {
+/* Shipment cards: the shipper app's card (.ship-row in frontend/shipment/src/App.css), copied. */
+.ship-row {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  padding: var(--space-3);
+  background: var(--c-surface);
   border: 1px solid var(--c-border);
   border-radius: var(--radius-md);
-  overflow: hidden;
-}
-
-.shipment-card__head {
-  width: 100%;
-  display: flex;
-  align-items: baseline;
-  gap: var(--space-3);
-  padding: var(--space-3) var(--space-4);
-  background: var(--c-surface);
-  border: none;
-  cursor: pointer;
-  text-align: left;
   color: var(--c-text);
+  transition:
+    border-color var(--transition),
+    box-shadow var(--transition);
 }
 
-.shipment-card__head:hover {
-  background: var(--c-surface-sunken);
+.ship-row:hover {
+  border-color: var(--c-accent-border);
+  box-shadow: var(--shadow-sm);
 }
 
-.shipment-card__type {
-  flex: 0 0 7.5rem;
-  font-size: var(--text-base);
+/* The card's summary: a plain block button. */
+.shipment-card__select {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  width: 100%;
+  padding: 0;
+  background: none;
+  border: none;
+  color: inherit;
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+
+.shipment-card__select:focus-visible {
+  outline: 2px solid var(--c-accent);
+  outline-offset: 4px;
+  border-radius: var(--radius-sm);
+}
+
+.ship-row--selected,
+.ship-row--selected:hover {
+  border-color: var(--c-accent);
+  box-shadow: 0 0 0 1px var(--c-accent);
+}
+
+.ship-row__head {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  flex-wrap: wrap;
+}
+
+.ship-row__type {
   font-weight: 600;
+  font-size: var(--text-base);
 }
 
-.shipment-card__pickup {
-  font-size: var(--text-sm);
+.ship-row__load {
+  margin-left: auto;
+  font-size: var(--text-xs);
   color: var(--c-text-muted);
   font-variant-numeric: tabular-nums;
 }
 
-.shipment-card__chev {
-  margin-left: auto;
-  align-self: center;
-  color: var(--c-text-subtle);
+/* Pickup / Delivery: label | place (name over area) | window (date over times) */
+.ship-row__stops {
+  display: grid;
+  grid-template-columns: max-content minmax(0, 1fr) max-content;
+  column-gap: var(--space-3);
+  row-gap: var(--space-2);
+  align-items: start;
+  padding-block: var(--space-2);
+  border-block: 1px solid var(--c-border);
 }
 
+.ship-row__stop-label {
+  font-size: var(--text-xs);
+  font-weight: 600;
+  color: var(--c-text-muted);
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  padding-top: 2px;
+}
+
+.ship-row__place,
+.ship-row__window {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+}
+
+.ship-row__place-name {
+  font-size: var(--text-sm);
+  font-weight: 600;
+}
+
+.ship-row__place-area {
+  font-size: var(--text-xs);
+  color: var(--c-text-muted);
+}
+
+.ship-row__window {
+  align-items: flex-end;
+  font-size: var(--text-xs);
+  color: var(--c-text-muted);
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+
+.ship-row__window > :first-child {
+  color: var(--c-text);
+}
+
+.ship-row__note {
+  display: block;
+  font-size: var(--text-sm);
+  color: var(--c-text);
+}
+
+.ship-row__actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-2);
+}
+
+/* The selected card's map and actions. */
 .shipment-card__body {
-  padding: var(--space-3);
-  border-top: 1px solid var(--c-border);
   display: flex;
   flex-direction: column;
   gap: var(--space-3);
 }
 
-.shipment-facts {
-  display: grid;
-  grid-template-columns: max-content 1fr;
-  gap: var(--space-2) var(--space-4);
-  margin: 0;
+/* --- Shipments column: type, sort, advanced search ------------- */
+.shipment-filters {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
   font-size: var(--text-sm);
 }
 
-.shipment-facts dt {
+/* One line; Advanced search moves to the next line when the column is too narrow. */
+.shipment-filters__line {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-2) var(--space-3);
+}
+
+.shipment-filters__field {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-1);
   color: var(--c-text-muted);
 }
 
-.shipment-facts dd {
-  margin: 0;
-  color: var(--c-text);
-  display: flex;
-  flex-direction: column;
-  gap: 2px;
+.shipment-filters__advanced {
+  display: inline-flex;
+  gap: var(--space-2);
+  margin-left: auto;
 }
 
-.shipment-facts__warn {
-  color: var(--c-danger);
+/* Advanced search: label | from – to */
+.shipment-filters__dates {
+  display: grid;
+  grid-template-columns: max-content minmax(0, 1fr);
+  align-items: center;
+  gap: var(--space-2) var(--space-3);
+  padding: var(--space-2) var(--space-3);
+  background: var(--c-surface-sunken);
+  border-radius: var(--radius-md);
+}
+
+.shipment-filters__label {
+  color: var(--c-text-muted);
+}
+
+.shipment-filters__range {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-1);
+  min-width: 0;
+}
+
+.shipment-filters__range input {
+  min-width: 0;
+}
+
+.shipment-filters__hint {
+  grid-column: 1 / -1;
+  font-size: var(--text-xs);
+  color: var(--c-text-subtle);
 }
 
 .capbar {
@@ -845,6 +991,25 @@ p[role='alert'] {
   color: var(--c-text);
 }
 
+/* The trucks that can't take it, each with why - below the ones that can. */
+.eligibility-list--unfit {
+  color: var(--c-text-muted);
+}
+
+/* A truck that can take a direct shipment: name, extra km/time and where its stops go | Assign. */
+.assign-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-3);
+}
+
+.assign-row__text {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+}
+
 /* --- Assign-shipment flow -------------------------------------- */
 .assign-step {
   border-top: 1px solid var(--c-border);
@@ -878,6 +1043,24 @@ p[role='alert'] {
 
 .assign-radio input {
   margin-top: 2px;
+}
+
+/* A shipment in the form's list: load above its pickup and delivery. */
+.assign-radio__shipment {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+}
+
+.assign-radio__shipment .ship-row__load {
+  margin-left: 0;
+}
+
+/* The shipment the form was opened for, on top. */
+.assign-shipment-summary {
+  cursor: default;
 }
 
 /* The assign modal carries more than the default 460px of content. */

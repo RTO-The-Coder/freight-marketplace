@@ -159,29 +159,16 @@ test('advancing the clock moves a truck along its route (a Pending stop becomes 
   })
 
   await test.step('assign the first matching pending shipment to a new trip', async () => {
-    // Book a direct copy of a seeded open BoxVan shipment to this company, so the full assign
-    // form lists it next to the company's own seeded direct shipments.
+    // Book a direct copy of a seeded open BoxVan shipment to this company, so it shows in the
+    // Direct list next to the company's own seeded direct shipments.
     const boxVan = (await pendingShipments()).find((s) => s.requiredTruckType === 'BoxVan' && !s.isDirect)
     expect(boxVan, 'No open BoxVan shipment is pending in the seed data — this test needs at least one.').toBeDefined()
     await bookDirectCopy(boxVan!, companyId)
-    await openDirectAssignModal(page)
+    // The company also has seeded direct shipments of its own, so open the copy's card by its load.
+    await openDirectAssignModal(page, `${Math.round(boxVan!.loadWeightKg).toLocaleString('en-US')} kg`)
 
-    // Step 2 filters to shipments matching the SELECTED truck's own type and
-    // capacity (see AssignShipmentModal's `relevant` filter). The company also has
-    // seeded direct shipments of its own, so pick the copy by its load, not the first row.
+    // The form offers only trucks of the shipment's type that are big enough.
     await page.locator('.assign-radio', { hasText: 'Clock-Truck' }).click()
-    await expect(page.getByRole('heading', { name: /Relevant shipments for Clock-Truck/ })).toBeVisible()
-
-    await expect(
-      page.getByText('No shipment booked directly to this company matches this truck.'),
-      'The direct BoxVan copy booked above should match Clock-Truck.',
-    ).toHaveCount(0)
-
-    const copy = page
-      .locator('.assign-shipment-list .assign-radio', { hasText: `${Math.round(boxVan!.loadWeightKg).toLocaleString('en-US')} kg` })
-      .first()
-    await expect(copy).toBeVisible({ timeout: 10_000 })
-    await copy.click()
 
     await expect(page.getByText('This shipment fits — ready to assign.')).toBeVisible({ timeout: 30_000 })
     await page.getByRole('button', { name: 'Assign shipment' }).click()
