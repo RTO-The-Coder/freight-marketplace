@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import { shipment, stop, truckDetail, truckSummary } from '../testData'
-import { insertionPreviewOrder, pendingRouteStops, shipmentsFittingTruck } from './assignment'
+import { insertionPreviewOrder, pendingRouteStops, shipmentsFittingTruck, truckUnfitReason } from './assignment'
 
 describe('shipmentsFittingTruck', () => {
   // Medium truck: 9,000 kg / 45 m³.
@@ -76,5 +76,24 @@ describe('insertionPreviewOrder', () => {
       'Delivery ▸',
       'Office (return)',
     ])
+  })
+})
+
+describe('truckUnfitReason', () => {
+  // Medium Flatbed: 9,000 kg / 45 m³; the shipment needs a Flatbed and fits.
+  const fits = shipment({ requiredTruckType: 'Flatbed', loadWeightKg: 9000, loadVolumeCubicMeters: 45 })
+
+  it('inactive first, then no driver', () => {
+    expect(truckUnfitReason(truckSummary({ isActive: false, hasDriverAssignment: false }), fits)).toBe('Inactive')
+    expect(truckUnfitReason(truckSummary({ hasDriverAssignment: false }), fits)).toBe('No driver assigned')
+  })
+
+  it('then a load over the rated capacity', () => {
+    expect(truckUnfitReason(truckSummary(), shipment({ loadWeightKg: 9001 }))).toBe('Too small for the load')
+    expect(truckUnfitReason(truckSummary(), shipment({ loadVolumeCubicMeters: 46 }))).toBe('Too small for the load')
+  })
+
+  it('otherwise it is the route check', () => {
+    expect(truckUnfitReason(truckSummary(), fits)).toBe("Doesn't fit its route, time windows or driving rules")
   })
 })

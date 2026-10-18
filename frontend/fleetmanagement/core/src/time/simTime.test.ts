@@ -6,8 +6,26 @@ import {
   fmtSimShort,
   fmtSimTimeOnly,
   fmtSimWindow,
+  fmtSimWindowLines,
   isoToDatetimeLocal,
 } from './simTime'
+
+describe('fmtSimWindowLines', () => {
+  it('puts the date above both times for a one-day window', () => {
+    const [top, bottom] = fmtSimWindowLines('2026-08-01T05:00:00Z', '2026-08-01T09:00:00Z')
+    expect(top).not.toContain('05:00')
+    expect(bottom).toBe(`${fmtSimTimeOnly('2026-08-01T05:00:00Z')} – ${fmtSimTimeOnly('2026-08-01T09:00:00Z')}`)
+    expect(bottom).toContain('05:00')
+    expect(bottom).toContain('09:00')
+  })
+
+  it('puts each end on its own line when the window spans days', () => {
+    const [top, bottom] = fmtSimWindowLines('2026-08-01T22:00:00Z', '2026-08-02T02:00:00Z')
+    expect(top).toContain('22:00')
+    expect(top.endsWith('–')).toBe(true)
+    expect(bottom).toContain('02:00')
+  })
+})
 
 // The one property every test here protects: a UTC timestamp must render with
 // its own UTC clock reading, never shifted by the host's local timezone. These

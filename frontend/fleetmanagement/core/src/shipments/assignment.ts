@@ -23,6 +23,20 @@ export function shipmentsFittingTruck(truck: TruckSummaryDto, shipments: Shipmen
 }
 
 /**
+ * Why a truck of the shipment's type that the evaluation found infeasible can't take it, worked
+ * out from what the screen already knows; the server's checks in its order (active, driver), then
+ * the truck's rated capacity. Anything else is the route check itself. Trucks of another type are
+ * not listed at all, so they have no reason.
+ */
+export function truckUnfitReason(truck: TruckSummaryDto, shipment: ShipmentSummaryDto): string {
+  if (!truck.isActive) return 'Inactive'
+  if (!truck.hasDriverAssignment) return 'No driver assigned'
+  const cap = CAPACITY_BY_SIZE[truck.truckSize]
+  if (shipment.loadWeightKg > cap.weightKg || shipment.loadVolumeCubicMeters > cap.volumeCubicMeters) return 'Too small for the load'
+  return "Doesn't fit its route, time windows or driving rules"
+}
+
+/**
  * The pending, non-Office stops already on the truck's route, in route order —
  * the list both insert indices are measured against (0 = before all, N = after all).
  */

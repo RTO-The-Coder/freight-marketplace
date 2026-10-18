@@ -64,6 +64,21 @@ export function fmtSimWindow(earliest: string, latest: string): string {
 }
 
 /**
+ * A window as two short lines for a card: "Aug 1" above "05:00 – 09:00" when both ends share a
+ * UTC day, otherwise "Aug 1, 22:00 –" above "Aug 2, 02:00".
+ */
+export function fmtSimWindowLines(earliest: string, latest: string): [string, string] {
+  const a = parse(earliest)
+  const b = parse(latest)
+  if (!a || !b) return [`${earliest} –`, latest]
+  if (a.toISOString().slice(0, 10) === b.toISOString().slice(0, 10)) {
+    const date = a.toLocaleDateString(undefined, { timeZone: 'UTC', month: 'short', day: 'numeric' })
+    return [date, `${fmtSimTimeOnly(earliest)} – ${fmtSimTimeOnly(latest)}`]
+  }
+  return [`${fmtSimShort(earliest)} –`, fmtSimShort(latest)]
+}
+
+/**
  * ISO -> value for `<input type="datetime-local">`. The picker has no timezone,
  * so we feed it the UTC wall-clock components — what the user then edits is read
  * straight back as simulation time by {@link datetimeLocalToIso}.
