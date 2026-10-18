@@ -9,7 +9,11 @@
     "DeliveryLon": 12.33,
     "Tier": "Short",
     "DistanceKm": 192.1,
-    "TimeTicks": 27
+    "TimeTicks": 27,
+    "PickupPostcode": "10178",
+    "PickupCity": "Berlin",
+    "DeliveryPostcode": "04229",
+    "DeliveryCity": "Leipzig"
   },
   {
     "PairId": "short-munich-nuremberg",
@@ -21,7 +25,11 @@
     "DeliveryLon": 11.05,
     "Tier": "Short",
     "DistanceKm": 164,
-    "TimeTicks": 20
+    "TimeTicks": 20,
+    "PickupPostcode": "80803",
+    "PickupCity": "Munich",
+    "DeliveryPostcode": "90439",
+    "DeliveryCity": "Nuremberg"
   },
   {
     "PairId": "short-hamburg-hannover",
@@ -33,7 +41,11 @@
     "DeliveryLon": 9.69,
     "Tier": "Short",
     "DistanceKm": 165.5,
-    "TimeTicks": 22
+    "TimeTicks": 22,
+    "PickupPostcode": "22765",
+    "PickupCity": "Hamburg",
+    "DeliveryPostcode": "30453",
+    "DeliveryCity": "Hanover"
   },
   {
     "PairId": "short-cologne-frankfurt",
@@ -45,7 +57,11 @@
     "DeliveryLon": 8.6821,
     "Tier": "Short",
     "DistanceKm": 192.8,
-    "TimeTicks": 26
+    "TimeTicks": 26,
+    "PickupPostcode": "50825",
+    "PickupCity": "Cologne",
+    "DeliveryPostcode": "60594",
+    "DeliveryCity": "Frankfurt"
   },
   {
     "PairId": "short-nuremberg-furth",
@@ -57,7 +73,11 @@
     "DeliveryLon": 10.972,
     "Tier": "Short",
     "DistanceKm": 9.8,
-    "TimeTicks": 3
+    "TimeTicks": 3,
+    "PickupPostcode": "90439",
+    "PickupCity": "Nuremberg",
+    "DeliveryPostcode": "90766",
+    "DeliveryCity": "F\u00FCrth"
   },
   {
     "PairId": "short-hannover-hildesheim",
@@ -69,7 +89,11 @@
     "DeliveryLon": 9.928,
     "Tier": "Short",
     "DistanceKm": 43.6,
-    "TimeTicks": 9
+    "TimeTicks": 9,
+    "PickupPostcode": "30453",
+    "PickupCity": "Hanover",
+    "DeliveryPostcode": "31137",
+    "DeliveryCity": "Hildesheim"
   },
   {
     "PairId": "short-goettingen-hildesheim",
@@ -81,7 +105,11 @@
     "DeliveryLon": 9.928,
     "Tier": "Short",
     "DistanceKm": 94.6,
-    "TimeTicks": 13
+    "TimeTicks": 13,
+    "PickupPostcode": "37079",
+    "PickupCity": "G\u00F6ttingen",
+    "DeliveryPostcode": "31137",
+    "DeliveryCity": "Hildesheim"
   },
   {
     "PairId": "short-leipzig-erfurt",
@@ -93,7 +121,11 @@
     "DeliveryLon": 11.027,
     "Tier": "Short",
     "DistanceKm": 150.3,
-    "TimeTicks": 20
+    "TimeTicks": 20,
+    "PickupPostcode": "04229",
+    "PickupCity": "Leipzig",
+    "DeliveryPostcode": "99086",
+    "DeliveryCity": "Erfurt"
   },
   {
     "PairId": "medium-berlin-munich",
@@ -105,7 +137,11 @@
     "DeliveryLon": 11.5822,
     "Tier": "Medium",
     "DistanceKm": 581.3,
-    "TimeTicks": 70
+    "TimeTicks": 70,
+    "PickupPostcode": "10178",
+    "PickupCity": "Berlin",
+    "DeliveryPostcode": "80803",
+    "DeliveryCity": "Munich"
   },
   {
     "PairId": "medium-cologne-vienna",
@@ -117,7 +153,11 @@
     "DeliveryLon": 16.382,
     "Tier": "Medium",
     "DistanceKm": 900.9,
-    "TimeTicks": 108
+    "TimeTicks": 108,
+    "PickupPostcode": "50825",
+    "PickupCity": "Cologne",
+    "DeliveryPostcode": "1100",
+    "DeliveryCity": "Vienna"
   },
   {
     "PairId": "medium-hamburg-milan",
@@ -129,7 +169,11 @@
     "DeliveryLon": 9.173,
     "Tier": "Medium",
     "DistanceKm": 1116.1,
-    "TimeTicks": 140
+    "TimeTicks": 140,
+    "PickupPostcode": "22765",
+    "PickupCity": "Hamburg",
+    "DeliveryPostcode": "20144",
+    "DeliveryCity": "Milan"
   },
   {
     "PairId": "medium-frankfurt-warsaw",
@@ -141,7 +185,11 @@
     "DeliveryLon": 21.041,
     "Tier": "Medium",
     "DistanceKm": 1097.3,
-    "TimeTicks": 127
+    "TimeTicks": 127,
+    "PickupPostcode": "60594",
+    "PickupCity": "Frankfurt",
+    "DeliveryPostcode": "03-737",
+    "DeliveryCity": "Warsaw"
   },
   {
     "PairId": "medium-munich-prague",
@@ -153,7 +201,11 @@
     "DeliveryLon": 14.4378,
     "Tier": "Medium",
     "DistanceKm": 377.2,
-    "TimeTicks": 47
+    "TimeTicks": 47,
+    "PickupPostcode": "80803",
+    "PickupCity": "Munich",
+    "DeliveryPostcode": "120 00",
+    "DeliveryCity": "Prague"
   },
   {
     "PairId": "medium-erfurt-brno",
@@ -165,7 +217,11 @@
     "DeliveryLon": 16.648,
     "Tier": "Medium",
     "DistanceKm": 529,
-    "TimeTicks": 72
+    "TimeTicks": 72,
+    "PickupPostcode": "99086",
+    "PickupCity": "Erfurt",
+    "DeliveryPostcode": "615 00",
+    "DeliveryCity": "Brno"
   },
   {
     "PairId": "long-berlin-lisbon",
@@ -177,7 +233,11 @@
     "DeliveryLon": -9.1288,
     "Tier": "LongHaulSingleDriver",
     "DistanceKm": 2791.2,
-    "TimeTicks": 345
+    "TimeTicks": 345,
+    "PickupPostcode": "10178",
+    "PickupCity": "Berlin",
+    "DeliveryPostcode": "1100-216",
+    "DeliveryCity": "Lisbon"
   },
   {
     "PairId": "long-hamburg-athens",
@@ -189,7 +249,11 @@
     "DeliveryLon": 23.7348,
     "Tier": "LongHaulSingleDriver",
     "DistanceKm": 2634.6,
-    "TimeTicks": 328
+    "TimeTicks": 328,
+    "PickupPostcode": "22765",
+    "PickupCity": "Hamburg",
+    "DeliveryPostcode": "105 57",
+    "DeliveryCity": "Athens"
   },
   {
     "PairId": "long-munich-tallinn",
@@ -201,7 +265,11 @@
     "DeliveryLon": 24.7536,
     "Tier": "LongHaulSingleDriver",
     "DistanceKm": 2087.9,
-    "TimeTicks": 279
+    "TimeTicks": 279,
+    "PickupPostcode": "80803",
+    "PickupCity": "Munich",
+    "DeliveryPostcode": "10111",
+    "DeliveryCity": "Tallinn"
   },
   {
     "PairId": "long-frankfurt-madrid",
@@ -213,7 +281,11 @@
     "DeliveryLon": -3.652,
     "Tier": "LongHaulSingleDriver",
     "DistanceKm": 1840.2,
-    "TimeTicks": 228
+    "TimeTicks": 228,
+    "PickupPostcode": "60594",
+    "PickupCity": "Frankfurt",
+    "DeliveryPostcode": "28018",
+    "DeliveryCity": "Madrid"
   },
   {
     "PairId": "long-hildesheim-coimbra",
@@ -225,7 +297,11 @@
     "DeliveryLon": -8.43,
     "Tier": "LongHaulSingleDriver",
     "DistanceKm": 2385.1,
-    "TimeTicks": 298
+    "TimeTicks": 298,
+    "PickupPostcode": "31137",
+    "PickupCity": "Hildesheim",
+    "DeliveryPostcode": "3040-255",
+    "DeliveryCity": "Coimbra"
   },
   {
     "PairId": "team-berlin-astana",
@@ -237,7 +313,11 @@
     "DeliveryLon": 71.4704,
     "Tier": "LongHaulTeamDriver",
     "DistanceKm": 4517.4,
-    "TimeTicks": 694
+    "TimeTicks": 694,
+    "PickupPostcode": "10178",
+    "PickupCity": "Berlin",
+    "DeliveryPostcode": "010000",
+    "DeliveryCity": "Astana"
   },
   {
     "PairId": "team-lisbon-tbilisi",
@@ -249,7 +329,11 @@
     "DeliveryLon": 44.8015,
     "Tier": "LongHaulTeamDriver",
     "DistanceKm": 5715.4,
-    "TimeTicks": 740
+    "TimeTicks": 740,
+    "PickupPostcode": "1100-216",
+    "PickupCity": "Lisbon",
+    "DeliveryPostcode": "0108",
+    "DeliveryCity": "Tbilisi"
   },
   {
     "PairId": "corridor-1-berlin-munich",
@@ -261,7 +345,11 @@
     "DeliveryLon": 11.5822,
     "Tier": "CorridorOverlap",
     "DistanceKm": 581.3,
-    "TimeTicks": 70
+    "TimeTicks": 70,
+    "PickupPostcode": "10178",
+    "PickupCity": "Berlin",
+    "DeliveryPostcode": "80803",
+    "DeliveryCity": "Munich"
   },
   {
     "PairId": "corridor-2-leipzig-nuremberg",
@@ -273,7 +361,11 @@
     "DeliveryLon": 11.05,
     "Tier": "CorridorOverlap",
     "DistanceKm": 282,
-    "TimeTicks": 35
+    "TimeTicks": 35,
+    "PickupPostcode": "04229",
+    "PickupCity": "Leipzig",
+    "DeliveryPostcode": "90439",
+    "DeliveryCity": "Nuremberg"
   },
   {
     "PairId": "corridor-3-nuremberg-munich",
@@ -285,7 +377,11 @@
     "DeliveryLon": 11.5822,
     "Tier": "CorridorOverlap",
     "DistanceKm": 166.7,
-    "TimeTicks": 21
+    "TimeTicks": 21,
+    "PickupPostcode": "90439",
+    "PickupCity": "Nuremberg",
+    "DeliveryPostcode": "80803",
+    "DeliveryCity": "Munich"
   },
   {
     "PairId": "short-cologne-duesseldorf",
@@ -297,7 +393,11 @@
     "DeliveryLon": 6.772,
     "Tier": "Short",
     "DistanceKm": 34.2,
-    "TimeTicks": 6
+    "TimeTicks": 6,
+    "PickupPostcode": "50825",
+    "PickupCity": "Cologne",
+    "DeliveryPostcode": "40223",
+    "DeliveryCity": "Dusseldorf"
   },
   {
     "PairId": "short-bonn-essen",
@@ -309,7 +409,11 @@
     "DeliveryLon": 7.006,
     "Tier": "Short",
     "DistanceKm": 90.5,
-    "TimeTicks": 13
+    "TimeTicks": 13,
+    "PickupPostcode": "53225",
+    "PickupCity": "Bonn",
+    "DeliveryPostcode": "45131",
+    "DeliveryCity": "Essen"
   },
   {
     "PairId": "short-aachen-cologne",
@@ -321,7 +425,11 @@
     "DeliveryLon": 6.92,
     "Tier": "Short",
     "DistanceKm": 76.8,
-    "TimeTicks": 11
+    "TimeTicks": 11,
+    "PickupPostcode": "52066",
+    "PickupCity": "Aachen",
+    "DeliveryPostcode": "50825",
+    "DeliveryCity": "Cologne"
   },
   {
     "PairId": "short-cologne-dortmund",
@@ -333,7 +441,11 @@
     "DeliveryLon": 7.51,
     "Tier": "Short",
     "DistanceKm": 90.2,
-    "TimeTicks": 14
+    "TimeTicks": 14,
+    "PickupPostcode": "50825",
+    "PickupCity": "Cologne",
+    "DeliveryPostcode": "44263",
+    "DeliveryCity": "Dortmund"
   },
   {
     "PairId": "short-hamburg-bremen",
@@ -345,7 +457,11 @@
     "DeliveryLon": 8.79,
     "Tier": "Short",
     "DistanceKm": 116.9,
-    "TimeTicks": 16
+    "TimeTicks": 16,
+    "PickupPostcode": "22765",
+    "PickupCity": "Hamburg",
+    "DeliveryPostcode": "28199",
+    "DeliveryCity": "Bremen"
   },
   {
     "PairId": "short-kiel-hamburg",
@@ -357,7 +473,11 @@
     "DeliveryLon": 9.9349,
     "Tier": "Short",
     "DistanceKm": 97.4,
-    "TimeTicks": 14
+    "TimeTicks": 14,
+    "PickupPostcode": "24143",
+    "PickupCity": "Kiel",
+    "DeliveryPostcode": "22765",
+    "DeliveryCity": "Hamburg"
   },
   {
     "PairId": "short-vienna-graz",
@@ -369,7 +489,11 @@
     "DeliveryLon": 15.43,
     "Tier": "Short",
     "DistanceKm": 193.2,
-    "TimeTicks": 27
+    "TimeTicks": 27,
+    "PickupPostcode": "1100",
+    "PickupCity": "Vienna",
+    "DeliveryPostcode": "8020",
+    "DeliveryCity": "Graz"
   },
   {
     "PairId": "short-linz-vienna",
@@ -381,7 +505,11 @@
     "DeliveryLon": 16.382,
     "Tier": "Short",
     "DistanceKm": 187.8,
-    "TimeTicks": 26
+    "TimeTicks": 26,
+    "PickupPostcode": "4040",
+    "PickupCity": "Linz",
+    "DeliveryPostcode": "1100",
+    "DeliveryCity": "Vienna"
   },
   {
     "PairId": "short-vienna-bratislava",
@@ -393,7 +521,11 @@
     "DeliveryLon": 17.11,
     "Tier": "Short",
     "DistanceKm": 78.3,
-    "TimeTicks": 12
+    "TimeTicks": 12,
+    "PickupPostcode": "1100",
+    "PickupCity": "Vienna",
+    "DeliveryPostcode": "851 02",
+    "DeliveryCity": "Bratislava"
   },
   {
     "PairId": "short-prague-brno",
@@ -405,7 +537,11 @@
     "DeliveryLon": 16.648,
     "Tier": "Short",
     "DistanceKm": 210.8,
-    "TimeTicks": 28
+    "TimeTicks": 28,
+    "PickupPostcode": "120 00",
+    "PickupCity": "Prague",
+    "DeliveryPostcode": "615 00",
+    "DeliveryCity": "Brno"
   },
   {
     "PairId": "short-prague-dresden",
@@ -417,7 +553,11 @@
     "DeliveryLon": 13.75,
     "Tier": "Short",
     "DistanceKm": 149.1,
-    "TimeTicks": 22
+    "TimeTicks": 22,
+    "PickupPostcode": "120 00",
+    "PickupCity": "Prague",
+    "DeliveryPostcode": "01099",
+    "DeliveryCity": "Dresden"
   },
   {
     "PairId": "short-pilsen-prague",
@@ -429,7 +569,11 @@
     "DeliveryLon": 14.4378,
     "Tier": "Short",
     "DistanceKm": 89.1,
-    "TimeTicks": 14
+    "TimeTicks": 14,
+    "PickupPostcode": "312 00",
+    "PickupCity": "Pilsen",
+    "DeliveryPostcode": "120 00",
+    "DeliveryCity": "Prague"
   },
   {
     "PairId": "short-lyon-grenoble",
@@ -441,7 +585,11 @@
     "DeliveryLon": 5.714,
     "Tier": "Short",
     "DistanceKm": 104.3,
-    "TimeTicks": 16
+    "TimeTicks": 16,
+    "PickupPostcode": "69003",
+    "PickupCity": "Lyon",
+    "DeliveryPostcode": "38000",
+    "DeliveryCity": "Grenoble"
   },
   {
     "PairId": "medium-lyon-marseille",
@@ -453,7 +601,11 @@
     "DeliveryLon": 5.366,
     "Tier": "Medium",
     "DistanceKm": 313.5,
-    "TimeTicks": 42
+    "TimeTicks": 42,
+    "PickupPostcode": "69003",
+    "PickupCity": "Lyon",
+    "DeliveryPostcode": "13002",
+    "DeliveryCity": "Marseille"
   },
   {
     "PairId": "short-geneva-lyon",
@@ -465,7 +617,11 @@
     "DeliveryLon": 4.859,
     "Tier": "Short",
     "DistanceKm": 147.5,
-    "TimeTicks": 22
+    "TimeTicks": 22,
+    "PickupPostcode": "1205",
+    "PickupCity": "Geneva",
+    "DeliveryPostcode": "69003",
+    "DeliveryCity": "Lyon"
   },
   {
     "PairId": "team-loop-01-brussels-paris",
@@ -477,7 +633,11 @@
     "DeliveryLon": 2.386,
     "Tier": "TeamLoop",
     "DistanceKm": 310,
-    "TimeTicks": 43
+    "TimeTicks": 43,
+    "PickupPostcode": "1050",
+    "PickupCity": "Ixelles - Elsene",
+    "DeliveryPostcode": "75012",
+    "DeliveryCity": "Paris"
   },
   {
     "PairId": "team-loop-02-lille-metz",
@@ -489,7 +649,11 @@
     "DeliveryLon": 6.18,
     "Tier": "TeamLoop",
     "DistanceKm": 397.1,
-    "TimeTicks": 49
+    "TimeTicks": 49,
+    "PickupPostcode": "59900",
+    "PickupCity": "Lille",
+    "DeliveryPostcode": "57000",
+    "DeliveryCity": "Metz"
   },
   {
     "PairId": "team-loop-03-reims-basel",
@@ -501,7 +665,11 @@
     "DeliveryLon": 7.598,
     "Tier": "TeamLoop",
     "DistanceKm": 480.4,
-    "TimeTicks": 60
+    "TimeTicks": 60,
+    "PickupPostcode": "51100",
+    "PickupCity": "Reims",
+    "DeliveryPostcode": "4005",
+    "DeliveryCity": "Basel"
   },
   {
     "PairId": "team-loop-04-strasbourg-innsbruck",
@@ -513,7 +681,11 @@
     "DeliveryLon": 11.41,
     "Tier": "TeamLoop",
     "DistanceKm": 465.9,
-    "TimeTicks": 64
+    "TimeTicks": 64,
+    "PickupPostcode": "67100",
+    "PickupCity": "Strasbourg",
+    "DeliveryPostcode": "6020",
+    "DeliveryCity": "Innsbruck"
   },
   {
     "PairId": "team-loop-05-zurich-salzburg",
@@ -525,7 +697,11 @@
     "DeliveryLon": 13.03,
     "Tier": "TeamLoop",
     "DistanceKm": 456.5,
-    "TimeTicks": 61
+    "TimeTicks": 61,
+    "PickupPostcode": "8048",
+    "PickupCity": "Zurich",
+    "DeliveryPostcode": "5020",
+    "DeliveryCity": "Salzburg"
   },
   {
     "PairId": "team-loop-06-munich-vienna",
@@ -537,7 +713,11 @@
     "DeliveryLon": 16.382,
     "Tier": "TeamLoop",
     "DistanceKm": 404.7,
-    "TimeTicks": 53
+    "TimeTicks": 53,
+    "PickupPostcode": "80803",
+    "PickupCity": "Munich",
+    "DeliveryPostcode": "1100",
+    "DeliveryCity": "Vienna"
   },
   {
     "PairId": "team-loop-07-linz-prague",
@@ -549,7 +729,11 @@
     "DeliveryLon": 14.4378,
     "Tier": "TeamLoop",
     "DistanceKm": 239.9,
-    "TimeTicks": 35
+    "TimeTicks": 35,
+    "PickupPostcode": "4040",
+    "PickupCity": "Linz",
+    "DeliveryPostcode": "120 00",
+    "DeliveryCity": "Prague"
   },
   {
     "PairId": "team-loop-08-brno-leipzig",
@@ -561,7 +745,11 @@
     "DeliveryLon": 12.33,
     "Tier": "TeamLoop",
     "DistanceKm": 467,
-    "TimeTicks": 61
+    "TimeTicks": 61,
+    "PickupPostcode": "615 00",
+    "PickupCity": "Brno",
+    "DeliveryPostcode": "04229",
+    "DeliveryCity": "Leipzig"
   },
   {
     "PairId": "team-loop-09-dresden-magdeburg",
@@ -573,7 +761,11 @@
     "DeliveryLon": 11.615,
     "Tier": "TeamLoop",
     "DistanceKm": 228.6,
-    "TimeTicks": 27
+    "TimeTicks": 27,
+    "PickupPostcode": "01099",
+    "PickupCity": "Dresden",
+    "DeliveryPostcode": "39112",
+    "DeliveryCity": "Magdeburg"
   },
   {
     "PairId": "team-loop-10-berlin-hamburg",
@@ -585,7 +777,11 @@
     "DeliveryLon": 9.9349,
     "Tier": "TeamLoop",
     "DistanceKm": 293.3,
-    "TimeTicks": 37
+    "TimeTicks": 37,
+    "PickupPostcode": "10178",
+    "PickupCity": "Berlin",
+    "DeliveryPostcode": "22765",
+    "DeliveryCity": "Hamburg"
   },
   {
     "PairId": "team-loop-11-hannover-muenster",
@@ -597,7 +793,11 @@
     "DeliveryLon": 7.64,
     "Tier": "TeamLoop",
     "DistanceKm": 205.7,
-    "TimeTicks": 27
+    "TimeTicks": 27,
+    "PickupPostcode": "30453",
+    "PickupCity": "Hanover",
+    "DeliveryPostcode": "48165",
+    "DeliveryCity": "M\u00FCnster"
   },
   {
     "PairId": "team-loop-12-bremen-dortmund",
@@ -609,6 +809,10 @@
     "DeliveryLon": 7.51,
     "Tier": "TeamLoop",
     "DistanceKm": 234.5,
-    "TimeTicks": 29
+    "TimeTicks": 29,
+    "PickupPostcode": "28199",
+    "PickupCity": "Bremen",
+    "DeliveryPostcode": "44263",
+    "DeliveryCity": "Dortmund"
   }
 ]

@@ -12,8 +12,9 @@ using ShipmentAggregate = Freight.Domain.Client.Shipment;
 using ShipperAggregate = Freight.Domain.Client.Shipper;
 
 // --build-fixture: one-time/rarely-rerun mode that calls the real OSRM routing service for
-// every pair in LocationPairs.All and writes Fixtures/route-pairs.json. The ordinary seed
-// run below never takes this path and never calls OSRM itself - see Fixtures/FixtureBuilder.cs.
+// every pair in LocationPairs.All, names every place by its area on Nominatim, and writes
+// Fixtures/route-pairs.json. The ordinary seed run below never takes this path and never
+// calls OSRM or Nominatim itself - see Fixtures/FixtureBuilder.cs.
 if (args.Contains("--build-fixture"))
 {
     // Write directly into the source tree (found by walking up from the build output to the
@@ -72,6 +73,10 @@ await using var db = new FreightDbContext(optionsBuilder.Options);
 // always produces the same dataset (relative to whatever anchorUtc is configured).
 var random = new Random(20260817);
 
+// Saved-address names draw from their own sequence, so adding address books left every draw
+// above (shippers, windows, loads) - and so the seeded shipments - unchanged.
+var addressRandom = new Random(20260818);
+
 // ---------------------------------------------------------------------------
 // Route-pair fixture - real OSRM-computed distance/time per pickup->delivery pair,
 // precomputed once via `dotnet run --build-fixture` (see Fixtures/FixtureBuilder.cs) and
@@ -108,6 +113,83 @@ GeoLocation PlaceLocation(string placeName)
     return pair.PickupName == placeName
         ? GeoLocation.Create(pair.PickupLat, pair.PickupLon)
         : GeoLocation.Create(pair.DeliveryLat, pair.DeliveryLon);
+}
+
+// A fixture place's generic area, e.g. "1100 Favoriten, Vienna" for "Vienna-Favoriten" - what
+// seeded addresses, shipments and offices are named by (ADR 0013). Postcode and city were looked
+// up once by --build-fixture; the suburb is the place name's own (after the city), just as a
+// shipper's typed suburb names a real saved address.
+string PlaceArea(string placeName)
+{
+    var pair = routePairs.FirstOrDefault(p => p.PickupName == placeName || p.DeliveryName == placeName)
+        ?? throw new InvalidOperationException($"Place '{placeName}' is not in the route-pair fixture.");
+    var (postcode, city) = pair.PickupName == placeName
+        ? (pair.PickupPostcode, pair.PickupCity)
+        : (pair.DeliveryPostcode, pair.DeliveryCity);
+    if (string.IsNullOrWhiteSpace(city))
+    {
+        throw new InvalidOperationException($"Place '{placeName}' has no city in the fixture - run `dotnet run --build-fixture`.");
+    }
+
+    var suburb = placeName.Contains('-') ? placeName[(placeName.IndexOf('-') + 1)..] : placeName;
+    return ShipperAddress.ComposeAreaName(postcode, suburb, city);
+}
+
+// ---------------------------------------------------------------------------
+// Address books - every seeded shipment is booked the way the shipper app books one: from two
+// of its shipper's saved addresses, copying their place name ("Warehouse — 1100 Favoriten,
+// Vienna") and coordinates. A shipper's address for a fixture place is created the first time
+// one of its shipments uses that place, under a business-style name unique within its book.
+// ---------------------------------------------------------------------------
+string[] addressLabels =
+[
+    "Warehouse", "Depot", "Distribution centre", "Plant", "Branch office", "Logistics hub",
+    "Factory", "Cross-dock", "Supplier site", "Customer site", "Store", "Showroom",
+];
+var savedAddresses = new Dictionary<(Guid ShipperId, string PlaceName), ShipperAddress>();
+
+ShipperAddress SavedAddress(ShipperAggregate shipper, string placeName, DateTime createdAt)
+{
+    if (savedAddresses.TryGetValue((shipper.Id, placeName), out var saved))
+    {
+        return saved;
+    }
+
+    var usedLabels = shipper.Addresses.Select(address => address.Label).ToHashSet();
+    var freeLabels = addressLabels.Where(label => !usedLabels.Contains(label)).ToList();
+    var label = freeLabels.Count > 0
+        ? freeLabels[addressRandom.Next(freeLabels.Count)]
+        : $"Site {shipper.Addresses.Count + 1}";
+
+    saved = shipper.AddAddress(label, PlaceArea(placeName), PlaceLocation(placeName), createdAt);
+    savedAddresses[(shipper.Id, placeName)] = saved;
+    return saved;
+}
+
+ShipmentAggregate BookFromAddressBook(
+    ShipperAggregate shipper,
+    RoutePairFixture pair,
+    Capacity load,
+    TruckType truckType,
+    TimeWindow pickupWindow,
+    TimeWindow deliveryWindow,
+    DateTime bookedAt,
+    Guid? directCompanyId = null)
+{
+    var pickup = SavedAddress(shipper, pair.PickupName, bookedAt);
+    var delivery = SavedAddress(shipper, pair.DeliveryName, bookedAt);
+    return ShipmentAggregate.Book(
+        shipper.Id,
+        pickup.Location,
+        pickup.PlaceName,
+        delivery.Location,
+        delivery.PlaceName,
+        load,
+        truckType,
+        pickupWindow,
+        deliveryWindow,
+        bookedAt,
+        directCompanyId);
 }
 
 // Weighted draw matching the ~40/35/25 Small/Medium/Large truck-size mix, used
@@ -242,15 +324,7 @@ List<ShipmentAggregate> BuildCorridorOverlapShipments(
 
         var bookedAt = pickupStart.AddHours(-24) < demoAnchor ? demoAnchor : pickupStart.AddHours(-24);
 
-        return ShipmentAggregate.Book(
-            shipper.Id,
-            GeoLocation.Create(pair.PickupLat, pair.PickupLon),
-            GeoLocation.Create(pair.DeliveryLat, pair.DeliveryLon),
-            load,
-            truckType,
-            pickupWindow,
-            deliveryWindow,
-            bookedAt);
+        return BookFromAddressBook(shipper, pair, load, truckType, pickupWindow, deliveryWindow, bookedAt);
     }
 
     return
@@ -277,7 +351,7 @@ async Task Reseed(DateTime demoAnchor)
     [
         "Shipments", "TripStops", "Trips", "TruckRouteProgresses",
         "DriverComplianceStates", "Trucks", "Drivers", "TruckingCompanies",
-        "Shippers", "SimulationClock", "DeviceTokens",
+        "ShipperAddresses", "Shippers", "SimulationClock", "DeviceTokens",
     ];
     foreach (var table in tables)
     {
@@ -299,7 +373,8 @@ async Task Reseed(DateTime demoAnchor)
 
     var companyByOffice = companyDefinitions.ToDictionary(
         company => company.OfficePlace,
-        company => TruckingCompany.Create(Guid.NewGuid(), company.Name, PlaceLocation(company.OfficePlace)));
+        company => TruckingCompany.Create(
+            Guid.NewGuid(), company.Name, PlaceLocation(company.OfficePlace), PlaceArea(company.OfficePlace)));
     var companies = companyByOffice.Values.ToList();
     db.AddRange(companies);
     Console.WriteLine($"Generated {companies.Count} trucking companies.");
@@ -377,10 +452,9 @@ async Task Reseed(DateTime demoAnchor)
             Math.Round(tierCapacity.WeightKg * fraction, 0),
             Math.Round(tierCapacity.VolumeCubicMeters * fraction, 1));
 
-        shipments.Add(ShipmentAggregate.Book(
-            shippers[random.Next(shippers.Count)].Id,
-            GeoLocation.Create(routePair.PickupLat, routePair.PickupLon),
-            GeoLocation.Create(routePair.DeliveryLat, routePair.DeliveryLon),
+        shipments.Add(BookFromAddressBook(
+            shippers[random.Next(shippers.Count)],
+            routePair,
             load,
             truckTypes[shipments.Count % truckTypes.Length],
             pickupWindow,
@@ -441,10 +515,9 @@ async Task Reseed(DateTime demoAnchor)
     {
         var routePair = RoutePair(teamLoopPairs[i].PairId);
         var (pickup, delivery, weightKg, volumeCubicMeters) = teamLoopWindows[i];
-        shipments.Add(ShipmentAggregate.Book(
-            shippers[random.Next(shippers.Count)].Id,
-            GeoLocation.Create(routePair.PickupLat, routePair.PickupLon),
-            GeoLocation.Create(routePair.DeliveryLat, routePair.DeliveryLon),
+        shipments.Add(BookFromAddressBook(
+            shippers[random.Next(shippers.Count)],
+            routePair,
             Capacity.Create(weightKg, volumeCubicMeters),
             TruckType.Flatbed,
             TimeWindow.Create(OnDay(pickup.Day, pickup.From), OnDay(pickup.Day, pickup.To)),
@@ -478,11 +551,29 @@ async Task Reseed(DateTime demoAnchor)
     db.AddRange(shipments);
     Console.WriteLine($"Generated {shipments.Count} shipments total ({directCount} direct, {shipments.Count - directCount} open).");
 
+    // 6. Every shipper has at least two saved addresses to book from - shippers with fewer
+    // (no or few seeded shipments) get extra fixture places.
+    var placeNames = routePairs
+        .SelectMany(pair => new[] { pair.PickupName, pair.DeliveryName })
+        .Distinct()
+        .Order(StringComparer.Ordinal)
+        .ToList();
+    foreach (var shipper in shippers)
+    {
+        while (shipper.Addresses.Count < 2)
+        {
+            SavedAddress(shipper, placeNames[addressRandom.Next(placeNames.Count)], demoAnchor);
+        }
+    }
+
+    var addressCount = shippers.Sum(shipper => shipper.Addresses.Count);
+    Console.WriteLine($"Generated {addressCount} saved addresses.");
+
     await db.SaveChangesAsync();
 
     Console.WriteLine("Seed data committed.");
     Console.WriteLine($"  TruckingCompanies: {companies.Count}");
-    Console.WriteLine($"  Shippers: {shippers.Count}");
+    Console.WriteLine($"  Shippers: {shippers.Count} ({addressCount} saved addresses)");
     Console.WriteLine($"  Shipments: {shipments.Count}");
 }
 
