@@ -15,6 +15,9 @@ public sealed class TruckingCompanyConfiguration : IEntityTypeConfiguration<Truc
         builder.Property(company => company.Name)
             .IsRequired();
 
+        builder.Property(company => company.OfficePlaceName)
+            .IsRequired();
+
         builder.OwnsOne(company => company.OfficeLocation, location =>
         {
             location.Property(l => l.Latitude).HasColumnName("OfficeLatitude");

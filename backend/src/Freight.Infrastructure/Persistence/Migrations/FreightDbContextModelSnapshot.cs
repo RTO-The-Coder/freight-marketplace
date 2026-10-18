@@ -28,6 +28,11 @@ namespace Freight.Infrastructure.Persistence.Migrations
                         .ValueGeneratedOnAdd()
                         .HasColumnType("uuid");
 
+                    b.Property<string>("DeliveryPlaceName")
+                        .IsRequired()
+                        .HasMaxLength(300)
+                        .HasColumnType("character varying(300)");
+
                     b.Property<DateTime?>("EstimatedPickup")
                         .HasColumnType("timestamp with time zone");
 
@@ -36,6 +41,11 @@ namespace Freight.Infrastructure.Persistence.Migrations
 
                     b.Property<DateTime>("OfferDeadline")
                         .HasColumnType("timestamp with time zone");
+
+                    b.Property<string>("PickupPlaceName")
+                        .IsRequired()
+                        .HasMaxLength(300)
+                        .HasColumnType("character varying(300)");
 
                     b.Property<string>("RequiredTruckType")
                         .IsRequired()
@@ -247,6 +257,10 @@ namespace Freight.Infrastructure.Persistence.Migrations
                         .IsRequired()
                         .HasColumnType("text");
 
+                    b.Property<string>("OfficePlaceName")
+                        .IsRequired()
+                        .HasColumnType("text");
+
                     b.HasKey("Id");
 
                     b.ToTable("TruckingCompanies", (string)null);
@@ -433,6 +447,66 @@ namespace Freight.Infrastructure.Persistence.Migrations
                     b.Navigation("ScheduledDeliveryWindow");
 
                     b.Navigation("ScheduledPickupWindow");
+                });
+
+            modelBuilder.Entity("Freight.Domain.Client.Shipper", b =>
+                {
+                    b.OwnsMany("Freight.Domain.Client.ShipperAddress", "Addresses", b1 =>
+                        {
+                            b1.Property<Guid>("Id")
+                                .HasColumnType("uuid");
+
+                            b1.Property<string>("AreaName")
+                                .IsRequired()
+                                .HasMaxLength(300)
+                                .HasColumnType("character varying(300)");
+
+                            b1.Property<DateTime>("CreatedAt")
+                                .HasColumnType("timestamp with time zone");
+
+                            b1.Property<string>("Label")
+                                .IsRequired()
+                                .HasMaxLength(100)
+                                .HasColumnType("character varying(100)");
+
+                            b1.Property<Guid>("ShipperId")
+                                .HasColumnType("uuid");
+
+                            b1.HasKey("Id");
+
+                            b1.HasIndex("ShipperId");
+
+                            b1.ToTable("ShipperAddresses", (string)null);
+
+                            b1.WithOwner()
+                                .HasForeignKey("ShipperId");
+
+                            b1.OwnsOne("Freight.Domain.ValueObjects.GeoLocation", "Location", b2 =>
+                                {
+                                    b2.Property<Guid>("ShipperAddressId")
+                                        .HasColumnType("uuid");
+
+                                    b2.Property<double>("Latitude")
+                                        .HasColumnType("double precision")
+                                        .HasColumnName("Latitude");
+
+                                    b2.Property<double>("Longitude")
+                                        .HasColumnType("double precision")
+                                        .HasColumnName("Longitude");
+
+                                    b2.HasKey("ShipperAddressId");
+
+                                    b2.ToTable("ShipperAddresses");
+
+                                    b2.WithOwner()
+                                        .HasForeignKey("ShipperAddressId");
+                                });
+
+                            b1.Navigation("Location")
+                                .IsRequired();
+                        });
+
+                    b.Navigation("Addresses");
                 });
 
             modelBuilder.Entity("Freight.Domain.Fleet.Driver", b =>

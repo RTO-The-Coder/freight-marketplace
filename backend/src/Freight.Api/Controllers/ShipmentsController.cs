@@ -30,7 +30,9 @@ public sealed class ShipmentsController(
             new BookShipmentRequest(
                 body.ShipperId,
                 GeoLocation.Create(body.PickupLatitude, body.PickupLongitude),
+                body.PickupPlaceName,
                 GeoLocation.Create(body.DeliveryLatitude, body.DeliveryLongitude),
+                body.DeliveryPlaceName,
                 Capacity.Create(body.LoadWeightKg, body.LoadVolumeCubicMeters),
                 body.RequiredTruckType,
                 TimeWindow.Create(body.PickupWindowEarliest, body.PickupWindowLatest),
@@ -63,13 +65,17 @@ public sealed class ShipmentsController(
     }
 }
 
+/// <param name="PickupPlaceName">Display name copied onto the shipment, e.g. "Main warehouse — 1100 Favoriten, Vienna".</param>
+/// <param name="DeliveryPlaceName">Display name copied onto the shipment, like <paramref name="PickupPlaceName"/>.</param>
 /// <param name="TruckingCompanyId">Optional: book the shipment straight to this company (no offers).</param>
 public sealed record BookShipmentBody(
     Guid ShipperId,
     double PickupLatitude,
     double PickupLongitude,
+    string PickupPlaceName,
     double DeliveryLatitude,
     double DeliveryLongitude,
+    string DeliveryPlaceName,
     double LoadWeightKg,
     double LoadVolumeCubicMeters,
     TruckType RequiredTruckType,

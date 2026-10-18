@@ -27,6 +27,14 @@ public sealed class ShipmentConfiguration : IEntityTypeConfiguration<Shipment>
         builder.Property(shipment => shipment.OfferDeadline)
             .IsRequired();
 
+        builder.Property(shipment => shipment.PickupPlaceName)
+            .HasMaxLength(Shipment.MaxPlaceNameLength)
+            .IsRequired();
+
+        builder.Property(shipment => shipment.DeliveryPlaceName)
+            .HasMaxLength(Shipment.MaxPlaceNameLength)
+            .IsRequired();
+
         builder.Property(shipment => shipment.EstimatedPickup);
 
         builder.Property(shipment => shipment.Status)

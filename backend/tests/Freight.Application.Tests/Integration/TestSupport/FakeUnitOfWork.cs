@@ -109,6 +109,9 @@ internal sealed class FakeShipmentRepository : FakeRepository<Shipment>, IShipme
     public Task<IReadOnlyList<Shipment>> GetByShipperIdAsync(Guid shipperId, CancellationToken cancellationToken = default) =>
         Task.FromResult<IReadOnlyList<Shipment>>([.. Items.Values.Where(s => s.ShipperId == shipperId)]);
 
+    public Task<IReadOnlyList<Shipment>> GetByIdsAsync(IReadOnlyCollection<Guid> shipmentIds, CancellationToken cancellationToken = default) =>
+        Task.FromResult<IReadOnlyList<Shipment>>([.. Items.Values.Where(s => shipmentIds.Contains(s.Id))]);
+
     public Task<IReadOnlyList<Shipment>> GetByStatusAsync(ShipmentStatus status, CancellationToken cancellationToken = default) =>
         Task.FromResult<IReadOnlyList<Shipment>>([.. Items.Values.Where(s => s.Status == status)]);
 }

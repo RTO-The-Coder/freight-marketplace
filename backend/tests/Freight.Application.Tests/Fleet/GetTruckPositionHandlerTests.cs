@@ -24,7 +24,7 @@ public sealed class GetTruckPositionHandlerTests
     }
 
     private static TruckingCompany SomeCompany(Guid companyId) =>
-        TruckingCompany.Create(companyId, "Acme Trucking", Office);
+        TruckingCompany.Create(companyId, "Acme Trucking", Office, "Office place");
 
     private static Trip OpenTripWithShipment(Guid truckId, Guid companyId)
     {

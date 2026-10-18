@@ -25,7 +25,7 @@ public class ShipmentTripLifecycleConsistencyTests
     {
         var shipper = Shipper.Create(Guid.NewGuid(), "Acme Shipping", "contact@acme.com");
         var shipment = Shipment.Book(
-            Guid.NewGuid(), shipper.Id, SomeLocation(), OtherLocation(), SomeLoad(),
+            Guid.NewGuid(), shipper.Id, SomeLocation(), "Pickup place", OtherLocation(), "Delivery place", SomeLoad(),
             TruckType.Refrigerated,
             TimeWindow.Create(BookedAt.AddHours(1), BookedAt.AddHours(3)),
             TimeWindow.Create(BookedAt.AddHours(5), BookedAt.AddHours(7)),
@@ -84,7 +84,7 @@ public class ShipmentTripLifecycleConsistencyTests
         // do not enforce consistency with each other - only a caller convention does.
         var shipper = Shipper.Create(Guid.NewGuid(), "Acme Shipping", "contact@acme.com");
         var shipment = Shipment.Book(
-            Guid.NewGuid(), shipper.Id, SomeLocation(), OtherLocation(), SomeLoad(),
+            Guid.NewGuid(), shipper.Id, SomeLocation(), "Pickup place", OtherLocation(), "Delivery place", SomeLoad(),
             TruckType.Refrigerated,
             TimeWindow.Create(BookedAt.AddHours(1), BookedAt.AddHours(3)),
             TimeWindow.Create(BookedAt.AddHours(5), BookedAt.AddHours(7)),

@@ -15,7 +15,9 @@ public sealed class BookShipmentHandlerTests
     private static BookShipmentRequest SomeRequest() => new(
         Guid.NewGuid(),
         GeoLocation.Create(52.52, 13.405),
+        "Warehouse — 10178 Mitte, Berlin",
         GeoLocation.Create(48.1351, 11.582),
+        "Depot — 80803 Schwabing, Munich",
         Capacity.Create(100, 5),
         TruckType.Refrigerated,
         TimeWindow.Create(new DateTime(2026, 1, 1, 9, 0, 0), new DateTime(2026, 1, 1, 11, 0, 0)),
@@ -105,7 +107,8 @@ public sealed class BookShipmentHandlerTests
         Assert.Equal(["save", "notify"], calls);
         Assert.NotNull(sent);
         Assert.Equal(response.ShipmentId, sent!.ShipmentId);
-        Assert.Same(request.PickupLocation, sent.PickupLocation);
+        Assert.Equal(request.PickupPlaceName, sent.PickupPlaceName);
+        Assert.Equal(request.DeliveryPlaceName, sent.DeliveryPlaceName);
         Assert.Equal(request.RequiredTruckType, sent.RequiredTruckType);
         Assert.Same(request.PickupWindow, sent.PickupWindow);
         Assert.False(sent.IsDirect);
@@ -116,7 +119,7 @@ public sealed class BookShipmentHandlerTests
     [Fact]
     public async Task BookShipmentAsync_WithKnownCompany_BooksDirectAndNotifiesOnlyThatCompany()
     {
-        var company = Freight.Domain.Fleet.TruckingCompany.Create(Guid.NewGuid(), "Acme Trucking", GeoLocation.Create(50.11, 8.68));
+        var company = Freight.Domain.Fleet.TruckingCompany.Create(Guid.NewGuid(), "Acme Trucking", GeoLocation.Create(50.11, 8.68), "Office place");
         var companies = new Mock<Freight.Domain.Fleet.Abstractions.ITruckingCompanyRepository>();
         companies.Setup(c => c.GetByIdAsync(company.Id, It.IsAny<CancellationToken>())).ReturnsAsync(company);
         var shipments = new Mock<IShipmentRepository>();

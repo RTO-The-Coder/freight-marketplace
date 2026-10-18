@@ -49,7 +49,7 @@ public sealed class SimulationAdvanceHandlerTests
         var trip = Trip.Open(truck.Id, companyId, StartedAt);
         var load = shipmentLoad ?? Capacity.Create(100, 1);
         var shipment = Shipment.Book(
-            Guid.NewGuid(), Guid.NewGuid(), Pickup, Delivery, load, TruckType.Refrigerated,
+            Guid.NewGuid(), Guid.NewGuid(), Pickup, "Pickup place", Delivery, "Delivery place", load, TruckType.Refrigerated,
             TimeWindow.Create(StartedAt, StartedAt.AddDays(2)),
             TimeWindow.Create(StartedAt, StartedAt.AddDays(3)),
             StartedAt);
@@ -293,7 +293,7 @@ public sealed class SimulationAdvanceHandlerTests
 
         var trip = Trip.Open(truck.Id, companyId, StartedAt);
         var shipment = Shipment.Book(
-            Guid.NewGuid(), Guid.NewGuid(), Pickup, Delivery, Capacity.Create(100, 1), TruckType.Refrigerated,
+            Guid.NewGuid(), Guid.NewGuid(), Pickup, "Pickup place", Delivery, "Delivery place", Capacity.Create(100, 1), TruckType.Refrigerated,
             TimeWindow.Create(StartedAt, StartedAt.AddDays(2)), TimeWindow.Create(StartedAt, StartedAt.AddDays(3)), StartedAt);
         shipment.AssignToCompany(companyId);
         trip.AssignShipment(
@@ -327,7 +327,7 @@ public sealed class SimulationAdvanceHandlerTests
 
         var trip = Trip.Open(truck.Id, companyId, StartedAt);
         var shipment = Shipment.Book(
-            Guid.NewGuid(), Guid.NewGuid(), Pickup, Delivery, Capacity.Create(100, 1), TruckType.Refrigerated,
+            Guid.NewGuid(), Guid.NewGuid(), Pickup, "Pickup place", Delivery, "Delivery place", Capacity.Create(100, 1), TruckType.Refrigerated,
             TimeWindow.Create(StartedAt, StartedAt.AddDays(2)), TimeWindow.Create(StartedAt, StartedAt.AddDays(3)), StartedAt);
         shipment.AssignToCompany(companyId);
         trip.AssignShipment(

@@ -14,11 +14,11 @@ public sealed class LogNotificationSender(ILogger<LogNotificationSender> logger)
     public Task NotifyAllCompaniesAsync(ShipmentNotificationSummary summary, CancellationToken cancellationToken = default)
     {
         logger.LogInformation(
-            "Shipment {ShipmentId} booked (pickup {PickupLatitude},{PickupLongitude}, {TruckType}, window {Earliest}-{Latest}) - " +
+            "Shipment {ShipmentId} booked ({PickupPlaceName} -> {DeliveryPlaceName}, {TruckType}, window {Earliest}-{Latest}) - " +
             "no push sent, Fcm:ServiceAccountPath is not configured.",
             summary.ShipmentId,
-            summary.PickupLocation.Latitude,
-            summary.PickupLocation.Longitude,
+            summary.PickupPlaceName,
+            summary.DeliveryPlaceName,
             summary.RequiredTruckType,
             summary.PickupWindow.Earliest,
             summary.PickupWindow.Latest);
@@ -30,12 +30,12 @@ public sealed class LogNotificationSender(ILogger<LogNotificationSender> logger)
         Guid truckingCompanyId, ShipmentNotificationSummary summary, CancellationToken cancellationToken = default)
     {
         logger.LogInformation(
-            "Shipment {ShipmentId} booked directly to company {TruckingCompanyId} (pickup {PickupLatitude},{PickupLongitude}, " +
+            "Shipment {ShipmentId} booked directly to company {TruckingCompanyId} ({PickupPlaceName} -> {DeliveryPlaceName}, " +
             "{TruckType}, window {Earliest}-{Latest}) - no push sent, Fcm:ServiceAccountPath is not configured.",
             summary.ShipmentId,
             truckingCompanyId,
-            summary.PickupLocation.Latitude,
-            summary.PickupLocation.Longitude,
+            summary.PickupPlaceName,
+            summary.DeliveryPlaceName,
             summary.RequiredTruckType,
             summary.PickupWindow.Earliest,
             summary.PickupWindow.Latest);

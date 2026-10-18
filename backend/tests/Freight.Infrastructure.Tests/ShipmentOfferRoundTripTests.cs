@@ -91,7 +91,8 @@ public sealed class ShipmentOfferRoundTripTests : IAsyncLifetime
     {
         var shipment = Shipment.Book(
             _shipmentId, Guid.NewGuid(),
-            GeoLocation.Create(52.52, 13.405), GeoLocation.Create(48.1351, 11.582),
+            GeoLocation.Create(52.52, 13.405),
+            "Pickup place", GeoLocation.Create(48.1351, 11.582), "Delivery place",
             Capacity.Create(100, 1), TruckType.Refrigerated,
             TimeWindow.Create(CreatedAt.AddHours(1), CreatedAt.AddHours(3)),
             TimeWindow.Create(CreatedAt.AddHours(5), CreatedAt.AddHours(7)),

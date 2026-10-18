@@ -36,7 +36,7 @@ public sealed class CapacityAndComplianceAcrossAdvanceTests
         var unitOfWork = new FakeUnitOfWork();
         var timeProvider = new FakeTimeProvider(new DateTimeOffset(ClockStart, TimeSpan.Zero));
 
-        var company = TruckingCompany.Create(Guid.NewGuid(), "Acme Trucking", Office);
+        var company = TruckingCompany.Create(Guid.NewGuid(), "Acme Trucking", Office, "Office place");
         unitOfWork.TruckingCompaniesRepo.Add(company);
         // 60kg load, Medium truck capacity 9000kg/45m3 - plenty of room, capacity isn't the
         // binding constraint here; this exercises SEQUENCING (pickup1 -> delivery1 -> pickup2)
@@ -57,7 +57,7 @@ public sealed class CapacityAndComplianceAcrossAdvanceTests
         var deliveryB = GeoLocation.Create(48.1351, 11.582);
 
         var shipmentA = await bookHandler.BookShipmentAsync(new BookShipmentRequest(
-            shipper.Id, pickupA, deliveryA, Capacity.Create(60, 1), TruckType.Refrigerated,
+            shipper.Id, pickupA, "Pickup place", deliveryA, "Delivery place", Capacity.Create(60, 1), TruckType.Refrigerated,
             TimeWindow.Create(ClockStart, ClockStart.AddDays(2)), TimeWindow.Create(ClockStart, ClockStart.AddDays(3))));
 
         var routingService = new FakeRoutingService { DefaultLeg = new Domain.Routing.Abstractions.RouteLeg(20, 2) };
@@ -66,7 +66,7 @@ public sealed class CapacityAndComplianceAcrossAdvanceTests
         await assignHandler.AssignShipmentAsync(new AssignShipmentToTruckRequest(truckResponse.TruckId, shipmentA.ShipmentId, 0, 0));
 
         var shipmentB = await bookHandler.BookShipmentAsync(new BookShipmentRequest(
-            shipper.Id, pickupB, deliveryB, Capacity.Create(60, 1), TruckType.Refrigerated,
+            shipper.Id, pickupB, "Pickup place", deliveryB, "Delivery place", Capacity.Create(60, 1), TruckType.Refrigerated,
             TimeWindow.Create(ClockStart, ClockStart.AddDays(2)), TimeWindow.Create(ClockStart, ClockStart.AddDays(3))));
         // Append shipment B's pickup+delivery AFTER shipment A's delivery (index 2), so A
         // is fully delivered before B is picked up - both legs 2 ticks each.

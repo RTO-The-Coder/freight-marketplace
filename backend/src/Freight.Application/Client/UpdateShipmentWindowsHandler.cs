@@ -36,7 +36,7 @@ public sealed class UpdateShipmentWindowsHandler(
         await unitOfWork.SaveChangesAsync(cancellationToken);
 
         var summary = new ShipmentNotificationSummary(
-            shipment.Id, shipment.PickupLocation, shipment.RequiredTruckType, shipment.PickupWindow, shipment.IsDirect);
+            shipment.Id, shipment.PickupPlaceName, shipment.DeliveryPlaceName, shipment.RequiredTruckType, shipment.PickupWindow, shipment.IsDirect);
         if (shipment.IsDirect)
         {
             await notificationSender.NotifyCompanyAsync(shipment.TruckingCompanyId!.Value, summary, cancellationToken);

@@ -31,7 +31,7 @@ public sealed class PendingShipmentDisappearsAfterBookingTests
         var unitOfWork = new FakeUnitOfWork();
         var timeProvider = new FakeTimeProvider(new DateTimeOffset(ClockStart, TimeSpan.Zero));
 
-        var company = TruckingCompany.Create(Guid.NewGuid(), "Acme Trucking", GeoLocation.Create(50.11, 8.68));
+        var company = TruckingCompany.Create(Guid.NewGuid(), "Acme Trucking", GeoLocation.Create(50.11, 8.68), "Office place");
         unitOfWork.TruckingCompaniesRepo.Add(company);
         var truckResponse = await new AddTruckHandler(unitOfWork).AddTruckAsync(
             new AddTruckRequest("Truck-1", TruckType.Refrigerated, TruckSize.Medium, company.Id));
@@ -45,11 +45,11 @@ public sealed class PendingShipmentDisappearsAfterBookingTests
         var bookHandler = new BookShipmentHandler(unitOfWork, timeProvider, new Mock<INotificationSender>().Object);
 
         var shipmentA = await bookHandler.BookShipmentAsync(new BookShipmentRequest(
-            shipper.Id, GeoLocation.Create(52.52, 13.405), GeoLocation.Create(48.1351, 11.582),
+            shipper.Id, GeoLocation.Create(52.52, 13.405), "Pickup place", GeoLocation.Create(48.1351, 11.582), "Delivery place",
             Capacity.Create(50, 1), TruckType.Refrigerated,
             TimeWindow.Create(ClockStart, ClockStart.AddDays(2)), TimeWindow.Create(ClockStart, ClockStart.AddDays(3))));
         var shipmentB = await bookHandler.BookShipmentAsync(new BookShipmentRequest(
-            shipper.Id, GeoLocation.Create(52.0, 13.0), GeoLocation.Create(48.0, 11.0),
+            shipper.Id, GeoLocation.Create(52.0, 13.0), "Pickup place", GeoLocation.Create(48.0, 11.0), "Delivery place",
             Capacity.Create(50, 1), TruckType.Refrigerated,
             TimeWindow.Create(ClockStart, ClockStart.AddDays(2)), TimeWindow.Create(ClockStart, ClockStart.AddDays(3))));
 

@@ -11,7 +11,7 @@ namespace Freight.Application.Tests.Fleet;
 public sealed class AddDriverHandlerTests
 {
     private static readonly TruckingCompany Company =
-        TruckingCompany.Create(Guid.NewGuid(), "Nordwest Spedition", GeoLocation.Create(53.55, 9.99));
+        TruckingCompany.Create(Guid.NewGuid(), "Nordwest Spedition", GeoLocation.Create(53.55, 9.99), "Office place");
 
     private static (Mock<IUnitOfWork> UnitOfWork, Mock<IDriverRepository> Drivers) SetUp(TruckingCompany? company)
     {

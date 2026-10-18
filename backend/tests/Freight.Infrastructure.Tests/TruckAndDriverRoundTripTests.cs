@@ -186,7 +186,7 @@ public class TruckAndDriverRoundTripTests : IAsyncLifetime
     [Fact]
     public async Task Trip_WithAssignedShipmentStops_RoundTripsRouteStopsInOrder()
     {
-        var company = TruckingCompany.Create(CompanyId, "Route Co", GeoLocation.Create(52.52, 13.405));
+        var company = TruckingCompany.Create(CompanyId, "Route Co", GeoLocation.Create(52.52, 13.405), "Office place");
         var driver = Driver.Create(Guid.NewGuid(), "Route", "Driver", SampleRules(), CompanyId);
         var truck = Truck.Create(Guid.NewGuid(), "Truck-4", TruckType.BoxVan, TruckSize.Small);
         truck.AssignToCompany(CompanyId);

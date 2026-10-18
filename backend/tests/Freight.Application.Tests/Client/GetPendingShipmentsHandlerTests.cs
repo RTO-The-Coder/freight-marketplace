@@ -15,7 +15,8 @@ public sealed class GetPendingShipmentsHandlerTests
 
     private static Shipment SomeShipment() => Shipment.Book(
         Guid.NewGuid(), Guid.NewGuid(),
-        GeoLocation.Create(52.52, 13.405), GeoLocation.Create(48.1351, 11.582),
+        GeoLocation.Create(52.52, 13.405),
+        "Pickup place", GeoLocation.Create(48.1351, 11.582), "Delivery place",
         Capacity.Create(100, 5), TruckType.Refrigerated,
         TimeWindow.Create(BookedAt.AddHours(1), BookedAt.AddHours(3)),
         TimeWindow.Create(BookedAt.AddHours(5), BookedAt.AddHours(7)),

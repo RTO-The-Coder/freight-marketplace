@@ -33,7 +33,8 @@ public sealed class FcmNotificationSenderTests : IDisposable
 
     private static ShipmentNotificationSummary SomeSummary() => new(
         Guid.NewGuid(),
-        GeoLocation.Create(52.52, 13.405),
+        "Pickup place",
+        "Delivery place",
         TruckType.Refrigerated,
         TimeWindow.Create(new DateTime(2026, 1, 1, 9, 0, 0), new DateTime(2026, 1, 1, 11, 0, 0)));
 

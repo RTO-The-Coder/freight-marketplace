@@ -77,9 +77,8 @@ public sealed class FcmNotificationSender(
                 Notification = new Notification
                 {
                     Title = summary.IsDirect ? "New shipment assigned to you" : "New shipment available",
-                    Body = $"{summary.RequiredTruckType} needed, pickup from " +
-                           $"{summary.PickupLocation.Latitude:F4},{summary.PickupLocation.Longitude:F4} " +
-                           $"by {summary.PickupWindow.Latest:g}.",
+                    Body = $"{summary.RequiredTruckType} needed: {summary.PickupPlaceName} → " +
+                           $"{summary.DeliveryPlaceName}, pickup by {summary.PickupWindow.Latest:g}.",
                 },
                 Data = new Dictionary<string, string>
                 {

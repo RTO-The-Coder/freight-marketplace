@@ -32,7 +32,7 @@ internal sealed class OfferScenario
     /// <summary>A company with one active Refrigerated truck that has a driver - eligible for <see cref="BookOpenShipmentAsync"/>.</summary>
     public async Task<(Guid CompanyId, Guid TruckId)> AddCompanyWithTruckAsync(string name = "Acme Trucking")
     {
-        var company = TruckingCompany.Create(Guid.NewGuid(), name, GeoLocation.Create(50.11, 8.68));
+        var company = TruckingCompany.Create(Guid.NewGuid(), name, GeoLocation.Create(50.11, 8.68), "Office place");
         UnitOfWork.TruckingCompaniesRepo.Add(company);
         var truckId = await AddTruckAsync(company.Id);
         return (company.Id, truckId);
@@ -55,7 +55,7 @@ internal sealed class OfferScenario
         var shipper = Domain.Client.Shipper.Create(Guid.NewGuid(), "Acme Shipping", "contact@acme.com");
         UnitOfWork.ShippersRepo.Add(shipper);
         var response = await new BookShipmentHandler(UnitOfWork, TimeProvider, Sender.Object).BookShipmentAsync(new BookShipmentRequest(
-            shipper.Id, GeoLocation.Create(52.52, 13.405), GeoLocation.Create(48.1351, 11.582),
+            shipper.Id, GeoLocation.Create(52.52, 13.405), "Pickup place", GeoLocation.Create(48.1351, 11.582), "Delivery place",
             Capacity.Create(50, 1), TruckType.Refrigerated,
             TimeWindow.Create(ClockStart, ClockStart.AddDays(2)), TimeWindow.Create(ClockStart, ClockStart.AddDays(3)),
             directCompanyId));

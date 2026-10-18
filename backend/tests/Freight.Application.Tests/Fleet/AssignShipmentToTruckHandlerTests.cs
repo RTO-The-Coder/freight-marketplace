@@ -26,7 +26,7 @@ public sealed class AssignShipmentToTruckHandlerTests
         DrivingRules.Create(DrivingBreakRule.FullBreak, DailyRestRule.FullRest, WeeklyRestRule.FullWeeklyRest, false);
 
     private static Shipment SomeShipment(TruckType requiredType = TruckType.Refrigerated) => Shipment.Book(
-        Guid.NewGuid(), Guid.NewGuid(), Pickup, Delivery,
+        Guid.NewGuid(), Guid.NewGuid(), Pickup, "Pickup place", Delivery, "Delivery place",
         Capacity.Create(100, 1), requiredType,
         TimeWindow.Create(StartedAt, StartedAt.AddDays(1)),
         TimeWindow.Create(StartedAt, StartedAt.AddDays(2)),
@@ -34,7 +34,7 @@ public sealed class AssignShipmentToTruckHandlerTests
 
     private static (Truck Truck, TruckingCompany Company) ReadyTruck(TruckType type = TruckType.Refrigerated, TruckSize size = TruckSize.Medium)
     {
-        var company = TruckingCompany.Create(Guid.NewGuid(), "Acme Trucking", Office);
+        var company = TruckingCompany.Create(Guid.NewGuid(), "Acme Trucking", Office, "Office place");
         var truck = Truck.Create(Guid.NewGuid(), "Truck-1", type, size);
         truck.AssignToCompany(company.Id);
         truck.AssignDrivers(Driver.Create(Guid.NewGuid(), "Jane", "Doe", SomeRules(), company.Id));
@@ -103,7 +103,7 @@ public sealed class AssignShipmentToTruckHandlerTests
         var (truck, company) = ReadyTruck();
         // Pickup window closes before the truck could possibly arrive.
         var tightShipment = Shipment.Book(
-            Guid.NewGuid(), Guid.NewGuid(), Pickup, Delivery,
+            Guid.NewGuid(), Guid.NewGuid(), Pickup, "Pickup place", Delivery, "Delivery place",
             Capacity.Create(100, 1), TruckType.Refrigerated,
             TimeWindow.Create(StartedAt, StartedAt.AddMinutes(1)),
             TimeWindow.Create(StartedAt, StartedAt.AddDays(2)),
@@ -127,7 +127,7 @@ public sealed class AssignShipmentToTruckHandlerTests
     {
         var (truck, company) = ReadyTruck();
         var tightShipment = Shipment.Book(
-            Guid.NewGuid(), Guid.NewGuid(), Pickup, Delivery,
+            Guid.NewGuid(), Guid.NewGuid(), Pickup, "Pickup place", Delivery, "Delivery place",
             Capacity.Create(100, 1), TruckType.Refrigerated,
             TimeWindow.Create(StartedAt, StartedAt.AddMinutes(1)),
             TimeWindow.Create(StartedAt, StartedAt.AddDays(2)),
@@ -227,7 +227,7 @@ public sealed class AssignShipmentToTruckHandlerTests
     [Fact]
     public async Task AssignShipmentAsync_TruckInactive_Throws_NoRoutingCalls()
     {
-        var company = TruckingCompany.Create(Guid.NewGuid(), "Acme Trucking", Office);
+        var company = TruckingCompany.Create(Guid.NewGuid(), "Acme Trucking", Office, "Office place");
         var truck = Truck.Create(Guid.NewGuid(), "Truck-1", TruckType.Refrigerated, TruckSize.Medium);
         truck.AssignToCompany(company.Id);
         truck.AssignDrivers(Driver.Create(Guid.NewGuid(), "Jane", "Doe", SomeRules(), company.Id));
@@ -259,7 +259,7 @@ public sealed class AssignShipmentToTruckHandlerTests
     [Fact]
     public async Task AssignShipmentAsync_NoDriverAssignment_Throws_NoRoutingCalls()
     {
-        var company = TruckingCompany.Create(Guid.NewGuid(), "Acme Trucking", Office);
+        var company = TruckingCompany.Create(Guid.NewGuid(), "Acme Trucking", Office, "Office place");
         var truck = Truck.Create(Guid.NewGuid(), "Truck-1", TruckType.Refrigerated, TruckSize.Medium);
         truck.AssignToCompany(company.Id);
         var shipment = SomeShipment();
@@ -315,7 +315,7 @@ public sealed class AssignShipmentToTruckHandlerTests
         truck.CurrentProgress!.AdvanceByTicks(3);
 
         var urgentShipment = Shipment.Book(
-            Guid.NewGuid(), Guid.NewGuid(), Pickup, Delivery,
+            Guid.NewGuid(), Guid.NewGuid(), Pickup, "Pickup place", Delivery, "Delivery place",
             Capacity.Create(100, 1), TruckType.Refrigerated,
             TimeWindow.Create(StartedAt, StartedAt.AddHours(1)),
             TimeWindow.Create(StartedAt, StartedAt.AddDays(2)),
@@ -408,7 +408,7 @@ public sealed class AssignShipmentToTruckHandlerTests
         var secondPickup = GeoLocation.Create(51.05, 13.74);
         var secondDelivery = GeoLocation.Create(53.55, 9.99);
         var secondShipment = Shipment.Book(
-            Guid.NewGuid(), Guid.NewGuid(), secondPickup, secondDelivery,
+            Guid.NewGuid(), Guid.NewGuid(), secondPickup, "Pickup place", secondDelivery, "Delivery place",
             Capacity.Create(100, 1), TruckType.Refrigerated,
             TimeWindow.Create(StartedAt, StartedAt.AddDays(1)),
             TimeWindow.Create(StartedAt, StartedAt.AddDays(2)),

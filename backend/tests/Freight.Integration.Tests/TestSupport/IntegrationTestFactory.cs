@@ -62,7 +62,7 @@ public sealed class IntegrationTestFactory(IRoutingService routingService) : Web
     /// <summary>Companies are seeded, not created through the API - there is no endpoint for them.</summary>
     public async Task<TruckingCompany> SeedTruckingCompanyAsync(GeoLocation officeLocation)
     {
-        var company = TruckingCompany.Create(Guid.NewGuid(), "Integration Trucking", officeLocation);
+        var company = TruckingCompany.Create(Guid.NewGuid(), "Integration Trucking", officeLocation, "Office place");
 
         await using var dbContext = CreateDbContext();
         dbContext.Set<TruckingCompany>().Add(company);

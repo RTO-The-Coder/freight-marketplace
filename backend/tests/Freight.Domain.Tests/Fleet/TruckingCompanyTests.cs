@@ -13,17 +13,26 @@ public class TruckingCompanyTests
         var id = Guid.NewGuid();
         var location = SomeLocation();
 
-        var company = TruckingCompany.Create(id, "Acme Trucking", location);
+        var company = TruckingCompany.Create(id, "Acme Trucking", location, " 50825 Ehrenfeld, Cologne ");
 
         Assert.Equal(id, company.Id);
         Assert.Equal("Acme Trucking", company.Name);
         Assert.Equal(location, company.OfficeLocation);
+        Assert.Equal("50825 Ehrenfeld, Cologne", company.OfficePlaceName);
+    }
+
+    [Theory]
+    [InlineData("")]
+    [InlineData("   ")]
+    public void Create_BlankOfficePlaceName_Throws(string officePlaceName)
+    {
+        Assert.Throws<ArgumentException>(() => TruckingCompany.Create(Guid.NewGuid(), "Acme Trucking", SomeLocation(), officePlaceName));
     }
 
     [Fact]
     public void Create_EmptyId_Throws()
     {
-        Assert.Throws<ArgumentException>(() => TruckingCompany.Create(Guid.Empty, "Acme Trucking", SomeLocation()));
+        Assert.Throws<ArgumentException>(() => TruckingCompany.Create(Guid.Empty, "Acme Trucking", SomeLocation(), "Office place"));
     }
 
     [Theory]
@@ -31,12 +40,12 @@ public class TruckingCompanyTests
     [InlineData("   ")]
     public void Create_BlankName_Throws(string name)
     {
-        Assert.Throws<ArgumentException>(() => TruckingCompany.Create(Guid.NewGuid(), name, SomeLocation()));
+        Assert.Throws<ArgumentException>(() => TruckingCompany.Create(Guid.NewGuid(), name, SomeLocation(), "Office place"));
     }
 
     [Fact]
     public void Create_NullOfficeLocation_Throws()
     {
-        Assert.Throws<ArgumentNullException>(() => TruckingCompany.Create(Guid.NewGuid(), "Acme Trucking", null!));
+        Assert.Throws<ArgumentNullException>(() => TruckingCompany.Create(Guid.NewGuid(), "Acme Trucking", null!, "Office place"));
     }
 }

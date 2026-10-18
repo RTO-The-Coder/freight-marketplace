@@ -28,7 +28,7 @@ public sealed class ShipmentEvaluationEngineTests
         TruckType requiredType = TruckType.Refrigerated,
         DateTime? pickupEarliest = null,
         DateTime? pickupLatest = null) => Shipment.Book(
-        Guid.NewGuid(), Guid.NewGuid(), Pickup, Delivery,
+        Guid.NewGuid(), Guid.NewGuid(), Pickup, "Pickup place", Delivery, "Delivery place",
         Capacity.Create(100, 1), requiredType,
         TimeWindow.Create(pickupEarliest ?? StartedAt, pickupLatest ?? StartedAt.AddDays(1)),
         TimeWindow.Create(StartedAt, StartedAt.AddDays(2)),
@@ -97,7 +97,7 @@ public sealed class ShipmentEvaluationEngineTests
     private static Harness NewHarnessForOneTruck(Truck truck, Shipment shipment)
     {
         var harness = new Harness(truck.TruckingCompanyId!.Value, [truck], shipment);
-        harness.RegisterCompany(TruckingCompany.Create(truck.TruckingCompanyId!.Value, "Acme Trucking", Office));
+        harness.RegisterCompany(TruckingCompany.Create(truck.TruckingCompanyId!.Value, "Acme Trucking", Office, "Office place"));
         return harness;
     }
 
@@ -159,7 +159,7 @@ public sealed class ShipmentEvaluationEngineTests
         var companyId = Guid.NewGuid();
         var truck = ReadyTruck(companyId, size: TruckSize.Small); // 2,800 kg / 20 m3
         var oversizedShipment = Shipment.Book(
-            Guid.NewGuid(), Guid.NewGuid(), Pickup, Delivery,
+            Guid.NewGuid(), Guid.NewGuid(), Pickup, "Pickup place", Delivery, "Delivery place",
             Capacity.Create(5_000, 1), TruckType.Refrigerated,
             TimeWindow.Create(StartedAt, StartedAt.AddDays(1)),
             TimeWindow.Create(StartedAt, StartedAt.AddDays(2)),
@@ -218,7 +218,7 @@ public sealed class ShipmentEvaluationEngineTests
         // Build an existing trip with one earlier shipment already on the route, far enough
         // ahead in time that the new shipment's pickup window opens well after it.
         var earlyShipment = Shipment.Book(
-            Guid.NewGuid(), Guid.NewGuid(), Pickup, Delivery,
+            Guid.NewGuid(), Guid.NewGuid(), Pickup, "Pickup place", Delivery, "Delivery place",
             Capacity.Create(50, 1), TruckType.Refrigerated,
             TimeWindow.Create(StartedAt, StartedAt.AddHours(1)),
             TimeWindow.Create(StartedAt, StartedAt.AddHours(2)),
@@ -257,7 +257,7 @@ public sealed class ShipmentEvaluationEngineTests
         var truckB = ReadyTruck(companyId);
         var shipment = SomeShipment();
         var harness = new Harness(companyId, [truckA, truckB], shipment);
-        harness.RegisterCompany(TruckingCompany.Create(companyId, "Acme Trucking", Office));
+        harness.RegisterCompany(TruckingCompany.Create(companyId, "Acme Trucking", Office, "Office place"));
 
         var results = await harness.NewEngine().EvaluateForCompanyAsync(shipment.Id, companyId);
 
@@ -280,7 +280,7 @@ public sealed class ShipmentEvaluationEngineTests
         // ever queried the wrong company or the whole fleet, this would return nothing
         // instead of silently including otherCompanyTruck.
         var harness = new Harness(companyId, [truck], shipment);
-        harness.RegisterCompany(TruckingCompany.Create(companyId, "Acme Trucking", Office));
+        harness.RegisterCompany(TruckingCompany.Create(companyId, "Acme Trucking", Office, "Office place"));
 
         var results = await harness.NewEngine().EvaluateForCompanyAsync(shipment.Id, companyId);
 
@@ -303,7 +303,7 @@ public sealed class ShipmentEvaluationEngineTests
         // (search starts at index 0), not attempt an out-of-range index against the
         // Office stop.
         var reachedShipment = Shipment.Book(
-            Guid.NewGuid(), Guid.NewGuid(), Pickup, Delivery,
+            Guid.NewGuid(), Guid.NewGuid(), Pickup, "Pickup place", Delivery, "Delivery place",
             Capacity.Create(50, 1), TruckType.Refrigerated,
             TimeWindow.Create(StartedAt, StartedAt.AddHours(1)),
             TimeWindow.Create(StartedAt, StartedAt.AddHours(2)),

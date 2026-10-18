@@ -13,7 +13,7 @@ public sealed class GetTruckingCompaniesHandlerTests
     public async Task GetTruckingCompaniesAsync_MapsIdNameAndOfficeCoordinates()
     {
         var location = GeoLocation.Create(52.52, 13.405);
-        var company = TruckingCompany.Create(Guid.NewGuid(), "Acme Trucking", location);
+        var company = TruckingCompany.Create(Guid.NewGuid(), "Acme Trucking", location, "Office place");
         var companies = new Mock<ITruckingCompanyRepository>();
         companies.Setup(c => c.GetAllAsync(It.IsAny<CancellationToken>())).ReturnsAsync([company]);
         var unitOfWork = new Mock<IUnitOfWork>();

@@ -6,7 +6,8 @@ public sealed record TruckingCompanySummaryDto(
     Guid CompanyId,
     string Name,
     double OfficeLatitude,
-    double OfficeLongitude);
+    double OfficeLongitude,
+    string OfficePlaceName);
 
 public sealed record GetTruckingCompaniesResponse(IReadOnlyList<TruckingCompanySummaryDto> Companies);
 
@@ -20,5 +21,5 @@ public sealed class GetTruckingCompaniesHandler(IUnitOfWork unitOfWork)
     }
 
     internal static TruckingCompanySummaryDto ToDto(Domain.Fleet.TruckingCompany company) =>
-        new(company.Id, company.Name, company.OfficeLocation.Latitude, company.OfficeLocation.Longitude);
+        new(company.Id, company.Name, company.OfficeLocation.Latitude, company.OfficeLocation.Longitude, company.OfficePlaceName);
 }

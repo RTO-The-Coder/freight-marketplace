@@ -21,7 +21,9 @@ public class ShipmentTests
             id ?? Guid.NewGuid(),
             Guid.NewGuid(),
             SomeLocation(),
+            "Pickup place",
             OtherLocation(),
+            "Delivery place",
             SomeLoad(),
             TruckType.Refrigerated,
             SomeWindow(at.AddHours(1)),
@@ -40,7 +42,7 @@ public class ShipmentTests
         var pickupWindow = SomeWindow(BookedAt.AddHours(1));
         var deliveryWindow = SomeWindow(BookedAt.AddHours(5));
 
-        var shipment = Shipment.Book(id, shipperId, pickup, delivery, load, TruckType.Refrigerated, pickupWindow, deliveryWindow, BookedAt);
+        var shipment = Shipment.Book(id, shipperId, pickup, "Pickup place", delivery, "Delivery place", load, TruckType.Refrigerated, pickupWindow, deliveryWindow, BookedAt);
 
         Assert.Equal(id, shipment.Id);
         Assert.Equal(shipperId, shipment.ShipperId);
@@ -63,7 +65,7 @@ public class ShipmentTests
     public void Book_WithoutExplicitId_GeneratesNonEmptyId()
     {
         var shipment = Shipment.Book(
-            Guid.NewGuid(), SomeLocation(), OtherLocation(), SomeLoad(), TruckType.Refrigerated,
+            Guid.NewGuid(), SomeLocation(), "Pickup place", OtherLocation(), "Delivery place", SomeLoad(), TruckType.Refrigerated,
             SomeWindow(BookedAt.AddHours(1)), SomeWindow(BookedAt.AddHours(5)), BookedAt);
 
         Assert.NotEqual(Guid.Empty, shipment.Id);
@@ -73,11 +75,11 @@ public class ShipmentTests
     public void Book_BothOverloads_ApplySameValidation()
     {
         Assert.Throws<ArgumentException>(() => Shipment.Book(
-            Guid.Empty, SomeLocation(), OtherLocation(), SomeLoad(), TruckType.Refrigerated,
+            Guid.Empty, SomeLocation(), "Pickup place", OtherLocation(), "Delivery place", SomeLoad(), TruckType.Refrigerated,
             SomeWindow(BookedAt.AddHours(1)), SomeWindow(BookedAt.AddHours(5)), BookedAt));
 
         Assert.Throws<ArgumentException>(() => Shipment.Book(
-            Guid.NewGuid(), Guid.Empty, SomeLocation(), OtherLocation(), SomeLoad(), TruckType.Refrigerated,
+            Guid.NewGuid(), Guid.Empty, SomeLocation(), "Pickup place", OtherLocation(), "Delivery place", SomeLoad(), TruckType.Refrigerated,
             SomeWindow(BookedAt.AddHours(1)), SomeWindow(BookedAt.AddHours(5)), BookedAt));
     }
 
@@ -85,7 +87,7 @@ public class ShipmentTests
     public void Book_EmptyId_Throws()
     {
         Assert.Throws<ArgumentException>(() => Shipment.Book(
-            Guid.Empty, Guid.NewGuid(), SomeLocation(), OtherLocation(), SomeLoad(), TruckType.Refrigerated,
+            Guid.Empty, Guid.NewGuid(), SomeLocation(), "Pickup place", OtherLocation(), "Delivery place", SomeLoad(), TruckType.Refrigerated,
             SomeWindow(BookedAt.AddHours(1)), SomeWindow(BookedAt.AddHours(5)), BookedAt));
     }
 
@@ -93,7 +95,7 @@ public class ShipmentTests
     public void Book_EmptyShipperId_Throws()
     {
         Assert.Throws<ArgumentException>(() => Shipment.Book(
-            Guid.NewGuid(), Guid.Empty, SomeLocation(), OtherLocation(), SomeLoad(), TruckType.Refrigerated,
+            Guid.NewGuid(), Guid.Empty, SomeLocation(), "Pickup place", OtherLocation(), "Delivery place", SomeLoad(), TruckType.Refrigerated,
             SomeWindow(BookedAt.AddHours(1)), SomeWindow(BookedAt.AddHours(5)), BookedAt));
     }
 
@@ -101,7 +103,7 @@ public class ShipmentTests
     public void Book_NullPickupLocation_Throws()
     {
         Assert.Throws<ArgumentNullException>(() => Shipment.Book(
-            Guid.NewGuid(), Guid.NewGuid(), null!, OtherLocation(), SomeLoad(), TruckType.Refrigerated,
+            Guid.NewGuid(), Guid.NewGuid(), null!, "Pickup place", OtherLocation(), "Delivery place", SomeLoad(), TruckType.Refrigerated,
             SomeWindow(BookedAt.AddHours(1)), SomeWindow(BookedAt.AddHours(5)), BookedAt));
     }
 
@@ -109,7 +111,7 @@ public class ShipmentTests
     public void Book_NullDeliveryLocation_Throws()
     {
         Assert.Throws<ArgumentNullException>(() => Shipment.Book(
-            Guid.NewGuid(), Guid.NewGuid(), SomeLocation(), null!, SomeLoad(), TruckType.Refrigerated,
+            Guid.NewGuid(), Guid.NewGuid(), SomeLocation(), "Pickup place", null!, "Delivery place", SomeLoad(), TruckType.Refrigerated,
             SomeWindow(BookedAt.AddHours(1)), SomeWindow(BookedAt.AddHours(5)), BookedAt));
     }
 
@@ -117,7 +119,7 @@ public class ShipmentTests
     public void Book_NullLoad_Throws()
     {
         Assert.Throws<ArgumentNullException>(() => Shipment.Book(
-            Guid.NewGuid(), Guid.NewGuid(), SomeLocation(), OtherLocation(), null!, TruckType.Refrigerated,
+            Guid.NewGuid(), Guid.NewGuid(), SomeLocation(), "Pickup place", OtherLocation(), "Delivery place", null!, TruckType.Refrigerated,
             SomeWindow(BookedAt.AddHours(1)), SomeWindow(BookedAt.AddHours(5)), BookedAt));
     }
 
@@ -125,7 +127,7 @@ public class ShipmentTests
     public void Book_NullPickupWindow_Throws()
     {
         Assert.Throws<ArgumentNullException>(() => Shipment.Book(
-            Guid.NewGuid(), Guid.NewGuid(), SomeLocation(), OtherLocation(), SomeLoad(), TruckType.Refrigerated,
+            Guid.NewGuid(), Guid.NewGuid(), SomeLocation(), "Pickup place", OtherLocation(), "Delivery place", SomeLoad(), TruckType.Refrigerated,
             null!, SomeWindow(BookedAt.AddHours(5)), BookedAt));
     }
 
@@ -133,7 +135,7 @@ public class ShipmentTests
     public void Book_NullDeliveryWindow_Throws()
     {
         Assert.Throws<ArgumentNullException>(() => Shipment.Book(
-            Guid.NewGuid(), Guid.NewGuid(), SomeLocation(), OtherLocation(), SomeLoad(), TruckType.Refrigerated,
+            Guid.NewGuid(), Guid.NewGuid(), SomeLocation(), "Pickup place", OtherLocation(), "Delivery place", SomeLoad(), TruckType.Refrigerated,
             SomeWindow(BookedAt.AddHours(1)), null!, BookedAt));
     }
 
@@ -144,7 +146,7 @@ public class ShipmentTests
         var deliveryWindow = SomeWindow(BookedAt.AddHours(1));
 
         Assert.Throws<ArgumentException>(() => Shipment.Book(
-            Guid.NewGuid(), Guid.NewGuid(), SomeLocation(), OtherLocation(), SomeLoad(), TruckType.Refrigerated,
+            Guid.NewGuid(), Guid.NewGuid(), SomeLocation(), "Pickup place", OtherLocation(), "Delivery place", SomeLoad(), TruckType.Refrigerated,
             pickupWindow, deliveryWindow, BookedAt));
     }
 
@@ -158,7 +160,7 @@ public class ShipmentTests
         var deliveryWindow = TimeWindow.Create(BookedAt, pickupEarliest);
 
         Assert.Throws<ArgumentException>(() => Shipment.Book(
-            Guid.NewGuid(), Guid.NewGuid(), SomeLocation(), OtherLocation(), SomeLoad(), TruckType.Refrigerated,
+            Guid.NewGuid(), Guid.NewGuid(), SomeLocation(), "Pickup place", OtherLocation(), "Delivery place", SomeLoad(), TruckType.Refrigerated,
             pickupWindow, deliveryWindow, BookedAt));
     }
 
@@ -172,7 +174,7 @@ public class ShipmentTests
         var deliveryWindow = TimeWindow.Create(BookedAt, pickupEarliest.AddTicks(1));
 
         var shipment = Shipment.Book(
-            Guid.NewGuid(), Guid.NewGuid(), SomeLocation(), OtherLocation(), SomeLoad(), TruckType.Refrigerated,
+            Guid.NewGuid(), Guid.NewGuid(), SomeLocation(), "Pickup place", OtherLocation(), "Delivery place", SomeLoad(), TruckType.Refrigerated,
             pickupWindow, deliveryWindow, BookedAt);
 
         Assert.Same(deliveryWindow, shipment.DeliveryWindow);
@@ -184,7 +186,7 @@ public class ShipmentTests
         var companyId = Guid.NewGuid();
 
         var shipment = Shipment.Book(
-            Guid.NewGuid(), SomeLocation(), OtherLocation(), SomeLoad(), TruckType.Refrigerated,
+            Guid.NewGuid(), SomeLocation(), "Pickup place", OtherLocation(), "Delivery place", SomeLoad(), TruckType.Refrigerated,
             SomeWindow(BookedAt.AddHours(1)), SomeWindow(BookedAt.AddHours(5)), BookedAt, companyId);
 
         Assert.True(shipment.IsDirect);
@@ -197,7 +199,7 @@ public class ShipmentTests
     public void Book_EmptyDirectCompanyId_Throws()
     {
         Assert.Throws<ArgumentException>(() => Shipment.Book(
-            Guid.NewGuid(), SomeLocation(), OtherLocation(), SomeLoad(), TruckType.Refrigerated,
+            Guid.NewGuid(), SomeLocation(), "Pickup place", OtherLocation(), "Delivery place", SomeLoad(), TruckType.Refrigerated,
             SomeWindow(BookedAt.AddHours(1)), SomeWindow(BookedAt.AddHours(5)), BookedAt, Guid.Empty));
     }
 
@@ -299,7 +301,7 @@ public class ShipmentTests
     public void UpdateWindows_DirectShipment_Succeeds()
     {
         var shipment = Shipment.Book(
-            Guid.NewGuid(), SomeLocation(), OtherLocation(), SomeLoad(), TruckType.Refrigerated,
+            Guid.NewGuid(), SomeLocation(), "Pickup place", OtherLocation(), "Delivery place", SomeLoad(), TruckType.Refrigerated,
             SomeWindow(BookedAt.AddHours(1)), SomeWindow(BookedAt.AddHours(5)), BookedAt, Guid.NewGuid());
         var newPickup = SomeWindow(BookedAt.AddHours(2));
 
@@ -333,7 +335,7 @@ public class ShipmentTests
     public void AssignToCompany_OtherCompanyThanHolder_Throws()
     {
         var shipment = Shipment.Book(
-            Guid.NewGuid(), SomeLocation(), OtherLocation(), SomeLoad(), TruckType.Refrigerated,
+            Guid.NewGuid(), SomeLocation(), "Pickup place", OtherLocation(), "Delivery place", SomeLoad(), TruckType.Refrigerated,
             SomeWindow(BookedAt.AddHours(1)), SomeWindow(BookedAt.AddHours(5)), BookedAt, Guid.NewGuid());
 
         Assert.Throws<InvalidOperationException>(() => shipment.AssignToCompany(Guid.NewGuid()));
@@ -459,5 +461,46 @@ public class ShipmentTests
         shipment.MarkDelivered(BookedAt.AddHours(5));
 
         Assert.Throws<InvalidOperationException>(() => shipment.MarkDelivered(BookedAt.AddHours(6)));
+    }
+
+    [Fact]
+    public void Book_StoresTrimmedPlaceNames()
+    {
+        var shipment = Shipment.Book(
+            Guid.NewGuid(), SomeLocation(), "  Warehouse — 10178 Mitte, Berlin ", OtherLocation(), " Depot — 80803 Schwabing, Munich",
+            SomeLoad(), TruckType.Refrigerated, SomeWindow(BookedAt.AddHours(1)), SomeWindow(BookedAt.AddHours(5)), BookedAt);
+
+        Assert.Equal("Warehouse — 10178 Mitte, Berlin", shipment.PickupPlaceName);
+        Assert.Equal("Depot — 80803 Schwabing, Munich", shipment.DeliveryPlaceName);
+    }
+
+    [Theory]
+    [InlineData("")]
+    [InlineData("   ")]
+    public void Book_BlankPickupPlaceName_Throws(string placeName)
+    {
+        Assert.Throws<ArgumentException>(() => Shipment.Book(
+            Guid.NewGuid(), SomeLocation(), placeName, OtherLocation(), "Delivery place",
+            SomeLoad(), TruckType.Refrigerated, SomeWindow(BookedAt.AddHours(1)), SomeWindow(BookedAt.AddHours(5)), BookedAt));
+    }
+
+    [Theory]
+    [InlineData("")]
+    [InlineData("   ")]
+    public void Book_BlankDeliveryPlaceName_Throws(string placeName)
+    {
+        Assert.Throws<ArgumentException>(() => Shipment.Book(
+            Guid.NewGuid(), SomeLocation(), "Pickup place", OtherLocation(), placeName,
+            SomeLoad(), TruckType.Refrigerated, SomeWindow(BookedAt.AddHours(1)), SomeWindow(BookedAt.AddHours(5)), BookedAt));
+    }
+
+    [Fact]
+    public void Book_PlaceNameTooLong_Throws()
+    {
+        var tooLong = new string('x', Shipment.MaxPlaceNameLength + 1);
+
+        Assert.Throws<ArgumentException>(() => Shipment.Book(
+            Guid.NewGuid(), SomeLocation(), tooLong, OtherLocation(), "Delivery place",
+            SomeLoad(), TruckType.Refrigerated, SomeWindow(BookedAt.AddHours(1)), SomeWindow(BookedAt.AddHours(5)), BookedAt));
     }
 }

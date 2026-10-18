@@ -33,7 +33,7 @@ public sealed class RescheduleAndEligibilityConsistencyTests
         var unitOfWork = new FakeUnitOfWork();
         var timeProvider = new FakeTimeProvider(new DateTimeOffset(ClockStart, TimeSpan.Zero));
 
-        var company = TruckingCompany.Create(Guid.NewGuid(), "Acme Trucking", Office);
+        var company = TruckingCompany.Create(Guid.NewGuid(), "Acme Trucking", Office, "Office place");
         unitOfWork.TruckingCompaniesRepo.Add(company);
         var truckResponse = await new AddTruckHandler(unitOfWork).AddTruckAsync(
             new AddTruckRequest("Truck-1", TruckType.Refrigerated, TruckSize.Medium, company.Id));
@@ -45,7 +45,7 @@ public sealed class RescheduleAndEligibilityConsistencyTests
         var shipper = Domain.Client.Shipper.Create(Guid.NewGuid(), "Acme Shipping", "contact@acme.com");
         unitOfWork.ShippersRepo.Add(shipper);
         var bookResponse = await new BookShipmentHandler(unitOfWork, timeProvider, new Mock<INotificationSender>().Object).BookShipmentAsync(new BookShipmentRequest(
-            shipper.Id, GeoLocation.Create(52.52, 13.405), GeoLocation.Create(48.1351, 11.582),
+            shipper.Id, GeoLocation.Create(52.52, 13.405), "Pickup place", GeoLocation.Create(48.1351, 11.582), "Delivery place",
             Capacity.Create(100, 1), TruckType.Refrigerated,
             TimeWindow.Create(ClockStart, ClockStart.AddDays(2)), TimeWindow.Create(ClockStart, ClockStart.AddDays(3))));
 

@@ -10,6 +10,8 @@ public sealed class Shipment
     /// <summary>Fixed offer window of an open shipment - offers can be sent and accepted only before it passes.</summary>
     private static readonly TimeSpan OfferSubmissionWindow = TimeSpan.FromHours(2);
 
+    public const int MaxPlaceNameLength = 300;
+
     public Guid Id { get; private set; }
     public Guid ShipperId { get; private set; }
 
@@ -23,7 +25,17 @@ public sealed class Shipment
     public bool IsDirect { get; private set; }
 
     public GeoLocation PickupLocation { get; private set; } = null!;
+
+    /// <summary>
+    /// Display name of the pickup, copied at booking (e.g. "Main warehouse — 1100 Favoriten, Vienna").
+    /// Never read by routing; a later address-book change never touches it (ADR 0013).
+    /// </summary>
+    public string PickupPlaceName { get; private set; } = null!;
+
     public GeoLocation DeliveryLocation { get; private set; } = null!;
+
+    /// <summary>Display name of the delivery, copied at booking - see <see cref="PickupPlaceName"/>.</summary>
+    public string DeliveryPlaceName { get; private set; } = null!;
     public Capacity Load { get; private set; } = null!;
     public TruckType RequiredTruckType { get; private set; }
     public TimeWindow PickupWindow { get; private set; } = null!;
@@ -55,7 +67,9 @@ public sealed class Shipment
         Guid id,
         Guid shipperId,
         GeoLocation pickupLocation,
+        string pickupPlaceName,
         GeoLocation deliveryLocation,
+        string deliveryPlaceName,
         Capacity load,
         TruckType requiredTruckType,
         TimeWindow pickupWindow,
@@ -68,7 +82,9 @@ public sealed class Shipment
         TruckingCompanyId = directCompanyId;
         IsDirect = directCompanyId is not null;
         PickupLocation = pickupLocation;
+        PickupPlaceName = pickupPlaceName;
         DeliveryLocation = deliveryLocation;
+        DeliveryPlaceName = deliveryPlaceName;
         Load = load;
         RequiredTruckType = requiredTruckType;
         PickupWindow = pickupWindow;
@@ -83,21 +99,25 @@ public sealed class Shipment
     public static Shipment Book(
         Guid shipperId,
         GeoLocation pickupLocation,
+        string pickupPlaceName,
         GeoLocation deliveryLocation,
+        string deliveryPlaceName,
         Capacity load,
         TruckType requiredTruckType,
         TimeWindow pickupWindow,
         TimeWindow deliveryWindow,
         DateTime bookedAt,
         Guid? directCompanyId = null) =>
-        Book(Guid.NewGuid(), shipperId, pickupLocation, deliveryLocation, load, requiredTruckType, pickupWindow, deliveryWindow, bookedAt, directCompanyId);
+        Book(Guid.NewGuid(), shipperId, pickupLocation, pickupPlaceName, deliveryLocation, deliveryPlaceName, load, requiredTruckType, pickupWindow, deliveryWindow, bookedAt, directCompanyId);
 
     /// <param name="directCompanyId">Set to book the shipment straight to that company (no offers); null for an open shipment.</param>
     public static Shipment Book(
         Guid id,
         Guid shipperId,
         GeoLocation pickupLocation,
+        string pickupPlaceName,
         GeoLocation deliveryLocation,
+        string deliveryPlaceName,
         Capacity load,
         TruckType requiredTruckType,
         TimeWindow pickupWindow,
@@ -122,13 +142,15 @@ public sealed class Shipment
 
         ArgumentNullException.ThrowIfNull(pickupLocation);
         ArgumentNullException.ThrowIfNull(deliveryLocation);
+        pickupPlaceName = RequirePlaceName(pickupPlaceName, nameof(pickupPlaceName));
+        deliveryPlaceName = RequirePlaceName(deliveryPlaceName, nameof(deliveryPlaceName));
         ArgumentNullException.ThrowIfNull(load);
         ArgumentNullException.ThrowIfNull(pickupWindow);
         ArgumentNullException.ThrowIfNull(deliveryWindow);
         EnsureDeliveryAfterPickup(pickupWindow, deliveryWindow);
 
         return new Shipment(
-            id, shipperId, pickupLocation, deliveryLocation, load, requiredTruckType, pickupWindow, deliveryWindow, bookedAt, directCompanyId);
+            id, shipperId, pickupLocation, pickupPlaceName, deliveryLocation, deliveryPlaceName, load, requiredTruckType, pickupWindow, deliveryWindow, bookedAt, directCompanyId);
     }
 
     /// <summary>An open shipment no company holds yet, still inside its offer window.</summary>
@@ -225,6 +247,17 @@ public sealed class Shipment
         }
 
         Status = ShipmentStatus.Delivered;
+    }
+
+    private static string RequirePlaceName(string placeName, string paramName)
+    {
+        var trimmed = placeName?.Trim() ?? string.Empty;
+        if (trimmed.Length == 0 || trimmed.Length > MaxPlaceNameLength)
+        {
+            throw new ArgumentException($"A place name of 1-{MaxPlaceNameLength} characters is required.", paramName);
+        }
+
+        return trimmed;
     }
 
     private static void EnsureDeliveryAfterPickup(TimeWindow pickupWindow, TimeWindow deliveryWindow)

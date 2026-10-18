@@ -32,7 +32,7 @@ public sealed class BookAssignAdvanceEtaConsistencyTests
         var timeProvider = new FakeTimeProvider(new DateTimeOffset(ClockStart, TimeSpan.Zero));
 
         // Seed a company, a driven+active truck.
-        var company = TruckingCompany.Create(Guid.NewGuid(), "Acme Trucking", GeoLocation.Create(50.11, 8.68));
+        var company = TruckingCompany.Create(Guid.NewGuid(), "Acme Trucking", GeoLocation.Create(50.11, 8.68), "Office place");
         unitOfWork.TruckingCompaniesRepo.Add(company);
 
         var addTruckHandler = new AddTruckHandler(unitOfWork);
@@ -55,7 +55,9 @@ public sealed class BookAssignAdvanceEtaConsistencyTests
         var bookResponse = await bookHandler.BookShipmentAsync(new BookShipmentRequest(
             shipper.Id,
             GeoLocation.Create(52.52, 13.405),
+            "Pickup place",
             GeoLocation.Create(48.1351, 11.582),
+            "Delivery place",
             Capacity.Create(100, 1),
             TruckType.Refrigerated,
             TimeWindow.Create(ClockStart, ClockStart.AddDays(2)),

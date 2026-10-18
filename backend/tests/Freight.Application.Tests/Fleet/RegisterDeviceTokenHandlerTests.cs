@@ -14,7 +14,7 @@ public sealed class RegisterDeviceTokenHandlerTests
     private sealed class Harness
     {
         public TruckingCompany Company { get; } =
-            TruckingCompany.Create(Guid.NewGuid(), "Acme Trucking", GeoLocation.Create(52.52, 13.405));
+            TruckingCompany.Create(Guid.NewGuid(), "Acme Trucking", GeoLocation.Create(52.52, 13.405), "Office place");
 
         public Mock<ITruckingCompanyRepository> Companies { get; } = new();
         public Mock<IDeviceTokenRepository> DeviceTokens { get; } = new();

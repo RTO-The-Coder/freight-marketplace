@@ -76,7 +76,7 @@ public sealed class ApiTestFactory : WebApplicationFactory<Program>
     /// </summary>
     public async Task<TruckingCompany> SeedTruckingCompanyAsync(string name = "Acme Trucking")
     {
-        var company = TruckingCompany.Create(Guid.NewGuid(), name, GeoLocation.Create(50.11, 8.68));
+        var company = TruckingCompany.Create(Guid.NewGuid(), name, GeoLocation.Create(50.11, 8.68), "Office place");
 
         await using var dbContext = new FreightDbContext(
             new DbContextOptionsBuilder<FreightDbContext>().UseNpgsql(ConnectionString).Options);

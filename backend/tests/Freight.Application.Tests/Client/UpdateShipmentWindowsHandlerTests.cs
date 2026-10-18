@@ -17,7 +17,8 @@ public sealed class UpdateShipmentWindowsHandlerTests
 
     private static Shipment SomeShipment(Guid? directCompanyId = null) => Shipment.Book(
         Guid.NewGuid(), Guid.NewGuid(),
-        GeoLocation.Create(52.52, 13.405), GeoLocation.Create(48.1351, 11.582),
+        GeoLocation.Create(52.52, 13.405),
+        "Pickup place", GeoLocation.Create(48.1351, 11.582), "Delivery place",
         Capacity.Create(100, 5), TruckType.Refrigerated,
         TimeWindow.Create(BookedAt.AddHours(2), BookedAt.AddHours(4)),
         TimeWindow.Create(BookedAt.AddHours(8), BookedAt.AddHours(10)),

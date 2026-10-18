@@ -38,7 +38,7 @@ public sealed class SetDriverCompanyHandlerTests
         var companies = new Mock<ITruckingCompanyRepository>();
         companies.Setup(c => c.GetByIdAsync(It.IsAny<Guid>(), It.IsAny<CancellationToken>()))
             .ReturnsAsync((Guid id, CancellationToken _) =>
-                companyExists ? TruckingCompany.Create(id, "Some Company", GeoLocation.Create(53.55, 9.99)) : null);
+                companyExists ? TruckingCompany.Create(id, "Some Company", GeoLocation.Create(53.55, 9.99), "Office place") : null);
 
         var unitOfWork = new Mock<IUnitOfWork>();
         unitOfWork.SetupGet(u => u.Drivers).Returns(drivers.Object);

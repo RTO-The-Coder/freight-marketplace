@@ -10,15 +10,17 @@ public static class TestShipments
     private static readonly TimeSpan OpensBeforeArrival = TimeSpan.FromHours(6);
     private static readonly TimeSpan ClosesAfterArrival = TimeSpan.FromHours(12);
 
-    /// <summary>A refrigerated shipment from <paramref name="pickup"/> to <paramref name="delivery"/>.</summary>
+    /// <summary>A refrigerated shipment from <paramref name="pickup"/> to <paramref name="delivery"/>, named "Pickup"/"Delivery" (names are display only).</summary>
     public static BookShipmentBody Between(
         Guid shipperId, GeoLocation pickup, GeoLocation delivery, Capacity load, TimeWindow pickupWindow, TimeWindow deliveryWindow) =>
         new(
             shipperId,
             pickup.Latitude,
             pickup.Longitude,
+            "Pickup",
             delivery.Latitude,
             delivery.Longitude,
+            "Delivery",
             load.WeightKg,
             load.VolumeCubicMeters,
             TruckType.Refrigerated,

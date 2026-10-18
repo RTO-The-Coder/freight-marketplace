@@ -13,6 +13,11 @@ public sealed class ShipmentRepository(FreightDbContext dbContext)
             .Where(shipment => shipment.ShipperId == shipperId)
             .ToListAsync(cancellationToken);
 
+    public async Task<IReadOnlyList<Shipment>> GetByIdsAsync(IReadOnlyCollection<Guid> shipmentIds, CancellationToken cancellationToken = default) =>
+        await DbContext.Set<Shipment>()
+            .Where(shipment => shipmentIds.Contains(shipment.Id))
+            .ToListAsync(cancellationToken);
+
     public async Task<IReadOnlyList<Shipment>> GetByStatusAsync(ShipmentStatus status, CancellationToken cancellationToken = default) =>
         await DbContext.Set<Shipment>()
             .Where(shipment => shipment.Status == status)

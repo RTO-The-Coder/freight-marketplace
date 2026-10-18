@@ -13,7 +13,7 @@ public sealed class GetTruckingCompanyByIdHandlerTests
     public async Task GetTruckingCompanyByIdAsync_KnownId_ReturnsSameShapeAsListEndpoint()
     {
         var location = GeoLocation.Create(52.52, 13.405);
-        var company = TruckingCompany.Create(Guid.NewGuid(), "Acme Trucking", location);
+        var company = TruckingCompany.Create(Guid.NewGuid(), "Acme Trucking", location, "Office place");
         var companies = new Mock<ITruckingCompanyRepository>();
         companies.Setup(c => c.GetByIdAsync(company.Id, It.IsAny<CancellationToken>())).ReturnsAsync(company);
         var unitOfWork = new Mock<IUnitOfWork>();

@@ -12,7 +12,9 @@ namespace Freight.Application.Client;
 public sealed record BookShipmentRequest(
     Guid ShipperId,
     GeoLocation PickupLocation,
+    string PickupPlaceName,
     GeoLocation DeliveryLocation,
+    string DeliveryPlaceName,
     Capacity Load,
     TruckType RequiredTruckType,
     TimeWindow PickupWindow,
@@ -38,7 +40,9 @@ public sealed class BookShipmentHandler(
         var shipment = ShipmentAggregate.Book(
             request.ShipperId,
             request.PickupLocation,
+            request.PickupPlaceName,
             request.DeliveryLocation,
+            request.DeliveryPlaceName,
             request.Load,
             request.RequiredTruckType,
             request.PickupWindow,
@@ -52,7 +56,7 @@ public sealed class BookShipmentHandler(
         // No search here, just a notification send, so it runs synchronously (ADR 0007):
         // an open shipment goes to every TruckingCompany, a direct one only to its company.
         var summary = new ShipmentNotificationSummary(
-            shipment.Id, shipment.PickupLocation, shipment.RequiredTruckType, shipment.PickupWindow, shipment.IsDirect);
+            shipment.Id, shipment.PickupPlaceName, shipment.DeliveryPlaceName, shipment.RequiredTruckType, shipment.PickupWindow, shipment.IsDirect);
         if (shipment.IsDirect)
         {
             await notificationSender.NotifyCompanyAsync(shipment.TruckingCompanyId!.Value, summary, cancellationToken);

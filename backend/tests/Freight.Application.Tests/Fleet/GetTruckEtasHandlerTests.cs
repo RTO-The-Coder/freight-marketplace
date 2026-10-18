@@ -35,7 +35,8 @@ public sealed class GetTruckEtasHandlerTests
         var trip = Trip.Open(truck.Id, truck.TruckingCompanyId!.Value, StartedAt);
         var shipment = Shipment.Book(
             Guid.NewGuid(), Guid.NewGuid(),
-            GeoLocation.Create(52.52, 13.405), GeoLocation.Create(48.1351, 11.582),
+            GeoLocation.Create(52.52, 13.405),
+            "Pickup place", GeoLocation.Create(48.1351, 11.582), "Delivery place",
             Capacity.Create(100, 1), TruckType.Refrigerated,
             TimeWindow.Create(StartedAt, StartedAt.AddDays(1)),
             TimeWindow.Create(StartedAt, StartedAt.AddDays(2)),
@@ -106,7 +107,8 @@ public sealed class GetTruckEtasHandlerTests
         var trip = Trip.Open(truck.Id, truck.TruckingCompanyId!.Value, StartedAt);
         var shipment = Shipment.Book(
             Guid.NewGuid(), Guid.NewGuid(),
-            GeoLocation.Create(52.52, 13.405), GeoLocation.Create(48.1351, 11.582),
+            GeoLocation.Create(52.52, 13.405),
+            "Pickup place", GeoLocation.Create(48.1351, 11.582), "Delivery place",
             Capacity.Create(100, 1), TruckType.Refrigerated,
             TimeWindow.Create(StartedAt, StartedAt.AddDays(1)),
             TimeWindow.Create(StartedAt, StartedAt.AddDays(2)),
