@@ -147,6 +147,7 @@ public sealed class Shipment
         ArgumentNullException.ThrowIfNull(load);
         ArgumentNullException.ThrowIfNull(pickupWindow);
         ArgumentNullException.ThrowIfNull(deliveryWindow);
+        EnsurePickupNotOver(pickupWindow, bookedAt);
         EnsureDeliveryAfterPickup(pickupWindow, deliveryWindow);
 
         return new Shipment(
@@ -195,6 +196,7 @@ public sealed class Shipment
             throw new InvalidOperationException("The times can't be changed after an offer has been accepted.");
         }
 
+        EnsurePickupNotOver(newPickupWindow, updatedAt);
         EnsureDeliveryAfterPickup(newPickupWindow, newDeliveryWindow);
 
         PickupWindow = newPickupWindow;
@@ -258,6 +260,15 @@ public sealed class Shipment
         }
 
         return trimmed;
+    }
+
+    /// <summary>A pickup window that has already closed (as of the simulation clock) can never be met.</summary>
+    private static void EnsurePickupNotOver(TimeWindow pickupWindow, DateTime now)
+    {
+        if (pickupWindow.Latest < now)
+        {
+            throw new ArgumentException("The pickup window is already over.", nameof(pickupWindow));
+        }
     }
 
     private static void EnsureDeliveryAfterPickup(TimeWindow pickupWindow, TimeWindow deliveryWindow)

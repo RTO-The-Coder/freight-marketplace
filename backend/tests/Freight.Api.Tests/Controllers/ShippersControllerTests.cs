@@ -7,6 +7,9 @@ namespace Freight.Api.Tests.Controllers;
 
 public sealed class ShippersControllerTests : ApiTestBase
 {
+    /// <summary>The simulation time these tests book at - before every window they use (March 2026).</summary>
+    private static readonly DateTime ClockStart = new DateTimeOffset(2026, 2, 28, 6, 0, 0, TimeSpan.Zero).UtcDateTime;
+
     [Fact]
     public async Task GetShippers_NoneExist_ReturnsEmptyList()
     {
@@ -102,6 +105,7 @@ public sealed class ShippersControllerTests : ApiTestBase
     public async Task GetShipmentsByShipper_BookedShipment_CarriesItsPlaceNamesAndPickupPosition()
     {
         var shipper = await Factory.SeedShipperAsync();
+        await SetSimulationTimeAsync(ClockStart);
         var pickupStart = new DateTimeOffset(2026, 3, 1, 6, 0, 0, TimeSpan.Zero).UtcDateTime;
         var book = await Client.PostAsJsonAsync("/shipments", new
         {
@@ -135,6 +139,7 @@ public sealed class ShippersControllerTests : ApiTestBase
     public async Task BookShipment_WithoutPlaceNames_Returns400()
     {
         var shipper = await Factory.SeedShipperAsync();
+        await SetSimulationTimeAsync(ClockStart);
         var pickupStart = new DateTimeOffset(2026, 3, 1, 6, 0, 0, TimeSpan.Zero).UtcDateTime;
 
         var response = await Client.PostAsJsonAsync("/shipments", new

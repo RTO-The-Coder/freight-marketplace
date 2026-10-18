@@ -25,6 +25,7 @@ public sealed class TripsControllerTests : ApiTestBase
     [Fact]
     public async Task RescheduleStart_NotYetDepartedTrip_Returns200WithNewStartTime()
     {
+        await SetSimulationTimeAsync(ClockStart);
         var company = await Factory.SeedTruckingCompanyAsync();
         var truckId = await AddTruckAsync();
         await Client.PostAsJsonAsync($"/trucks/{truckId}/company", new { TruckingCompanyId = company.Id }, JsonOptions);

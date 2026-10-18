@@ -8,6 +8,9 @@ namespace Freight.Api.Tests.Controllers;
 
 public sealed class ShipmentsControllerTests : ApiTestBase
 {
+    /// <summary>The simulation time these tests book at - before every window they use (March 2026).</summary>
+    private static readonly DateTime ClockStart = new DateTimeOffset(2026, 2, 28, 6, 0, 0, TimeSpan.Zero).UtcDateTime;
+
     [Fact]
     public async Task GetPendingShipments_NoneExist_ReturnsEmptyList()
     {
@@ -23,6 +26,7 @@ public sealed class ShipmentsControllerTests : ApiTestBase
     public async Task BookShipment_ValidBody_Returns200AndAppearsInPending()
     {
         var shipper = await Factory.SeedShipperAsync();
+        await SetSimulationTimeAsync(ClockStart);
 
         var bookResponse = await BookShipmentAsync(shipper.Id);
 
@@ -37,6 +41,7 @@ public sealed class ShipmentsControllerTests : ApiTestBase
         // Shipment.Book rejects a delivery window that closes at or before the pickup
         // window even opens - delivering before pickup can happen is impossible.
         var shipper = await Factory.SeedShipperAsync();
+        await SetSimulationTimeAsync(ClockStart);
         var pickupStart = new DateTimeOffset(2026, 3, 1, 6, 0, 0, TimeSpan.Zero).UtcDateTime;
 
         var response = await Client.PostAsJsonAsync("/shipments", new
@@ -61,11 +66,25 @@ public sealed class ShipmentsControllerTests : ApiTestBase
     }
 
     [Fact]
+    public async Task BookShipment_PickupWindowOverBySimulationTime_Returns400WithAPlainMessage()
+    {
+        var shipper = await Factory.SeedShipperAsync();
+        await SetSimulationTimeAsync(new DateTimeOffset(2026, 3, 5, 6, 0, 0, TimeSpan.Zero).UtcDateTime);
+
+        // Shipment.Book's ArgumentException names its parameter - the middleware leaves that out.
+        var response = await Client.PostAsJsonAsync("/shipments", BookBody(shipper.Id, ClockStart.AddDays(1), null), JsonOptions);
+
+        Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
+        Assert.Equal("""{"error":"The pickup window is already over."}""", await response.Content.ReadAsStringAsync());
+    }
+
+    [Fact]
     public async Task BookShipment_PickupWindowEarliestEqualsLatest_Returns400ViaExceptionMiddleware()
     {
         // TimeWindow.Create DOES reject earliest >= latest - this is the genuine
         // validation boundary, unlike the cross-window case above.
         var shipper = await Factory.SeedShipperAsync();
+        await SetSimulationTimeAsync(ClockStart);
         var sameInstant = new DateTimeOffset(2026, 3, 1, 6, 0, 0, TimeSpan.Zero).UtcDateTime;
 
         var response = await Client.PostAsJsonAsync("/shipments", new
@@ -93,6 +112,7 @@ public sealed class ShipmentsControllerTests : ApiTestBase
     public async Task BookShipment_WithKnownCompany_IsDirectAndHeldByThatCompany()
     {
         var shipper = await Factory.SeedShipperAsync();
+        await SetSimulationTimeAsync(ClockStart);
         var company = await Factory.SeedTruckingCompanyAsync();
 
         var bookResponse = await BookShipmentAsync(shipper.Id, company.Id);
@@ -108,6 +128,7 @@ public sealed class ShipmentsControllerTests : ApiTestBase
     public async Task BookShipment_UnknownCompany_Returns400ViaExceptionMiddleware()
     {
         var shipper = await Factory.SeedShipperAsync();
+        await SetSimulationTimeAsync(ClockStart);
         var pickupStart = new DateTimeOffset(2026, 3, 1, 6, 0, 0, TimeSpan.Zero).UtcDateTime;
 
         var response = await Client.PostAsJsonAsync("/shipments", BookBody(shipper.Id, pickupStart, Guid.NewGuid()), JsonOptions);
@@ -129,6 +150,7 @@ public sealed class ShipmentsControllerTests : ApiTestBase
     public async Task UpdateWindows_ValidBody_Returns204AndUpdatesBothWindows()
     {
         var shipper = await Factory.SeedShipperAsync();
+        await SetSimulationTimeAsync(ClockStart);
         var bookResponse = await BookShipmentAsync(shipper.Id);
         var newEarliest = new DateTimeOffset(2026, 3, 2, 6, 0, 0, TimeSpan.Zero).UtcDateTime;
 
@@ -147,6 +169,7 @@ public sealed class ShipmentsControllerTests : ApiTestBase
     public async Task UpdateWindows_DeliveryClosesBeforePickupOpens_Returns400ViaExceptionMiddleware()
     {
         var shipper = await Factory.SeedShipperAsync();
+        await SetSimulationTimeAsync(ClockStart);
         var bookResponse = await BookShipmentAsync(shipper.Id);
         var newEarliest = new DateTimeOffset(2026, 3, 10, 6, 0, 0, TimeSpan.Zero).UtcDateTime;
 
@@ -165,6 +188,7 @@ public sealed class ShipmentsControllerTests : ApiTestBase
     public async Task GetOffers_NewShipment_ReturnsEmptyListWithDeadline()
     {
         var shipper = await Factory.SeedShipperAsync();
+        await SetSimulationTimeAsync(ClockStart);
         var bookResponse = await BookShipmentAsync(shipper.Id);
 
         var offers = await Client.GetFromJsonAsync<Freight.Application.Offers.GetShipmentOffersResponse>(

@@ -162,7 +162,11 @@ app.Use(async (context, next) =>
     catch (Exception ex) when (ex is ArgumentException or InvalidOperationException)
     {
         context.Response.StatusCode = StatusCodes.Status400BadRequest;
-        await context.Response.WriteAsJsonAsync(new { error = ex.Message });
+        // ArgumentException appends " (Parameter 'x')" to its message - a code detail, not for users.
+        var message = ex is ArgumentException { ParamName: { } paramName }
+            ? ex.Message.Replace($" (Parameter '{paramName}')", string.Empty)
+            : ex.Message;
+        await context.Response.WriteAsJsonAsync(new { error = message });
     }
 });
 

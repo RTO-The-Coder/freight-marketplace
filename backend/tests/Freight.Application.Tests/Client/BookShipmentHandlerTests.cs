@@ -61,7 +61,7 @@ public sealed class BookShipmentHandlerTests
         var unitOfWork = new Mock<IUnitOfWork>();
         unitOfWork.SetupGet(u => u.Shipments).Returns(shipments.Object);
 
-        var seedTimeOffset = new DateTimeOffset(2026, 3, 1, 12, 0, 0, TimeSpan.Zero);
+        var seedTimeOffset = new DateTimeOffset(2025, 12, 31, 12, 0, 0, TimeSpan.Zero);
         var simulationClockRepo = new Mock<Freight.Domain.Simulation.Abstractions.ISimulationClockRepository>();
         simulationClockRepo
             .Setup(r => r.GetOrCreateAsync(It.IsAny<Func<DateTime>>(), It.IsAny<CancellationToken>()))

@@ -1,3 +1,4 @@
+using System.Net.Http.Json;
 using System.Text.Json;
 using System.Text.Json.Serialization;
 
@@ -30,6 +31,13 @@ public abstract class ApiTestBase : IAsyncLifetime
         await Factory.CreateDatabaseAsync();
         Client = Factory.CreateClient();
     }
+
+    /// <summary>
+    /// Sets the simulation clock. Without it the clock starts at the real current time, and a
+    /// shipment whose pickup window is over by then can't be booked.
+    /// </summary>
+    protected async Task SetSimulationTimeAsync(DateTime time) =>
+        (await Client.PostAsJsonAsync("/simulation/time", new { NewCurrentTime = time }, JsonOptions)).EnsureSuccessStatusCode();
 
     public async Task DisposeAsync()
     {

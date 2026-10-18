@@ -181,6 +181,32 @@ public class ShipmentTests
     }
 
     [Fact]
+    public void Book_PickupWindowAlreadyOver_Throws()
+    {
+        var pickupWindow = TimeWindow.Create(BookedAt.AddHours(-3), BookedAt.AddTicks(-1));
+
+        var error = Assert.Throws<ArgumentException>(() => Shipment.Book(
+            Guid.NewGuid(), Guid.NewGuid(), SomeLocation(), "Pickup place", OtherLocation(), "Delivery place", SomeLoad(), TruckType.Refrigerated,
+            pickupWindow, SomeWindow(BookedAt.AddHours(5)), BookedAt));
+
+        Assert.StartsWith("The pickup window is already over.", error.Message);
+    }
+
+    [Fact]
+    public void Book_PickupWindowStillOpen_Succeeds()
+    {
+        // Opened before booking but not closed yet - the truck can still make it; closing at the
+        // booking instant itself is still allowed (only a window already over is rejected).
+        var pickupWindow = TimeWindow.Create(BookedAt.AddHours(-3), BookedAt);
+
+        var shipment = Shipment.Book(
+            Guid.NewGuid(), Guid.NewGuid(), SomeLocation(), "Pickup place", OtherLocation(), "Delivery place", SomeLoad(), TruckType.Refrigerated,
+            pickupWindow, SomeWindow(BookedAt.AddHours(5)), BookedAt);
+
+        Assert.Same(pickupWindow, shipment.PickupWindow);
+    }
+
+    [Fact]
     public void Book_WithDirectCompany_IsDirectHeldByThatCompanyAndPending()
     {
         var companyId = Guid.NewGuid();
@@ -317,6 +343,20 @@ public class ShipmentTests
 
         Assert.Throws<ArgumentException>(() =>
             shipment.UpdateWindows(SomeWindow(BookedAt.AddHours(8)), SomeWindow(BookedAt.AddHours(5)), BookedAt));
+    }
+
+    [Fact]
+    public void UpdateWindows_PickupWindowAlreadyOver_ThrowsAndKeepsTheOldWindows()
+    {
+        var shipment = BookedShipment();
+        var oldPickup = shipment.PickupWindow;
+        var updatedAt = BookedAt.AddHours(10);
+
+        var error = Assert.Throws<ArgumentException>(() =>
+            shipment.UpdateWindows(SomeWindow(BookedAt.AddHours(6)), SomeWindow(BookedAt.AddHours(12)), updatedAt));
+
+        Assert.StartsWith("The pickup window is already over.", error.Message);
+        Assert.Same(oldPickup, shipment.PickupWindow);
     }
 
     [Fact]
