@@ -47,7 +47,7 @@ export function createShipmentsApi(client: ApiClient) {
     getShipmentsByShipper: (shipperId: string) =>
       client.get<GetShipmentsByShipperResponse>(`/shippers/${shipperId}/shipments`),
 
-    /** The shipper's saved addresses, newest first. */
+    /** The shipper's saved addresses, A–Z by name. */
     getShipperAddresses: (shipperId: string) =>
       client.get<GetShipperAddressesResponse>(`/shippers/${shipperId}/addresses`),
 

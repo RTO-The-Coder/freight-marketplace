@@ -45,10 +45,10 @@ public class TruckingCompanyAndShipperRoundTripTests : IAsyncLifetime
     }
 
     [Fact]
-    public async Task ShipperAddressBook_SavedAndExtendedLater_LoadsEveryAddressNewestFirst()
+    public async Task ShipperAddressBook_SavedAndExtendedLater_LoadsEveryAddressByName()
     {
         var shipper = Shipper.Create(_shipperId, "Acme Shipping", "contact@acme.com");
-        shipper.AddAddress("Depot", "80803 Schwabing, Munich", GeoLocation.Create(48.1626, 11.5868), Now);
+        shipper.AddAddress("Warehouse", "80803 Schwabing, Munich", GeoLocation.Create(48.1626, 11.5868), Now);
         await using (var dbContext = new FreightDbContext(Options()))
         {
             new ShipperRepository(dbContext).Add(shipper);
@@ -69,14 +69,14 @@ public class TruckingCompanyAndShipperRoundTripTests : IAsyncLifetime
         Assert.NotNull(reloaded);
         Assert.Collection(
             reloaded.Addresses,
-            newest =>
+            added =>
             {
-                Assert.Equal("Main warehouse", newest.Label);
-                Assert.Equal("1100 Favoriten, Vienna", newest.AreaName);
-                Assert.Equal(GeoLocation.Create(48.155, 16.382), newest.Location);
-                Assert.Equal(Now.AddHours(1), newest.CreatedAt);
+                Assert.Equal("Main warehouse", added.Label);
+                Assert.Equal("1100 Favoriten, Vienna", added.AreaName);
+                Assert.Equal(GeoLocation.Create(48.155, 16.382), added.Location);
+                Assert.Equal(Now.AddHours(1), added.CreatedAt);
             },
-            oldest => Assert.Equal("Depot", oldest.Label));
+            first => Assert.Equal("Warehouse", first.Label));
     }
 
     [Fact]

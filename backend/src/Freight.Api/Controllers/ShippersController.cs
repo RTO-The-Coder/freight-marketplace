@@ -28,7 +28,7 @@ public sealed class ShippersController(
         return Ok(response);
     }
 
-    /// <summary>The shipper's saved addresses (address book), newest first.</summary>
+    /// <summary>The shipper's saved addresses (address book), A–Z by name.</summary>
     [HttpGet("{shipperId:guid}/addresses")]
     public async Task<ActionResult<GetShipperAddressesResponse>> GetAddresses(
         Guid shipperId,

@@ -27,7 +27,7 @@ public sealed record ShipperAddressDto(
 
 public sealed record GetShipperAddressesResponse(IReadOnlyList<ShipperAddressDto> Addresses);
 
-/// <summary>A shipper's saved addresses (their address book, ADR 0013), newest first.</summary>
+/// <summary>A shipper's saved addresses (their address book, ADR 0013), A–Z by name.</summary>
 public sealed class GetShipperAddressesHandler(IUnitOfWork unitOfWork)
 {
     public async Task<GetShipperAddressesResponse> GetShipperAddressesAsync(GetShipperAddressesRequest request, CancellationToken cancellationToken = default)

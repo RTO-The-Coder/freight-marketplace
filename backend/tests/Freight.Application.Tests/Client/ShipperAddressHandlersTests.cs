@@ -66,16 +66,16 @@ public sealed class ShipperAddressHandlersTests
     }
 
     [Fact]
-    public async Task GetShipperAddressesAsync_ReturnsTheAddressBookNewestFirst()
+    public async Task GetShipperAddressesAsync_ReturnsTheAddressBookByName()
     {
         var shipper = Shipper.Create(Guid.NewGuid(), "Acme Shipping", "contact@acme.com");
-        shipper.AddAddress("Depot", "80803 Schwabing, Munich", GeoLocation.Create(48.16, 11.58), SimNow);
-        shipper.AddAddress("Warehouse", "1100 Favoriten, Vienna", GeoLocation.Create(48.155, 16.382), SimNow.AddHours(1));
+        shipper.AddAddress("Warehouse", "1100 Favoriten, Vienna", GeoLocation.Create(48.155, 16.382), SimNow);
+        shipper.AddAddress("Depot", "80803 Schwabing, Munich", GeoLocation.Create(48.16, 11.58), SimNow.AddHours(1));
         var handler = new GetShipperAddressesHandler(SetUp(shipper).Object);
 
         var response = await handler.GetShipperAddressesAsync(new GetShipperAddressesRequest(shipper.Id));
 
-        Assert.Equal(["Warehouse", "Depot"], response.Addresses.Select(a => a.Label));
+        Assert.Equal(["Depot", "Warehouse"], response.Addresses.Select(a => a.Label));
     }
 
     [Fact]

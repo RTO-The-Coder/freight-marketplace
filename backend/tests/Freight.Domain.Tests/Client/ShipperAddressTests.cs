@@ -27,13 +27,14 @@ public class ShipperAddressTests
     }
 
     [Fact]
-    public void Addresses_AreNewestFirst()
+    public void Addresses_AreSortedByNameThenArea_NotByWhenSaved()
     {
         var shipper = SomeShipper();
-        var older = shipper.AddAddress("Depot", "80803 Schwabing, Munich", Favoriten, Now);
-        var newer = shipper.AddAddress("Warehouse", "1100 Favoriten, Vienna", Favoriten, Now.AddHours(1));
+        var warehouse = shipper.AddAddress("Warehouse", "1100 Favoriten, Vienna", Favoriten, Now);
+        var depotVienna = shipper.AddAddress("depot", "1100 Favoriten, Vienna", Favoriten, Now.AddHours(1));
+        var depotMunich = shipper.AddAddress("Depot", "80803 Schwabing, Munich", Favoriten, Now.AddHours(2));
 
-        Assert.Equal([newer, older], shipper.Addresses);
+        Assert.Equal([depotVienna, depotMunich, warehouse], shipper.Addresses);
     }
 
     [Theory]

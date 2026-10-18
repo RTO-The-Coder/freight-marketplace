@@ -60,25 +60,23 @@ public sealed class ShippersControllerTests : ApiTestBase
     // --- Address book ------------------------------------------------------------------
 
     [Fact]
-    public async Task AddAddress_ThenGetAddresses_ReturnsTheSavedAddressNewestFirst()
+    public async Task AddAddress_ThenGetAddresses_ReturnsTheSavedAddressesByName()
     {
         var shipper = await Factory.SeedShipperAsync();
 
         var first = await Client.PostAsJsonAsync($"/shippers/{shipper.Id}/addresses",
-            new { Label = "Depot", AreaName = "80803 Schwabing, Munich", Latitude = 48.1626, Longitude = 11.5868 }, JsonOptions);
-        first.EnsureSuccessStatusCode();
-        // "Newest first" is by simulation time - move the clock so the second address is newer.
-        (await Client.PostAsJsonAsync("/simulation/advance", new { Ticks = 1 }, JsonOptions)).EnsureSuccessStatusCode();
-        var second = await Client.PostAsJsonAsync($"/shippers/{shipper.Id}/addresses",
             new { Label = "Main warehouse", AreaName = "1100 Favoriten, Vienna", Latitude = 48.155, Longitude = 16.382 }, JsonOptions);
-        second.EnsureSuccessStatusCode();
-        var saved = await second.Content.ReadFromJsonAsync<ShipperAddressDto>(JsonOptions);
+        first.EnsureSuccessStatusCode();
+        var saved = await first.Content.ReadFromJsonAsync<ShipperAddressDto>(JsonOptions);
         Assert.Equal("Main warehouse — 1100 Favoriten, Vienna", saved!.PlaceName);
+        var second = await Client.PostAsJsonAsync($"/shippers/{shipper.Id}/addresses",
+            new { Label = "Depot", AreaName = "80803 Schwabing, Munich", Latitude = 48.1626, Longitude = 11.5868 }, JsonOptions);
+        second.EnsureSuccessStatusCode();
 
         var body = await Client.GetFromJsonAsync<GetShipperAddressesResponse>($"/shippers/{shipper.Id}/addresses", JsonOptions);
 
-        Assert.Equal(["Main warehouse", "Depot"], body!.Addresses.Select(a => a.Label));
-        Assert.Equal(saved.AddressId, body.Addresses[0].AddressId);
+        Assert.Equal(["Depot", "Main warehouse"], body!.Addresses.Select(a => a.Label));
+        Assert.Equal(saved.AddressId, body.Addresses[1].AddressId);
     }
 
     [Fact]

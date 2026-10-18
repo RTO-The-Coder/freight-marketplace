@@ -10,8 +10,15 @@ public sealed class Shipper
     public string Name { get; private set; } = null!;
     public string ContactEmail { get; private set; } = null!;
 
-    /// <summary>The shipper's saved addresses, newest first. Add-only (<see cref="AddAddress"/>).</summary>
-    public IReadOnlyList<ShipperAddress> Addresses => [.. _addresses.OrderByDescending(address => address.CreatedAt)];
+    /// <summary>
+    /// The shipper's saved addresses, A–Z by name, then by area. Add-only (<see cref="AddAddress"/>).
+    /// </summary>
+    public IReadOnlyList<ShipperAddress> Addresses =>
+    [
+        .. _addresses
+            .OrderBy(address => address.Label, StringComparer.InvariantCultureIgnoreCase)
+            .ThenBy(address => address.AreaName, StringComparer.InvariantCultureIgnoreCase),
+    ];
 
     // EF Core's materializer constructs instances via this parameterless constructor
     // and sets the properties above via reflection - see the same pattern on
