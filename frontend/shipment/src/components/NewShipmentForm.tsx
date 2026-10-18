@@ -1,13 +1,22 @@
-import { ApiError, type TruckingCompanySummaryDto, type TruckType } from '@freight/api-client'
+import { ApiError, type ShipperAddressDto, type TruckingCompanySummaryDto, type TruckType } from '@freight/api-client'
 import { useEffect, useState } from 'react'
 import { shipmentsApi, truckingCompaniesApi } from '../apiClient'
-import { type LatLng, LocationMapPicker } from './LocationMapPicker'
+import { AddressPicker } from './AddressPicker'
 
 const truckTypes: TruckType[] = ['BoxVan', 'Flatbed', 'Refrigerated', 'Tanker']
 
 interface NewShipmentFormProps {
   shipperId: string
-  onBooked: () => void
+  /** The shipper's address book, newest first - null while loading. */
+  addresses: ShipperAddressDto[] | null
+  /** A new address was saved from the form - the page adds it to the address book. */
+  onAddressSaved: (address: ShipperAddressDto) => void
+  // Pickup and delivery are held by the page, so a saved address's From / To buttons can fill them.
+  pickupAddress: ShipperAddressDto | null
+  deliveryAddress: ShipperAddressDto | null
+  onPickupChange: (address: ShipperAddressDto | null) => void
+  onDeliveryChange: (address: ShipperAddressDto | null) => void
+  onBooked: (shipmentId: string) => void
 }
 
 // datetime-local inputs give a value like "2026-01-02T08:00" with no timezone -
@@ -17,9 +26,16 @@ function toIsoUtc(datetimeLocalValue: string): string {
   return `${datetimeLocalValue}:00Z`
 }
 
-export function NewShipmentForm({ shipperId, onBooked }: NewShipmentFormProps) {
-  const [pickupLocation, setPickupLocation] = useState<LatLng | null>(null)
-  const [deliveryLocation, setDeliveryLocation] = useState<LatLng | null>(null)
+export function NewShipmentForm({
+  shipperId,
+  addresses,
+  onAddressSaved,
+  pickupAddress,
+  deliveryAddress,
+  onPickupChange,
+  onDeliveryChange,
+  onBooked,
+}: NewShipmentFormProps) {
   const [loadWeightKg, setLoadWeightKg] = useState('')
   const [loadVolumeCubicMeters, setLoadVolumeCubicMeters] = useState('')
   const [requiredTruckType, setRequiredTruckType] = useState<TruckType>(truckTypes[0])
@@ -44,23 +60,26 @@ export function NewShipmentForm({ shipperId, onBooked }: NewShipmentFormProps) {
     event.preventDefault()
     setError(null)
 
-    if (!pickupLocation) {
-      setError('Click the pickup map to drop a pin.')
+    if (!pickupAddress) {
+      setError('Choose a saved pickup address, or save a new one.')
       return
     }
-    if (!deliveryLocation) {
-      setError('Click the delivery map to drop a pin.')
+    if (!deliveryAddress) {
+      setError('Choose a saved delivery address, or save a new one.')
       return
     }
 
     setIsSubmitting(true)
     try {
-      await shipmentsApi.bookShipment({
+      const { shipmentId } = await shipmentsApi.bookShipment({
         shipperId,
-        pickupLatitude: pickupLocation.latitude,
-        pickupLongitude: pickupLocation.longitude,
-        deliveryLatitude: deliveryLocation.latitude,
-        deliveryLongitude: deliveryLocation.longitude,
+        // A copy of each saved address's name and coordinates - the shipment never links back to it.
+        pickupLatitude: pickupAddress.latitude,
+        pickupLongitude: pickupAddress.longitude,
+        pickupPlaceName: pickupAddress.placeName,
+        deliveryLatitude: deliveryAddress.latitude,
+        deliveryLongitude: deliveryAddress.longitude,
+        deliveryPlaceName: deliveryAddress.placeName,
         loadWeightKg: Number(loadWeightKg),
         loadVolumeCubicMeters: Number(loadVolumeCubicMeters),
         requiredTruckType,
@@ -71,8 +90,8 @@ export function NewShipmentForm({ shipperId, onBooked }: NewShipmentFormProps) {
         truckingCompanyId: truckingCompanyId || undefined,
       })
 
-      setPickupLocation(null)
-      setDeliveryLocation(null)
+      onPickupChange(null)
+      onDeliveryChange(null)
       setLoadWeightKg('')
       setLoadVolumeCubicMeters('')
       setPickupWindowEarliest('')
@@ -80,7 +99,7 @@ export function NewShipmentForm({ shipperId, onBooked }: NewShipmentFormProps) {
       setDeliveryWindowEarliest('')
       setDeliveryWindowLatest('')
       setTruckingCompanyId('')
-      onBooked()
+      onBooked(shipmentId)
     } catch (err) {
       setError(err instanceof ApiError ? err.message : 'Failed to book shipment.')
     } finally {
@@ -90,25 +109,27 @@ export function NewShipmentForm({ shipperId, onBooked }: NewShipmentFormProps) {
 
   return (
     <form className="new-shipment-form" onSubmit={handleSubmit}>
-      <div className="form-field">
-        <label>Pickup location (click map to drop pin)</label>
-        <LocationMapPicker value={pickupLocation} onChange={setPickupLocation} />
-        {pickupLocation && (
-          <p className="map-coords" data-testid="pickup-coords">
-            {pickupLocation.latitude.toFixed(4)}, {pickupLocation.longitude.toFixed(4)}
-          </p>
-        )}
-      </div>
-
-      <div className="form-field">
-        <label>Delivery location (click map to drop pin)</label>
-        <LocationMapPicker value={deliveryLocation} onChange={setDeliveryLocation} />
-        {deliveryLocation && (
-          <p className="map-coords" data-testid="delivery-coords">
-            {deliveryLocation.latitude.toFixed(4)}, {deliveryLocation.longitude.toFixed(4)}
-          </p>
-        )}
-      </div>
+      {!addresses && <p>Loading saved addresses…</p>}
+      {addresses && (
+        <>
+          <AddressPicker
+            legend="Pickup"
+            shipperId={shipperId}
+            addresses={addresses}
+            value={pickupAddress}
+            onChange={onPickupChange}
+            onAddressSaved={onAddressSaved}
+          />
+          <AddressPicker
+            legend="Delivery"
+            shipperId={shipperId}
+            addresses={addresses}
+            value={deliveryAddress}
+            onChange={onDeliveryChange}
+            onAddressSaved={onAddressSaved}
+          />
+        </>
+      )}
 
       <div className="form-row">
         <div className="form-field">
@@ -200,7 +221,7 @@ export function NewShipmentForm({ shipperId, onBooked }: NewShipmentFormProps) {
       </div>
 
       <button type="submit" disabled={isSubmitting}>
-        {isSubmitting ? 'Booking…' : 'Book Shipment'}
+        {isSubmitting ? 'Booking…' : 'Book shipment'}
       </button>
       {error && <p role="alert">{error}</p>}
     </form>

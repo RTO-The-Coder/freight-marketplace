@@ -2,7 +2,7 @@ import { ApiError, type ShipmentOffersResponse } from '@freight/api-client'
 import { useEffect, useState } from 'react'
 import { offersApi } from '../apiClient'
 import { formatDateTime } from '../formatDateTime'
-import { Modal } from './Modal'
+import { Modal } from '@freight/web-ui'
 
 interface ShipmentOffersModalProps {
   shipmentId: string

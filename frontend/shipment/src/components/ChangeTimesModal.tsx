@@ -2,7 +2,7 @@ import { ApiError, type ShipmentSummaryDto } from '@freight/api-client'
 import { useState } from 'react'
 import { shipmentsApi } from '../apiClient'
 import { fromDatetimeLocal, toDatetimeLocal } from '../formatDateTime'
-import { Modal } from './Modal'
+import { Modal } from '@freight/web-ui'
 
 interface ChangeTimesModalProps {
   shipment: ShipmentSummaryDto

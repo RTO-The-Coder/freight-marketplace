@@ -1,8 +1,9 @@
-import { createApiClient, createOffersApi, createShipmentsApi, createTruckingCompaniesApi } from '@freight/api-client'
+import { createGeocodingApi } from '@freight/api-client'
+import { apiClient, configureApi } from '@freight/fleetmanagement-core'
 
-const baseUrl = import.meta.env.VITE_API_BASE_URL as string
+// Module top level: must run before any screen fetches. The shipper app shares the fleet
+// apps' API setup (and with it the simulation clock and road-route hooks in core).
+configureApi(import.meta.env.VITE_API_BASE_URL as string)
 
-export const apiClient = createApiClient({ baseUrl })
-export const shipmentsApi = createShipmentsApi(apiClient)
-export const offersApi = createOffersApi(apiClient)
-export const truckingCompaniesApi = createTruckingCompaniesApi(apiClient)
+export { offersApi, shipmentsApi, simulationApi, truckingCompaniesApi } from '@freight/fleetmanagement-core'
+export const geocodingApi = createGeocodingApi(apiClient)
