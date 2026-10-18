@@ -71,7 +71,10 @@ input[type='text'],
 input[type='number'],
 input[type='datetime-local'],
 select {
-  padding: var(--space-2) var(--space-3);
+  /* One fixed height for all of them - a select draws shorter than an input with the same padding. */
+  height: 2.5rem;
+  box-sizing: border-box;
+  padding: 0 var(--space-3);
   border-radius: var(--radius-sm);
   border: 1px solid var(--c-border-strong);
   background: var(--c-surface);
