@@ -35,6 +35,8 @@ export interface AddDriverRequest {
   dailyRestRule: DailyRestRule
   weeklyRestRule: WeeklyRestRule
   extendDailyDrivingWhenEligible: boolean
+  /** The company the driver is added to. */
+  truckingCompanyId: string
 }
 
 export interface AddDriverResponse {
@@ -71,8 +73,10 @@ export function createFleetApi(client: ApiClient) {
         `/trucks${buildQuery({ unassigned: options?.unassigned, truckingCompanyId: options?.truckingCompanyId })}`,
       ),
 
-    getDrivers: (options?: { unassigned?: boolean }) =>
-      client.get<GetDriversResponse>(`/drivers${buildQuery({ unassigned: options?.unassigned })}`),
+    getDrivers: (options?: { unassigned?: boolean; truckingCompanyId?: string }) =>
+      client.get<GetDriversResponse>(
+        `/drivers${buildQuery({ unassigned: options?.unassigned, truckingCompanyId: options?.truckingCompanyId })}`,
+      ),
 
     getTruckDetail: (truckId: string) => client.get<TruckDetailDto>(`/trucks/${truckId}`),
 

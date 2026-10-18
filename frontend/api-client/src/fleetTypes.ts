@@ -35,9 +35,21 @@ export interface FleetTruckDto {
   driverAssignment: FleetDriverAssignmentDto | null
 }
 
+/** One of the company's drivers, with the truck it is assigned to (if any). */
+export interface FleetCompanyDriverDto {
+  driverId: string
+  firstName: string
+  lastName: string
+  assignedTruckId: string | null
+  assignedTruckName: string | null
+}
+
 export interface GetFleetTreeResponse {
   trucks: FleetTruckDto[]
+  /** The company's drivers not on any truck. */
   unassignedDrivers: FleetDriverDto[]
+  /** Every driver of the company. */
+  drivers: FleetCompanyDriverDto[]
 }
 
 export interface TruckSummaryDto {
@@ -117,6 +129,31 @@ export interface DriverComplianceStateDto {
   weeklyDrivingMinutesThisWeek: number
   weeklyDrivingMinutesPriorWeek: number
   lastEvaluatedSimulatedTime: string
+  /** Split-break driver: the first (short) part of the break is taken, the second is due. */
+  awaitingSecondBreakBlock: boolean
+  extendedDaysUsedThisWeek: number
+  /** Split daily rest: the 3 h part is taken, the 9 h part is due. */
+  awaitingSecondDailyRestBlock: boolean
+  reducedDailyRestsUsedSinceWeeklyRest: number
+  lastRestEndedAt: string
+  lastWeeklyRestEndedAt: string
+  /** Minutes a reduced weekly rest still owes, added to the next weekly rest. */
+  weeklyRestMinutesOwed: number
+  /** Planned length of the running break/rest (0 while driving or riding). */
+  currentActivityLengthMinutes: number
+}
+
+/** The EU 561 limits the driver's ledger is measured against. */
+export interface DriverRuleLimitsDto {
+  maxContinuousDrivingMinutesBeforeBreak: number
+  maxDailyDrivingMinutes: number
+  extendedDailyDrivingMinutes: number
+  maxExtendedDaysPerWeek: number
+  maxReducedDailyRestsSinceWeeklyRest: number
+  maxWeeklyDrivingMinutes: number
+  maxTwoWeekDrivingMinutes: number
+  /** A weekly rest must start within this many minutes of the last one ending. */
+  maxMinutesBetweenWeeklyRests: number
 }
 
 export interface DriverDetailDto {
@@ -128,6 +165,9 @@ export interface DriverDetailDto {
   weeklyRestRule: WeeklyRestRule
   extendDailyDrivingWhenEligible: boolean
   complianceState: DriverComplianceStateDto | null
+  /** Null once the driver has left its company. */
+  truckingCompanyId: string | null
+  limits: DriverRuleLimitsDto
 }
 
 export interface AssignShipmentToTruckResponse {

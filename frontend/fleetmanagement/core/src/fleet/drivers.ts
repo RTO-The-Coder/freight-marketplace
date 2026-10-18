@@ -1,5 +1,26 @@
-import type { DriverSummaryDto, TruckDetailDto } from '@freight/api-client'
+import type { DriverSummaryDto, FleetCompanyDriverDto, TruckDetailDto } from '@freight/api-client'
 import { fullName } from './driverFormat'
+
+/**
+ * The company page's Drivers list order: assigned drivers first, in the order their
+ * trucks appear in the fleet list (`truckIds`), then unassigned drivers A→Z by full name.
+ * A driver whose truck isn't in `truckIds` sorts after the listed trucks' drivers.
+ */
+export function orderCompanyDrivers(drivers: FleetCompanyDriverDto[], truckIds: string[]): FleetCompanyDriverDto[] {
+  const truckRank = new Map(truckIds.map((id, i) => [id, i]))
+  const rank = (d: FleetCompanyDriverDto) => truckRank.get(d.assignedTruckId!) ?? truckIds.length
+
+  const assigned = drivers
+    .map((d, i) => ({ d, i }))
+    .filter(({ d }) => d.assignedTruckId !== null)
+    .sort((a, b) => rank(a.d) - rank(b.d) || a.i - b.i)
+    .map(({ d }) => d)
+  const unassigned = drivers
+    .filter((d) => d.assignedTruckId === null)
+    .sort((a, b) => fullName(a).localeCompare(fullName(b)))
+
+  return [...assigned, ...unassigned]
+}
 
 export const DRIVER_SEARCH_MAX_RESULTS = 6
 

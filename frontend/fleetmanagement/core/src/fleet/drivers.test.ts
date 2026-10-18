@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import { truckDetail } from '../testData'
-import { DRIVER_SEARCH_MAX_RESULTS, fleetDriverLabel, mergeDriverPool, searchDrivers } from './drivers'
+import { DRIVER_SEARCH_MAX_RESULTS, fleetDriverLabel, mergeDriverPool, orderCompanyDrivers, searchDrivers } from './drivers'
 
 const jan = { driverId: 'd1', firstName: 'Jan', lastName: 'Kowalski' }
 const petra = { driverId: 'd2', firstName: 'Petra', lastName: 'Novak' }
@@ -31,6 +31,40 @@ describe('mergeDriverPool', () => {
 
   it('is just the pool when the truck has no drivers', () => {
     expect(mergeDriverPool(truckDetail(), [marek])).toEqual([marek])
+  })
+})
+
+describe('orderCompanyDrivers', () => {
+  const companyDriver = (driverId: string, firstName: string, lastName: string, truckId: string | null) => ({
+    driverId,
+    firstName,
+    lastName,
+    assignedTruckId: truckId,
+    assignedTruckName: truckId,
+  })
+
+  it('lists assigned drivers in fleet order, then unassigned drivers A→Z', () => {
+    const drivers = [
+      companyDriver('d1', 'Paul', 'Richter', null),
+      companyDriver('d2', 'Mara', 'Keller', 't2'),
+      companyDriver('d3', 'Anna', 'Zeller', null),
+      companyDriver('d4', 'Lena', 'Brandt', 't1'),
+      companyDriver('d5', 'Jonas', 'Weber', 't1'),
+    ]
+
+    const ordered = orderCompanyDrivers(drivers, ['t1', 't2'])
+
+    expect(ordered.map((d) => d.driverId)).toEqual(['d4', 'd5', 'd2', 'd3', 'd1'])
+  })
+
+  it('puts a driver whose truck is not in the fleet list after the listed trucks’ drivers', () => {
+    const drivers = [companyDriver('d1', 'A', 'A', 'elsewhere'), companyDriver('d2', 'B', 'B', 't1')]
+
+    expect(orderCompanyDrivers(drivers, ['t1']).map((d) => d.driverId)).toEqual(['d2', 'd1'])
+  })
+
+  it('is empty for no drivers', () => {
+    expect(orderCompanyDrivers([], ['t1'])).toEqual([])
   })
 })
 
