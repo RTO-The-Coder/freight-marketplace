@@ -6,16 +6,19 @@ using Freight.Application.Fleet;
 using Freight.Domain.Common;
 using Freight.Domain.Fleet.Abstractions;
 using Freight.Domain.Fleet.Services;
+using Freight.Domain.Geocoding.Abstractions;
 using Freight.Domain.Notifications.Abstractions;
 using Freight.Domain.Routing.Abstractions;
 using Freight.Domain.Tracking.Abstractions;
 using Freight.Domain.Tracking.Services;
+using Freight.Infrastructure.Geocoding;
 using Freight.Infrastructure.Notifications;
 using Freight.Infrastructure.Persistence;
 using Freight.Infrastructure.Routing;
 using Freight.Infrastructure.Security;
 using Google.Apis.Auth.OAuth2;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.Caching.Memory;
 using Microsoft.Extensions.Options;
 
 var builder = WebApplication.CreateBuilder(args);
@@ -55,6 +58,21 @@ builder.Services.AddScoped<IRoutingService>(serviceProvider => new ThrottlingRou
 // In-process cache for road geometry - a trip/fleet map is many geometry calls, each
 // spaced ~1.1s by the throttle, and suburb-centroid coordinates repeat across trips.
 builder.Services.AddMemoryCache();
+
+// Nominatim area search for the shipper address book (ADR 0013), built like OSRM: a typed
+// HttpClient for the raw calls, wrapped by a process-wide throttle (1 req/sec usage policy)
+// and a cache. Needs no local settings: the User-Agent names the app and its project page.
+builder.Services.Configure<NominatimOptions>(builder.Configuration.GetSection(NominatimOptions.SectionName));
+builder.Services.AddHttpClient<NominatimGeocodingService>((serviceProvider, client) =>
+{
+    var options = serviceProvider.GetRequiredService<IOptions<NominatimOptions>>().Value;
+    client.BaseAddress = new Uri(options.BaseUrl.TrimEnd('/') + "/");
+    client.Timeout = TimeSpan.FromSeconds(options.TimeoutSeconds);
+});
+builder.Services.AddScoped<IGeocodingService>(serviceProvider => new ThrottlingGeocodingService(
+    serviceProvider.GetRequiredService<NominatimGeocodingService>(),
+    serviceProvider.GetRequiredService<IOptions<NominatimOptions>>(),
+    serviceProvider.GetRequiredService<IMemoryCache>()));
 
 // Device token encryption (ADR 0007) - the key lives only in local config
 // (appsettings.Development.json, gitignored), never in source. Without a key (CI, tests)
@@ -132,6 +150,12 @@ app.Use(async (context, next) =>
     {
         // The routing provider (OSRM) was unreachable or had no route - not the caller's
         // fault, and retryable, so 503 rather than 400.
+        context.Response.StatusCode = StatusCodes.Status503ServiceUnavailable;
+        await context.Response.WriteAsJsonAsync(new { error = ex.Message });
+    }
+    catch (GeocodingUnavailableException ex)
+    {
+        // Nominatim was unreachable or errored - retryable, so 503.
         context.Response.StatusCode = StatusCodes.Status503ServiceUnavailable;
         await context.Response.WriteAsJsonAsync(new { error = ex.Message });
     }

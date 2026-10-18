@@ -1,4 +1,5 @@
 using Freight.Domain.Fleet;
+using Freight.Domain.Geocoding.Abstractions;
 using Freight.Domain.Routing.Abstractions;
 using Freight.Domain.ValueObjects;
 using Freight.Infrastructure.Persistence;
@@ -33,6 +34,8 @@ public sealed class ApiTestFactory : WebApplicationFactory<Program>
 
     public FakeRoutingService RoutingService { get; } = new();
 
+    public FakeGeocodingService GeocodingService { get; } = new();
+
     protected override void ConfigureWebHost(IWebHostBuilder builder)
     {
         builder.UseEnvironment("Development");
@@ -52,6 +55,10 @@ public sealed class ApiTestFactory : WebApplicationFactory<Program>
         {
             services.RemoveAll<IRoutingService>();
             services.AddSingleton<IRoutingService>(RoutingService);
+
+            // Likewise for address search: never the live Nominatim server.
+            services.RemoveAll<IGeocodingService>();
+            services.AddSingleton<IGeocodingService>(GeocodingService);
         });
     }
 

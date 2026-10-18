@@ -1,5 +1,6 @@
 using Freight.Domain.Client;
 using Freight.Domain.Fleet;
+using Freight.Domain.Geocoding.Abstractions;
 using Freight.Domain.Routing.Abstractions;
 using Freight.Domain.ValueObjects;
 using Freight.Infrastructure.Persistence;
@@ -44,6 +45,8 @@ public sealed class IntegrationTestFactory(IRoutingService routingService) : Web
         {
             services.RemoveAll<IRoutingService>();
             services.AddSingleton(routingService);
+            services.RemoveAll<IGeocodingService>();
+            services.AddSingleton<IGeocodingService, NoGeocodingService>();
         });
     }
 
