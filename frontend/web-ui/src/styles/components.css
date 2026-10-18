@@ -430,6 +430,18 @@
   cursor: pointer;
 }
 
+.tripmap-pin--highlighted {
+  width: 20px;
+  height: 20px;
+  border-width: 3px;
+  box-shadow: 0 0 0 3px var(--c-accent, #7c3aed), 0 1px 4px rgb(0 0 0 / 0.5);
+}
+
+.tripmap-truck--highlighted {
+  font-size: 30px;
+  filter: drop-shadow(0 0 3px var(--c-accent, #7c3aed)) drop-shadow(0 1px 2px rgb(0 0 0 / 0.45));
+}
+
 .tripmap-office {
   display: block;
   width: 12px;
