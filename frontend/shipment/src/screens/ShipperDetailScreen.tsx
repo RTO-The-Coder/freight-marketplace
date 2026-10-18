@@ -1,12 +1,13 @@
 import type { ShipmentStatus, ShipmentSummaryDto, ShipperAddressDto, ShipperSummaryDto } from '@freight/api-client'
 import { useSimClock } from '@freight/fleetmanagement-core'
-import { useCallback, useEffect, useState } from 'react'
+import { type MouseEvent, useCallback, useEffect, useRef, useState } from 'react'
 import { ChangeTimesModal } from '../components/ChangeTimesModal'
 import { NewShipmentForm } from '../components/NewShipmentForm'
 import { ShipmentOffersModal } from '../components/ShipmentOffersModal'
 import { ShipmentsMap } from '../components/ShipmentsMap'
 import { shipmentsApi, truckingCompaniesApi } from '../apiClient'
-import { formatDateTime } from '../formatDateTime'
+import { formatDateTime, formatWindowLines } from '../formatDateTime'
+import { splitPlaceName } from '../placeName'
 import { Logo, SidePanel } from '@freight/web-ui'
 
 interface ShipperDetailScreenProps {
@@ -20,8 +21,30 @@ const STATUS_LABEL: Record<ShipmentStatus, string> = {
   Delivered: 'Delivered',
 }
 
-function formatWindow(earliest: string, latest: string): string {
-  return `${formatDateTime(earliest)} – ${formatDateTime(latest)}`
+/** The shared status pill's colour per status: waiting amber, booked green, moving blue, done grey. */
+const STATUS_PILL: Record<ShipmentStatus, string> = {
+  Pending: 'pill pill--idle',
+  Booked: 'pill pill--atoffice',
+  InTransit: 'pill pill--running',
+  Delivered: 'pill',
+}
+
+function StopRow({ label, placeName, earliest, latest }: { label: string; placeName: string; earliest: string; latest: string }) {
+  const { name, area } = splitPlaceName(placeName)
+  const [windowTop, windowBottom] = formatWindowLines(earliest, latest)
+  return (
+    <>
+      <span className="ship-row__stop-label">{label}</span>
+      <span className="ship-row__place">
+        <span className="ship-row__place-name">{name}</span>
+        {area && <span className="ship-row__place-area">{area}</span>}
+      </span>
+      <span className="ship-row__window">
+        <span>{windowTop}</span>
+        <span>{windowBottom}</span>
+      </span>
+    </>
+  )
 }
 
 /** What the shipper can do with a still-Pending shipment, from who holds it and the 2-hour offer window. */
@@ -33,7 +56,12 @@ function pendingState(shipment: ShipmentSummaryDto): PendingState {
   return shipment.offersOpen ? 'offersOpen' : 'dead'
 }
 
-const isWaitingForOffers = (shipment: ShipmentSummaryDto) =>
+const byName = new Intl.Collator('en', { sensitivity: 'base' })
+
+/** A card's buttons open their own window and leave the card's selection alone. */
+const stopClick = (e: MouseEvent) => e.stopPropagation()
+
+const isWaitingForOffers =(shipment: ShipmentSummaryDto) =>
   shipment.status === 'Pending' && pendingState(shipment) === 'offersOpen'
 
 /**
@@ -54,6 +82,13 @@ export function ShipperDetailScreen({ shipperId }: ShipperDetailScreenProps) {
   const [changeTimesFor, setChangeTimesFor] = useState<ShipmentSummaryDto | null>(null)
   // Bumped whenever the simulation clock moves - shipments are re-read so in-transit ones move on the map.
   const { simVersion } = useSimClock()
+  // The shipment cards by id - a shipment picked on the map scrolls its card into view.
+  const rowRefs = useRef(new Map<string, HTMLLIElement>())
+
+  const selectFromMap = (shipmentId: string) => {
+    setSelectedShipmentId(shipmentId)
+    rowRefs.current.get(shipmentId)?.scrollIntoView({ block: 'nearest', behavior: 'smooth' })
+  }
 
   const loadShipments = useCallback(() => {
     shipmentsApi
@@ -92,8 +127,13 @@ export function ShipperDetailScreen({ shipperId }: ShipperDetailScreenProps) {
       .catch(() => setCompanyNames({}))
   }, [])
 
+  // Kept A–Z by name, then area, like the server returns them.
   const addSavedAddress = (address: ShipperAddressDto) =>
-    setAddresses((current) => [address, ...(current ?? []).filter((a) => a.addressId !== address.addressId)])
+    setAddresses((current) =>
+      [...(current ?? []).filter((a) => a.addressId !== address.addressId), address].sort(
+        (a, b) => byName.compare(a.label, b.label) || byName.compare(a.areaName, b.areaName),
+      ),
+    )
 
   const companyName = (companyId: string | null) => (companyId ? (companyNames[companyId] ?? 'a company') : null)
 
@@ -109,7 +149,7 @@ export function ShipperDetailScreen({ shipperId }: ShipperDetailScreenProps) {
         return (
           <>
             <p className="ship-row__note">Booked directly to {companyName(shipment.truckingCompanyId)}.</p>
-            <div className="ship-row__actions">{changeTimes}</div>
+            <div className="ship-row__actions" onClick={stopClick}>{changeTimes}</div>
           </>
         )
       case 'accepted':
@@ -122,7 +162,7 @@ export function ShipperDetailScreen({ shipperId }: ShipperDetailScreenProps) {
         return (
           <>
             <p className="ship-row__note">Offers close {formatDateTime(shipment.offerDeadline)}.</p>
-            <div className="ship-row__actions">
+            <div className="ship-row__actions" onClick={stopClick}>
               <button type="button" className="btn btn--sm btn--primary" onClick={() => setOffersFor(shipment.shipmentId)}>
                 See offers ({shipment.waitingOfferCount})
               </button>
@@ -134,7 +174,7 @@ export function ShipperDetailScreen({ shipperId }: ShipperDetailScreenProps) {
         return (
           <>
             <p className="ship-row__note ship-row__note--warn">No offer accepted — change times to get new offers.</p>
-            <div className="ship-row__actions">{changeTimes}</div>
+            <div className="ship-row__actions" onClick={stopClick}>{changeTimes}</div>
           </>
         )
     }
@@ -171,7 +211,7 @@ export function ShipperDetailScreen({ shipperId }: ShipperDetailScreenProps) {
             <ShipmentsMap
               shipments={shipments}
               selectedShipmentId={selectedShipmentId}
-              onSelect={setSelectedShipmentId}
+              onSelect={selectFromMap}
             />
           ) : (
             <div className="skeleton skeleton--map" />
@@ -198,33 +238,47 @@ export function ShipperDetailScreen({ shipperId }: ShipperDetailScreenProps) {
                 <ul className="row-list">
                   {shipments.map((shipment) => {
                     const selected = shipment.shipmentId === selectedShipmentId
+                    const toggle = () => setSelectedShipmentId(selected ? null : shipment.shipmentId)
                     return (
-                      <li key={shipment.shipmentId} className={`ship-row${selected ? ' ship-row--selected' : ''}`}>
-                        <button
-                          type="button"
-                          className="ship-row__main"
-                          aria-pressed={selected}
-                          onClick={() => setSelectedShipmentId(selected ? null : shipment.shipmentId)}
-                        >
-                          <span className="ship-row__head">
-                            <span className={`status-badge status-${shipment.status.toLowerCase()}`}>
-                              {STATUS_LABEL[shipment.status]}
-                            </span>
-                            <span className="ship-row__type">{shipment.requiredTruckType}</span>
-                            <span className="ship-row__load">
-                              {shipment.loadWeightKg.toLocaleString()} kg · {shipment.loadVolumeCubicMeters} m³
-                            </span>
+                      // The whole card selects the shipment; its buttons only open their own window.
+                      <li
+                        key={shipment.shipmentId}
+                        ref={(element) => {
+                          if (element) rowRefs.current.set(shipment.shipmentId, element)
+                          else rowRefs.current.delete(shipment.shipmentId)
+                        }}
+                        className={`ship-row${selected ? ' ship-row--selected' : ''}`}
+                        role="button"
+                        tabIndex={0}
+                        aria-pressed={selected}
+                        onClick={toggle}
+                        onKeyDown={(e) => {
+                          if (e.target !== e.currentTarget || (e.key !== 'Enter' && e.key !== ' ')) return
+                          e.preventDefault()
+                          toggle()
+                        }}
+                      >
+                        <span className="ship-row__head">
+                          <span className={STATUS_PILL[shipment.status]}>{STATUS_LABEL[shipment.status]}</span>
+                          <span className="ship-row__type">{shipment.requiredTruckType}</span>
+                          <span className="ship-row__load">
+                            {shipment.loadWeightKg.toLocaleString()} kg · {shipment.loadVolumeCubicMeters} m³
                           </span>
-                          <span className="ship-row__route">
-                            {shipment.pickupPlaceName} → {shipment.deliveryPlaceName}
-                          </span>
-                          <span className="ship-row__when">
-                            Pickup {formatWindow(shipment.pickupWindowEarliest, shipment.pickupWindowLatest)}
-                          </span>
-                          <span className="ship-row__when">
-                            Delivery {formatWindow(shipment.deliveryWindowEarliest, shipment.deliveryWindowLatest)}
-                          </span>
-                        </button>
+                        </span>
+                        <div className="ship-row__stops">
+                          <StopRow
+                            label="Pickup"
+                            placeName={shipment.pickupPlaceName}
+                            earliest={shipment.pickupWindowEarliest}
+                            latest={shipment.pickupWindowLatest}
+                          />
+                          <StopRow
+                            label="Delivery"
+                            placeName={shipment.deliveryPlaceName}
+                            earliest={shipment.deliveryWindowEarliest}
+                            latest={shipment.deliveryWindowLatest}
+                          />
+                        </div>
                         {shipment.status === 'Pending' && renderPendingPart(shipment)}
                         {shipment.status !== 'Pending' && shipment.truckingCompanyId && (
                           <p className="ship-row__note">Carried by {companyName(shipment.truckingCompanyId)}.</p>
@@ -246,7 +300,7 @@ export function ShipperDetailScreen({ shipperId }: ShipperDetailScreenProps) {
                 <ul className="address-list">
                   {addresses.map((address) => (
                     <li key={address.addressId} className="address-row">
-                      <span className="address-row__text">
+                      <span className="address-row__text" title={address.placeName}>
                         <span className="address-row__label">{address.label}</span>
                         <span className="address-row__area">{address.areaName}</span>
                       </span>
@@ -310,6 +364,7 @@ export function ShipperDetailScreen({ shipperId }: ShipperDetailScreenProps) {
       {changeTimesFor && (
         <ChangeTimesModal
           shipment={changeTimesFor}
+          companyName={companyName(changeTimesFor.truckingCompanyId)}
           onClose={() => setChangeTimesFor(null)}
           onSaved={() => {
             setChangeTimesFor(null)

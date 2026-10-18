@@ -4,10 +4,18 @@ import { useMemo } from 'react'
 import { MapContainer, Marker, Polyline, TileLayer, Tooltip } from 'react-leaflet'
 import { dotIcon, FitBounds, InvalidateSizeOnResize, OSM_ATTRIBUTION, OSM_TILE_URL, truckIcon } from '@freight/web-ui'
 
-/** Pending (no truck yet) and Booked (waiting for its truck) shipments, both at their pickup. */
-const WAITING_COLOR: Record<string, string> = { Pending: '#6b6577', Booked: '#2563eb' }
+/**
+ * Dots for shipments not on a truck: Pending and Booked at their pickup, a selected Delivered one at
+ * its delivery. Same colours as the cards' status pills.
+ */
+const DOT_COLOR: Record<string, string> = { Pending: '#b45309', Booked: '#15803d', Delivered: '#6b6577' }
 
-const STATUS_TEXT: Record<string, string> = { Pending: 'Pending', Booked: 'Booked', InTransit: 'In transit' }
+const STATUS_TEXT: Record<string, string> = {
+  Pending: 'Pending',
+  Booked: 'Booked',
+  InTransit: 'In transit',
+  Delivered: 'Delivered',
+}
 
 interface ShipmentsMapProps {
   shipments: ShipmentSummaryDto[]
@@ -18,12 +26,24 @@ interface ShipmentsMapProps {
 /**
  * The shipper's shipments that are not delivered yet, where they are now: a dot at the pickup
  * until picked up, the truck carrying it while in transit (it moves as the simulation clock is
- * advanced). The selected shipment also gets its pickup and delivery pins and its road route.
+ * advanced). The selected shipment also gets its pickup and delivery pins and its road route, and
+ * where it is now is drawn larger (a delivered one at its delivery); the others are faded.
  */
 export function ShipmentsMap({ shipments, selectedShipmentId, onSelect }: ShipmentsMapProps) {
   const onTheWay = useMemo(
     () => shipments.filter((s) => s.status !== 'Delivered' && s.currentLatitude !== null && s.currentLongitude !== null),
     [shipments],
+  )
+  // Delivered shipments only appear while selected.
+  const shown = useMemo(
+    () =>
+      shipments.filter(
+        (s) =>
+          s.currentLatitude !== null &&
+          s.currentLongitude !== null &&
+          (s.status !== 'Delivered' || s.shipmentId === selectedShipmentId),
+      ),
+    [shipments, selectedShipmentId],
   )
   const selected = shipments.find((s) => s.shipmentId === selectedShipmentId) ?? null
 
@@ -75,16 +95,17 @@ export function ShipmentsMap({ shipments, selectedShipmentId, onSelect }: Shipme
           </Marker>
         )}
 
-        {onTheWay.map((s) => {
+        {shown.map((s) => {
           const isSelected = s.shipmentId === selectedShipmentId
+          const dimmed = selected !== null && !isSelected
           return (
             <Marker
               key={s.shipmentId}
               position={[s.currentLatitude!, s.currentLongitude!]}
               icon={
                 s.status === 'InTransit'
-                  ? truckIcon(routeLabel(s))
-                  : dotIcon(WAITING_COLOR[s.status] ?? '#6b6577', selected !== null && !isSelected)
+                  ? truckIcon(routeLabel(s), dimmed, isSelected)
+                  : dotIcon(DOT_COLOR[s.status] ?? '#6b6577', dimmed, isSelected)
               }
               zIndexOffset={isSelected ? 1000 : s.status === 'InTransit' ? 500 : 0}
               eventHandlers={{ click: () => onSelect(s.shipmentId) }}
@@ -103,8 +124,8 @@ export function ShipmentsMap({ shipments, selectedShipmentId, onSelect }: Shipme
         <p className="shipments-map__empty">No shipments on the way — book one with the form on the right.</p>
       )}
       <p className="tripmap__status">
-        <span className="shipments-map__key" style={{ background: WAITING_COLOR.Pending }} /> pending ·{' '}
-        <span className="shipments-map__key" style={{ background: WAITING_COLOR.Booked }} /> booked, at pickup · 🚚 in
+        <span className="shipments-map__key" style={{ background: DOT_COLOR.Pending }} /> pending ·{' '}
+        <span className="shipments-map__key" style={{ background: DOT_COLOR.Booked }} /> booked, at pickup · 🚚 in
         transit · click one to see its route
       </p>
       {anyStraightLine && (

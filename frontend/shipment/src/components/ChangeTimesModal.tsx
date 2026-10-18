@@ -2,10 +2,13 @@ import { ApiError, type ShipmentSummaryDto } from '@freight/api-client'
 import { useState } from 'react'
 import { shipmentsApi } from '../apiClient'
 import { fromDatetimeLocal, toDatetimeLocal } from '../formatDateTime'
+import { splitPlaceName } from '../placeName'
 import { Modal } from '@freight/web-ui'
 
 interface ChangeTimesModalProps {
   shipment: ShipmentSummaryDto
+  /** The company a direct shipment is booked to, named in the notice. */
+  companyName: string | null
   onClose: () => void
   /** Called after the new times were saved - the shipment list should reload. */
   onSaved: () => void
@@ -16,7 +19,7 @@ interface ChangeTimesModalProps {
  * offers still waiting, restarts the 2-hour offer window and notifies all companies again; on
  * a direct shipment it notifies only that company.
  */
-export function ChangeTimesModal({ shipment, onClose, onSaved }: ChangeTimesModalProps) {
+export function ChangeTimesModal({ shipment, companyName, onClose, onSaved }: ChangeTimesModalProps) {
   const [pickupEarliest, setPickupEarliest] = useState(toDatetimeLocal(shipment.pickupWindowEarliest))
   const [pickupLatest, setPickupLatest] = useState(toDatetimeLocal(shipment.pickupWindowLatest))
   const [deliveryEarliest, setDeliveryEarliest] = useState(toDatetimeLocal(shipment.deliveryWindowEarliest))
@@ -43,62 +46,90 @@ export function ChangeTimesModal({ shipment, onClose, onSaved }: ChangeTimesModa
   }
 
   return (
-    <Modal title="Change times" onClose={onClose}>
-      <form className="modal-body" onSubmit={handleSubmit}>
-        <p>
+    <Modal title="Change times" onClose={onClose} wide>
+      <form className="times-form" onSubmit={handleSubmit}>
+        <TimesStop
+          id="change-pickup"
+          label="Pickup"
+          placeName={shipment.pickupPlaceName}
+          earliest={pickupEarliest}
+          latest={pickupLatest}
+          onEarliestChange={setPickupEarliest}
+          onLatestChange={setPickupLatest}
+        />
+        <TimesStop
+          id="change-delivery"
+          label="Delivery"
+          placeName={shipment.deliveryPlaceName}
+          earliest={deliveryEarliest}
+          latest={deliveryLatest}
+          onEarliestChange={setDeliveryEarliest}
+          onLatestChange={setDeliveryLatest}
+        />
+
+        <p className="times-form__notice">
           {shipment.isDirect
-            ? 'The company will be notified of the new times.'
+            ? `${companyName ?? 'The company'} will be notified of the new times.`
             : 'Offers still waiting will be rejected, and all companies get 2 hours to send new offers.'}
         </p>
-        <div className="form-row">
-          <div className="form-field">
-            <label htmlFor="change-pickup-earliest">Pickup window earliest</label>
-            <input
-              id="change-pickup-earliest"
-              type="datetime-local"
-              value={pickupEarliest}
-              onChange={(event) => setPickupEarliest(event.target.value)}
-              required
-            />
-          </div>
-          <div className="form-field">
-            <label htmlFor="change-pickup-latest">Pickup window latest</label>
-            <input
-              id="change-pickup-latest"
-              type="datetime-local"
-              value={pickupLatest}
-              onChange={(event) => setPickupLatest(event.target.value)}
-              required
-            />
-          </div>
+
+        {error && (
+          <p className="alert" role="alert">
+            {error}
+          </p>
+        )}
+
+        <div className="modal-actions">
+          <button type="button" className="btn" onClick={onClose} disabled={isSaving}>
+            Cancel
+          </button>
+          <button type="submit" className="btn btn--primary" disabled={isSaving}>
+            {isSaving ? 'Saving…' : 'Save new times'}
+          </button>
         </div>
-        <div className="form-row">
-          <div className="form-field">
-            <label htmlFor="change-delivery-earliest">Delivery window earliest</label>
-            <input
-              id="change-delivery-earliest"
-              type="datetime-local"
-              value={deliveryEarliest}
-              onChange={(event) => setDeliveryEarliest(event.target.value)}
-              required
-            />
-          </div>
-          <div className="form-field">
-            <label htmlFor="change-delivery-latest">Delivery window latest</label>
-            <input
-              id="change-delivery-latest"
-              type="datetime-local"
-              value={deliveryLatest}
-              onChange={(event) => setDeliveryLatest(event.target.value)}
-              required
-            />
-          </div>
-        </div>
-        <button type="submit" disabled={isSaving}>
-          {isSaving ? 'Saving…' : 'Save new times'}
-        </button>
-        {error && <p role="alert">{error}</p>}
       </form>
     </Modal>
+  )
+}
+
+interface TimesStopProps {
+  id: string
+  label: string
+  placeName: string
+  earliest: string
+  latest: string
+  onEarliestChange: (value: string) => void
+  onLatestChange: (value: string) => void
+}
+
+/** One stop, laid out like the shipment card: label | name over area, its From / To window below. */
+function TimesStop({ id, label, placeName, earliest, latest, onEarliestChange, onLatestChange }: TimesStopProps) {
+  const { name, area } = splitPlaceName(placeName)
+  return (
+    <div className="times-stop" role="group" aria-labelledby={`${id}-label`}>
+      <span id={`${id}-label`} className="times-stop__label">{label}</span>
+      <div className="times-stop__body">
+        <span className="times-stop__name">{name}</span>
+        {area && <span className="times-stop__area">{area}</span>}
+        <div className="times-stop__window">
+          <label htmlFor={`${id}-earliest`}>From</label>
+          <input
+            id={`${id}-earliest`}
+            type="datetime-local"
+            value={earliest}
+            onChange={(event) => onEarliestChange(event.target.value)}
+            required
+          />
+          <label htmlFor={`${id}-latest`}>To</label>
+          <input
+            id={`${id}-latest`}
+            type="datetime-local"
+            value={latest}
+            onChange={(event) => onLatestChange(event.target.value)}
+            required
+          />
+        </div>
+      </div>
+    </div>
   )
 }

@@ -1,13 +1,15 @@
 import { ApiError, type ShipperAddressDto, type TruckingCompanySummaryDto, type TruckType } from '@freight/api-client'
+import { useSimClock } from '@freight/fleetmanagement-core'
 import { useEffect, useState } from 'react'
 import { shipmentsApi, truckingCompaniesApi } from '../apiClient'
+import { defaultWindows, windowProblems, type WindowValues } from '../timeWindows'
 import { AddressPicker } from './AddressPicker'
 
 const truckTypes: TruckType[] = ['BoxVan', 'Flatbed', 'Refrigerated', 'Tanker']
 
 interface NewShipmentFormProps {
   shipperId: string
-  /** The shipper's address book, newest first - null while loading. */
+  /** The shipper's address book, A–Z by name - null while loading. */
   addresses: ShipperAddressDto[] | null
   /** A new address was saved from the form - the page adds it to the address book. */
   onAddressSaved: (address: ShipperAddressDto) => void
@@ -39,15 +41,24 @@ export function NewShipmentForm({
   const [loadWeightKg, setLoadWeightKg] = useState('')
   const [loadVolumeCubicMeters, setLoadVolumeCubicMeters] = useState('')
   const [requiredTruckType, setRequiredTruckType] = useState<TruckType>(truckTypes[0])
-  const [pickupWindowEarliest, setPickupWindowEarliest] = useState('')
-  const [pickupWindowLatest, setPickupWindowLatest] = useState('')
-  const [deliveryWindowEarliest, setDeliveryWindowEarliest] = useState('')
-  const [deliveryWindowLatest, setDeliveryWindowLatest] = useState('')
+  // Empty until the simulation time is known, then prefilled from it (see defaultWindows).
+  const [windows, setWindows] = useState<WindowValues>({ pickupFrom: '', pickupTo: '', deliveryFrom: '', deliveryTo: '' })
+  const { currentTime: simNow } = useSimClock()
   // '' = open shipment (companies send offers); a company id = booked straight to that company.
   const [truckingCompanyId, setTruckingCompanyId] = useState('')
   const [companies, setCompanies] = useState<TruckingCompanySummaryDto[]>([])
   const [error, setError] = useState<string | null>(null)
   const [isSubmitting, setIsSubmitting] = useState(false)
+
+  useEffect(() => {
+    // Prefill once the clock is known - never over what the shipper already typed.
+    if (simNow) setWindows((current) => (current.pickupFrom ? current : defaultWindows(simNow)))
+  }, [simNow])
+
+  const setWindow = (field: keyof WindowValues) => (value: string) =>
+    setWindows((current) => ({ ...current, [field]: value }))
+  const problems = windowProblems(windows, simNow)
+  const hasProblem = problems.pickup !== null || problems.delivery !== null
 
   useEffect(() => {
     truckingCompaniesApi
@@ -83,10 +94,10 @@ export function NewShipmentForm({
         loadWeightKg: Number(loadWeightKg),
         loadVolumeCubicMeters: Number(loadVolumeCubicMeters),
         requiredTruckType,
-        pickupWindowEarliest: toIsoUtc(pickupWindowEarliest),
-        pickupWindowLatest: toIsoUtc(pickupWindowLatest),
-        deliveryWindowEarliest: toIsoUtc(deliveryWindowEarliest),
-        deliveryWindowLatest: toIsoUtc(deliveryWindowLatest),
+        pickupWindowEarliest: toIsoUtc(windows.pickupFrom),
+        pickupWindowLatest: toIsoUtc(windows.pickupTo),
+        deliveryWindowEarliest: toIsoUtc(windows.deliveryFrom),
+        deliveryWindowLatest: toIsoUtc(windows.deliveryTo),
         truckingCompanyId: truckingCompanyId || undefined,
       })
 
@@ -94,10 +105,7 @@ export function NewShipmentForm({
       onDeliveryChange(null)
       setLoadWeightKg('')
       setLoadVolumeCubicMeters('')
-      setPickupWindowEarliest('')
-      setPickupWindowLatest('')
-      setDeliveryWindowEarliest('')
-      setDeliveryWindowLatest('')
+      if (simNow) setWindows(defaultWindows(simNow))
       setTruckingCompanyId('')
       onBooked(shipmentId)
     } catch (err) {
@@ -166,46 +174,25 @@ export function NewShipmentForm({
         </div>
       </div>
 
-      <div className="form-row">
-        <div className="form-field">
-          <label>Pickup window earliest</label>
-          <input
-            type="datetime-local"
-            value={pickupWindowEarliest}
-            onChange={(event) => setPickupWindowEarliest(event.target.value)}
-            required
-          />
-        </div>
-        <div className="form-field">
-          <label>Pickup window latest</label>
-          <input
-            type="datetime-local"
-            value={pickupWindowLatest}
-            onChange={(event) => setPickupWindowLatest(event.target.value)}
-            required
-          />
-        </div>
-      </div>
-
-      <div className="form-row">
-        <div className="form-field">
-          <label>Delivery window earliest</label>
-          <input
-            type="datetime-local"
-            value={deliveryWindowEarliest}
-            onChange={(event) => setDeliveryWindowEarliest(event.target.value)}
-            required
-          />
-        </div>
-        <div className="form-field">
-          <label>Delivery window latest</label>
-          <input
-            type="datetime-local"
-            value={deliveryWindowLatest}
-            onChange={(event) => setDeliveryWindowLatest(event.target.value)}
-            required
-          />
-        </div>
+      <div className="window-rows">
+        <WindowRow
+          id="book-pickup"
+          label="Pickup"
+          from={windows.pickupFrom}
+          to={windows.pickupTo}
+          onFromChange={setWindow('pickupFrom')}
+          onToChange={setWindow('pickupTo')}
+          problem={problems.pickup}
+        />
+        <WindowRow
+          id="book-delivery"
+          label="Delivery"
+          from={windows.deliveryFrom}
+          to={windows.deliveryTo}
+          onFromChange={setWindow('deliveryFrom')}
+          onToChange={setWindow('deliveryTo')}
+          problem={problems.delivery}
+        />
       </div>
 
       <div className="form-field">
@@ -220,10 +207,60 @@ export function NewShipmentForm({
         </select>
       </div>
 
-      <button type="submit" disabled={isSubmitting}>
+      {error && (
+        <p className="alert" role="alert">
+          {error}
+        </p>
+      )}
+
+      <button type="submit" className="btn btn--primary" disabled={isSubmitting || hasProblem}>
         {isSubmitting ? 'Booking…' : 'Book shipment'}
       </button>
-      {error && <p role="alert">{error}</p>}
     </form>
+  )
+}
+
+interface WindowRowProps {
+  id: string
+  label: string
+  from: string
+  to: string
+  onFromChange: (value: string) => void
+  onToChange: (value: string) => void
+  /** Why this window can't be booked, shown under it; null when fine. */
+  problem: string | null
+}
+
+/** One stop's time window: label | From | To, with what is wrong underneath. */
+function WindowRow({ id, label, from, to, onFromChange, onToChange, problem }: WindowRowProps) {
+  return (
+    <div className="window-row" role="group" aria-labelledby={`${id}-label`}>
+      <span id={`${id}-label`} className="window-row__label">
+        {label}
+      </span>
+      <label htmlFor={`${id}-from`}>From</label>
+      <input
+        id={`${id}-from`}
+        type="datetime-local"
+        value={from}
+        onChange={(event) => onFromChange(event.target.value)}
+        aria-invalid={problem !== null}
+        required
+      />
+      <label htmlFor={`${id}-to`}>To</label>
+      <input
+        id={`${id}-to`}
+        type="datetime-local"
+        value={to}
+        onChange={(event) => onToChange(event.target.value)}
+        aria-invalid={problem !== null}
+        required
+      />
+      {problem && (
+        <p className="window-row__problem" role="alert">
+          {problem}
+        </p>
+      )}
+    </div>
   )
 }

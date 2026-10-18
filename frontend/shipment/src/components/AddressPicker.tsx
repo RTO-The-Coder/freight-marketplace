@@ -12,7 +12,7 @@ interface AddressPickerProps {
   /** "Pickup" or "Delivery" - the fieldset legend and the base of every field id. */
   legend: string
   shipperId: string
-  /** The shipper's address book, newest first (shared by pickup and delivery). */
+  /** The shipper's address book, A–Z by name (shared by pickup and delivery). */
   addresses: ShipperAddressDto[]
   value: ShipperAddressDto | null
   onChange: (address: ShipperAddressDto | null) => void
