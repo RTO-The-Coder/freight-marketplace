@@ -7,6 +7,8 @@ export interface FleetStop extends GeoStop {
   stopId: string
   kind: string
   status: string
+  /** Shipment place name, or the office's for the Office stop. */
+  placeName: string
 }
 
 /** A stop on a single truck's trip map. */
@@ -14,6 +16,8 @@ export interface TripStop extends GeoStop {
   id: string
   kind: string
   status: string
+  /** Shipment place name, or the office's for the Office stop. */
+  placeName: string
 }
 
 /**
@@ -32,6 +36,7 @@ export function fleetRouteChains(
         stopId: s.stopId,
         kind: s.kind,
         status: s.status,
+        placeName: s.placeName,
         latitude: s.latitude,
         longitude: s.longitude,
         sequence: s.sequence,
@@ -56,6 +61,7 @@ export function tripRoute(
       id: s.stopId,
       kind: s.kind,
       status: s.status,
+      placeName: s.placeName,
       latitude: s.latitude,
       longitude: s.longitude,
       sequence: s.sequence,

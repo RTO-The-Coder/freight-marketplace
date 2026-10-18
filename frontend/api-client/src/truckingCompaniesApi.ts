@@ -8,6 +8,8 @@ export interface TruckingCompanySummaryDto {
   // in the type so the UI degrades gracefully until that endpoint change lands.
   officeLatitude?: number
   officeLongitude?: number
+  /** The office's area, e.g. "50825 Ehrenfeld, Cologne". Optional like the coordinates: a company saved on a phone carries only id and name. */
+  officePlaceName?: string
 }
 
 export interface GetTruckingCompaniesResponse {

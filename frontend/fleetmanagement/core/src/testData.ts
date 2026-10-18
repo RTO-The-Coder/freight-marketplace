@@ -31,6 +31,7 @@ export function stop(overrides: Partial<TruckDetailStopDto> = {}): TruckDetailSt
     sequence: 10,
     latitude: 51.1,
     longitude: 17.0,
+    placeName: 'Warehouse — 50-001 Stare Miasto, Wroclaw',
     incomingLegDistanceKm: 0,
     incomingLegTimeTick: 0,
     reachedAt: null,
@@ -73,8 +74,10 @@ export function shipment(overrides: Partial<ShipmentSummaryDto> = {}): ShipmentS
     truckingCompanyId: null,
     pickupLatitude: 51.1,
     pickupLongitude: 17.0,
+    pickupPlaceName: 'Warehouse — 50-001 Stare Miasto, Wroclaw',
     deliveryLatitude: 52.2,
     deliveryLongitude: 21.0,
+    deliveryPlaceName: 'Depot — 00-001 Srodmiescie, Warsaw',
     loadWeightKg: 1000,
     loadVolumeCubicMeters: 10,
     requiredTruckType: 'Flatbed',
@@ -87,6 +90,8 @@ export function shipment(overrides: Partial<ShipmentSummaryDto> = {}): ShipmentS
     isDirect: false,
     offersOpen: true,
     waitingOfferCount: 0,
+    currentLatitude: null,
+    currentLongitude: null,
     ...overrides,
   }
 }

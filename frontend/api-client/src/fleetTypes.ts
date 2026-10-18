@@ -99,6 +99,8 @@ export interface TruckDetailStopDto {
   sequence: number
   latitude: number
   longitude: number
+  /** The shipment's pickup/delivery place name, or the office's place name for the Office stop. */
+  placeName: string
   incomingLegDistanceKm: number
   incomingLegTimeTick: number
   reachedAt: string | null

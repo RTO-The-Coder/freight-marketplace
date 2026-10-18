@@ -1,13 +1,23 @@
 import type { ApiClient } from './client'
 import type { TruckType } from './fleetTypes'
-import type { GetPendingShipmentsResponse, GetShipmentsByShipperResponse, GetShippersResponse } from './shipmentTypes'
+import type {
+  AddShipperAddressRequest,
+  GetPendingShipmentsResponse,
+  GetShipmentsByShipperResponse,
+  GetShipperAddressesResponse,
+  GetShippersResponse,
+  ShipperAddressDto,
+} from './shipmentTypes'
 
 export interface BookShipmentRequest {
   shipperId: string
   pickupLatitude: number
   pickupLongitude: number
+  /** Copied onto the shipment, e.g. a saved address's placeName. */
+  pickupPlaceName: string
   deliveryLatitude: number
   deliveryLongitude: number
+  deliveryPlaceName: string
   loadWeightKg: number
   loadVolumeCubicMeters: number
   requiredTruckType: TruckType
@@ -36,6 +46,14 @@ export function createShipmentsApi(client: ApiClient) {
 
     getShipmentsByShipper: (shipperId: string) =>
       client.get<GetShipmentsByShipperResponse>(`/shippers/${shipperId}/shipments`),
+
+    /** The shipper's saved addresses, newest first. */
+    getShipperAddresses: (shipperId: string) =>
+      client.get<GetShipperAddressesResponse>(`/shippers/${shipperId}/addresses`),
+
+    /** Saves a picked "Find area" match to the address book (add-only). */
+    addShipperAddress: (shipperId: string, body: AddShipperAddressRequest) =>
+      client.post<ShipperAddressDto>(`/shippers/${shipperId}/addresses`, body),
 
     getPendingShipments: () => client.get<GetPendingShipmentsResponse>('/shipments/pending'),
 

@@ -5,6 +5,11 @@ import { MAX_CAPACITY, type ShipmentSummaryDto } from '@freight/api-client'
 // are measured against the simulation clock, not any real-world clock.
 export { fmtSimShort as fmtDateTime, fmtSimWindow as fmtWindow, fmtRelativeToSim as fmtRelative } from '../time/simTime'
 
+/** "Pickup → Delivery" by the shipment's place names, e.g. "Warehouse — 1100 Favoriten, Vienna → Depot — 80803 Schwabing, Munich". */
+export function routeLabel(shipment: Pick<ShipmentSummaryDto, 'pickupPlaceName' | 'deliveryPlaceName'>): string {
+  return `${shipment.pickupPlaceName} → ${shipment.deliveryPlaceName}`
+}
+
 export interface CapacityFill {
   weightPct: number
   volumePct: number

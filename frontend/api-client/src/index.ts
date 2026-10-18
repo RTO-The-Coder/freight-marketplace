@@ -56,6 +56,8 @@ export { createRoutingApi } from './routingApi'
 export type { RouteGeometryResponse, RouteLegResponse, RoutePointDto, RoutingApi } from './routingApi'
 export { createTripsApi } from './tripsApi'
 export type { RescheduleTripResponse, TripsApi } from './tripsApi'
+export { createGeocodingApi } from './geocodingApi'
+export type { AreaMatchDto, GeocodingApi, SearchAreasResponse } from './geocodingApi'
 export { createShipmentsApi } from './shipmentsApi'
 export type {
   BookShipmentRequest,
@@ -78,10 +80,13 @@ export type {
   ShipperOfferDto,
 } from './offersApi'
 export type {
+  AddShipperAddressRequest,
   GetPendingShipmentsResponse,
   GetShipmentsByShipperResponse,
+  GetShipperAddressesResponse,
   GetShippersResponse,
   ShipmentStatus,
   ShipmentSummaryDto,
+  ShipperAddressDto,
   ShipperSummaryDto,
 } from './shipmentTypes'
