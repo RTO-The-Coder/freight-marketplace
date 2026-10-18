@@ -3,6 +3,7 @@
   "private": true,
   "workspaces": [
     "frontend/api-client",
+    "frontend/web-ui",
     "frontend/shipment",
     "frontend/fleetmanagement/core",
     "frontend/fleetmanagement/web",

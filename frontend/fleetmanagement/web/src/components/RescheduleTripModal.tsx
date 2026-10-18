@@ -3,7 +3,7 @@ import { useState } from 'react'
 import { tripsApi } from '@freight/fleetmanagement-core'
 import { useSimClock } from '@freight/fleetmanagement-core'
 import { datetimeLocalToIso, isoToDatetimeLocal } from '@freight/fleetmanagement-core'
-import { Modal } from './Modal'
+import { Modal } from '@freight/web-ui'
 
 interface RescheduleTripModalProps {
   tripId: string

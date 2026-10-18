@@ -1,8 +1,8 @@
 import { ApiError, CAPACITY_BY_SIZE, type TruckSize, type TruckType } from '@freight/api-client'
 import { useState } from 'react'
 import { fleetApi } from '@freight/fleetmanagement-core'
-import { Modal } from './Modal'
 import { Picker } from './Picker'
+import { Modal } from '@freight/web-ui'
 
 const TRUCK_TYPES: readonly TruckType[] = ['BoxVan', 'Flatbed', 'Refrigerated', 'Tanker']
 const TRUCK_SIZES: readonly TruckSize[] = ['Small', 'Medium', 'Large']

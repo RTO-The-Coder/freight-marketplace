@@ -1,8 +1,8 @@
 import { ApiError, type DailyRestRule, type DrivingBreakRule, type WeeklyRestRule } from '@freight/api-client'
 import { useState } from 'react'
 import { fleetApi } from '@freight/fleetmanagement-core'
-import { Modal } from './Modal'
 import { Picker } from './Picker'
+import { Modal } from '@freight/web-ui'
 
 const BREAK_RULES: readonly DrivingBreakRule[] = ['FullBreak', 'SplitBreak']
 const DAILY_REST_RULES: readonly DailyRestRule[] = ['FullRest', 'ReducedRest', 'SplitRest']

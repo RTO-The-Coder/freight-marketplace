@@ -10,7 +10,7 @@ import {
   fullName,
   useSimClock,
 } from '@freight/fleetmanagement-core'
-import { Modal } from './Modal'
+import { Modal } from '@freight/web-ui'
 
 interface DriverDetailModalProps {
   driverId: string

@@ -1,0 +1,183 @@
+/* =========================================================================
+   Three-column page — the fleet company page and the shipper page.
+   The page fills the window: the columns take all the height below the heading,
+   the map stretches to it, and each column scrolls on its own. Each app fills the
+   left and right columns with its own content (and may split the left column).
+   Markup: .app.app--wide > .columns-page > (.page-head.columns-head, .columns >
+   (.columns__map, .columns__left, .columns__right)).
+   ========================================================================= */
+
+.app--wide {
+  height: 100vh;
+  display: flex;
+  flex-direction: column;
+  padding: var(--space-4) var(--space-5);
+}
+
+.app--wide .app-header {
+  margin-bottom: var(--space-3);
+}
+
+/* Only the columns give up height; the header (with its bottom line), breadcrumb and
+   page heading keep their natural size. */
+.app--wide > .app-header,
+.app--wide > .nav,
+.columns-page > .page-head,
+.columns-page > .alert {
+  flex-shrink: 0;
+}
+
+.columns-page {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+}
+
+/* --- Heading row: logo, name, a counts line under the name ------------ */
+.columns-head__title {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  flex-wrap: wrap;
+  min-width: 0;
+}
+
+.columns-head__title h2 {
+  font-size: var(--text-xl);
+  letter-spacing: -0.02em;
+}
+
+.columns-head__name {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+
+.columns-head__sub {
+  color: var(--c-text-muted);
+  font-size: var(--text-sm);
+}
+
+.columns-page .page-head {
+  align-items: center;
+  margin-bottom: var(--space-4);
+  padding-bottom: var(--space-4);
+  border-bottom: 1px solid var(--c-border);
+}
+
+/* --- The three columns ------------------------------------------------ */
+.columns {
+  flex: 1;
+  min-height: 0;
+  display: grid;
+  grid-template-columns: minmax(340px, 1fr) minmax(0, 1.9fr) minmax(360px, 1.05fr);
+  grid-template-rows: minmax(0, 1fr);
+  grid-template-areas: 'left map right';
+  gap: var(--space-4);
+}
+
+.columns__left {
+  grid-area: left;
+  min-width: 0;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-4);
+}
+
+.columns__right {
+  grid-area: right;
+  min-width: 0;
+  min-height: 0;
+}
+
+.columns__map {
+  grid-area: map;
+  min-width: 0;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+}
+
+/* The map takes whatever height the column has. */
+.columns__map > .tripmap,
+.columns__map > .map-placeholder,
+.columns__map > .skeleton--map {
+  flex: 1;
+  min-height: 0;
+}
+
+.columns__map .tripmap__canvas {
+  flex: 1;
+  height: auto;
+  min-height: 0;
+}
+
+/* --- A column's panel: heading with count, body scrolling on its own --- */
+.side-panel {
+  height: 100%;
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+}
+
+.side-panel__head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-3);
+  margin-bottom: var(--space-3);
+}
+
+.side-panel__head h3 {
+  font-size: var(--text-md);
+}
+
+.side-panel__body {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  /* Room for row shadows and the scrollbar. */
+  padding: 2px var(--space-2) var(--space-2) 2px;
+}
+
+.side-panel__actions {
+  display: flex;
+  margin-bottom: var(--space-3);
+}
+
+/* Below ~1100px the columns stack (map, left, right) and the page scrolls normally. */
+@media (max-width: 1100px) {
+  .app--wide {
+    height: auto;
+    display: block;
+  }
+
+  .columns {
+    grid-template-columns: minmax(0, 1fr);
+    grid-template-rows: auto;
+    grid-template-areas: 'map' 'left' 'right';
+  }
+
+  .columns__map > .tripmap,
+  .columns__map > .map-placeholder,
+  .columns__map > .skeleton--map {
+    flex: none;
+  }
+
+  .columns__map .tripmap__canvas,
+  .columns__map > .skeleton--map {
+    height: 420px;
+  }
+
+  .side-panel {
+    height: auto;
+  }
+
+  .side-panel__body {
+    overflow: visible;
+  }
+}

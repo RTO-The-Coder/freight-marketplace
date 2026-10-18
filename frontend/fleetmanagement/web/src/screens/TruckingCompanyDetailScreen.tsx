@@ -12,16 +12,15 @@ import { ActivationToggle } from '../components/ActivationToggle'
 import { AssignDriversModal } from '../components/AssignDriversModal'
 import { AssignShipmentModal } from '../components/AssignShipmentModal'
 import { Chevron } from '../components/Chevron'
-import { CompanyLogo } from '../components/CompanyLogo'
 import { DriverDetailModal } from '../components/DriverDetailModal'
 import { DriversPanel } from '../components/DriversPanel'
 import { fleetDriverLabel, orderCompanyDrivers } from '@freight/fleetmanagement-core'
 import { FleetMap, type FleetMapTruck } from '../components/FleetMap'
 import { OpenShipmentsPanel } from '../components/OpenShipmentsPanel'
-import { SidePanel } from '../components/SidePanel'
 import { StatusPill } from '../components/StatusPill'
 import { TruckSelector } from '../components/TruckSelector'
 import { ROUTE_COLORS, fleetApi, truckingCompaniesApi } from '@freight/fleetmanagement-core'
+import { Logo, SidePanel } from '@freight/web-ui'
 
 interface TruckingCompanyDetailScreenProps {
   companyId: string
@@ -176,17 +175,17 @@ export function TruckingCompanyDetailScreen({
   if (error && !company && !trucks) return <p className="alert">{error}</p>
 
   return (
-    <div className="company-page">
+    <div className="columns-page">
       {error && <p className="alert">{error}</p>}
 
       {/* One row: the company, its counts under its name. */}
-      <div className="page-head company-head">
-        <div className="company-head__title">
-          {company && <CompanyLogo name={company.name} />}
-          <div className="company-head__name">
+      <div className="page-head columns-head">
+        <div className="columns-head__title">
+          {company && <Logo name={company.name} />}
+          <div className="columns-head__name">
             <h2>{company?.name ?? (error ? 'Trucking company' : 'Loading…')}</h2>
             {trucks && (
-              <span className="company-head__sub">
+              <span className="columns-head__sub">
                 {`${trucks.length} truck${trucks.length === 1 ? '' : 's'} · ${activeCount} active`}
                 {company?.officePlaceName && ` · Office ${company.officePlaceName}`}
               </span>
@@ -195,9 +194,9 @@ export function TruckingCompanyDetailScreen({
         </div>
       </div>
 
-      <div className="company-layout">
+      <div className="columns">
         {/* --- Map (middle; first when stacked) ----------------------- */}
-        <section className="company-layout__map" aria-label="Fleet map">
+        <section className="columns__map" aria-label="Fleet map">
           {truckDetails ? (
             <FleetMap
               trucks={mapTrucks}
@@ -222,7 +221,7 @@ export function TruckingCompanyDetailScreen({
         </section>
 
         {/* --- Left: Fleet above Drivers, each list scrolling on its own ------- */}
-        <div className="company-layout__left">
+        <div className="columns__left">
           <div className="company-layout__fleet">
             <SidePanel title="Fleet" count={trucks?.length ?? null}>
               {trucks && trucks.length > 0 && (
@@ -326,7 +325,7 @@ export function TruckingCompanyDetailScreen({
         </div>
 
         {/* --- Right: Shipments ----------------------------------------- */}
-        <div className="company-layout__shipments">
+        <div className="columns__right">
           <SidePanel title="Shipments" count={null}>
             <OpenShipmentsPanel
               companyId={companyId}

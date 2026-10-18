@@ -1,8 +1,7 @@
 import { useMemo } from 'react'
 import { MapContainer, Marker, Polyline, TileLayer, Tooltip } from 'react-leaflet'
-import { FitBounds } from './FitBounds'
-import { OSM_ATTRIBUTION, OSM_TILE_URL, dotIcon } from './mapPrimitives'
 import { STOP_KIND_COLOR, collectFitPoints, shipmentRoute, useRouteGeometry } from '@freight/fleetmanagement-core'
+import { dotIcon, FitBounds, OSM_ATTRIBUTION, OSM_TILE_URL } from '@freight/web-ui'
 
 interface ShipmentRouteMapProps {
   pickup: { latitude: number; longitude: number }

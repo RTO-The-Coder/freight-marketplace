@@ -1,15 +1,15 @@
 import { companyInitials, companyLogoHues } from '@freight/fleetmanagement-core'
 
-interface CompanyLogoProps {
+interface LogoProps {
   name: string
   size?: 'md' | 'lg'
 }
 
 /**
- * A generated monogram tile — no image files. Colours and initials come from
- * core so web and mobile render the same mark for the same company.
+ * A generated monogram tile for a trucking company or a shipper — no image files. Colours
+ * and initials come from core so web and mobile render the same mark for the same name.
  */
-export function CompanyLogo({ name, size = 'md' }: CompanyLogoProps) {
+export function Logo({ name, size = 'md' }: LogoProps) {
   const { hue, hue2 } = companyLogoHues(name)
   const initials = companyInitials(name)
 

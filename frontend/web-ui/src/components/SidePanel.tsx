@@ -7,7 +7,10 @@ interface SidePanelProps {
   children: ReactNode
 }
 
-/** A company-page side column (Fleet, Drivers): a heading with its count, and a list that scrolls on its own. */
+/**
+ * A column of a three-column page (Fleet, Drivers, Shipments, Saved addresses, ...): a heading
+ * with its count, and a body that scrolls on its own.
+ */
 export function SidePanel({ title, count, children }: SidePanelProps) {
   return (
     <section className="side-panel" aria-label={title}>

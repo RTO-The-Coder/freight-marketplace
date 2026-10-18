@@ -17,9 +17,9 @@ import {
 import { useSimClock } from '@freight/fleetmanagement-core'
 import { datetimeLocalToIso, isoToDatetimeLocal } from '@freight/fleetmanagement-core'
 import { resolveInsertionIndices } from '@freight/fleetmanagement-core'
-import { Modal } from './Modal'
 import { ShipmentRouteMap } from './ShipmentRouteMap'
 import { capacityFill, fmtWindow } from '@freight/fleetmanagement-core'
+import { Modal } from '@freight/web-ui'
 
 interface AssignShipmentModalProps {
   /** Only shipments booked directly to this company can be assigned here - open ones go through offers. */

@@ -1,7 +1,7 @@
 import { ApiError, type TruckingCompanySummaryDto } from '@freight/api-client'
 import { useEffect, useState } from 'react'
 import { fleetApi, truckingCompaniesApi } from '@freight/fleetmanagement-core'
-import { Modal } from './Modal'
+import { Modal } from '@freight/web-ui'
 
 interface AssignCompanyModalProps {
   truckId: string

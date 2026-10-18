@@ -1,9 +1,6 @@
 import { useMemo } from 'react'
 import { MapContainer, Marker, Polyline, TileLayer, Tooltip } from 'react-leaflet'
 import type { TruckDetailDto, TruckPositionDto } from '@freight/api-client'
-import { FitBounds } from './FitBounds'
-import { InvalidateSizeOnResize } from './InvalidateSizeOnResize'
-import { OSM_ATTRIBUTION, OSM_TILE_URL, dotIcon, fleetTruckIcon, officeIcon } from './mapPrimitives'
 import {
   STOP_KIND_COLOR,
   collectFitPoints,
@@ -11,6 +8,7 @@ import {
   useRouteGeometry,
   type LatLng,
 } from '@freight/fleetmanagement-core'
+import { dotIcon, FitBounds, fleetTruckIcon, InvalidateSizeOnResize, officeIcon, OSM_ATTRIBUTION, OSM_TILE_URL } from '@freight/web-ui'
 
 /** A truck to draw on the fleet map, in its route colour. */
 export interface FleetMapTruck {

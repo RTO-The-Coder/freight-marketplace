@@ -1,9 +1,8 @@
 import { useMemo } from 'react'
 import { MapContainer, Marker, Polyline, TileLayer, Tooltip } from 'react-leaflet'
 import type { TruckDetailStopDto, TruckPositionDto } from '@freight/api-client'
-import { FitBounds } from './FitBounds'
-import { OSM_ATTRIBUTION, OSM_TILE_URL, dotIcon, truckIcon } from './mapPrimitives'
 import { STOP_KIND_COLOR, collectFitPoints, tripRoute, useRouteGeometry } from '@freight/fleetmanagement-core'
+import { dotIcon, FitBounds, OSM_ATTRIBUTION, OSM_TILE_URL, truckIcon } from '@freight/web-ui'
 
 interface TripMapProps {
   stops: TruckDetailStopDto[]

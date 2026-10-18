@@ -11,7 +11,12 @@ interface ModalProps {
 export function Modal({ title, onClose, children, wide = false }: ModalProps) {
   return (
     <div className="modal-overlay" onClick={onClose}>
-      <div className={wide ? 'modal modal--wide' : 'modal'} onClick={(event) => event.stopPropagation()}>
+      <div
+        className={wide ? 'modal modal--wide' : 'modal'}
+        role="dialog"
+        aria-label={title}
+        onClick={(event) => event.stopPropagation()}
+      >
         <div className="modal-header">
           <h3>{title}</h3>
           <button type="button" className="modal-close" onClick={onClose} aria-label="Close">

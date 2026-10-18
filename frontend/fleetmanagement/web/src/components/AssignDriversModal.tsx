@@ -2,7 +2,7 @@ import { ApiError, type DriverSummaryDto, type TruckSize } from '@freight/api-cl
 import { useEffect, useState } from 'react'
 import { fleetApi, mergeDriverPool } from '@freight/fleetmanagement-core'
 import { DriverSearchSelect } from './DriverSearchSelect'
-import { Modal } from './Modal'
+import { Modal } from '@freight/web-ui'
 
 interface AssignDriversModalProps {
   truckId: string

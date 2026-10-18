@@ -3,6 +3,7 @@ import { advanceSummary, amountToTicks, useSimClock, type AdvanceUnit } from '@f
 import { fmtSimDateTime, isoToDatetimeLocal } from '@freight/fleetmanagement-core'
 import { Modal } from './Modal'
 
+/** The simulation clock, with Advance and Set time - in the header of both web apps. */
 export function SimClockBar() {
   const { currentTime, busy, lastAdvance, error, advance, setTime } = useSimClock()
 

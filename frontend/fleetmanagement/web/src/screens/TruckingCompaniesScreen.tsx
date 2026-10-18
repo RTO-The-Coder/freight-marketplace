@@ -1,7 +1,7 @@
 import type { TruckingCompanySummaryDto } from '@freight/api-client'
 import { useEffect, useState } from 'react'
-import { CompanyLogo } from '../components/CompanyLogo'
 import { truckingCompaniesApi } from '@freight/fleetmanagement-core'
+import { Logo } from '@freight/web-ui'
 
 interface TruckingCompaniesScreenProps {
   onSelect: (companyId: string, companyName: string) => void
@@ -50,7 +50,7 @@ export function TruckingCompaniesScreen({ onSelect }: TruckingCompaniesScreenPro
                 className="row-card"
                 onClick={() => onSelect(company.companyId, company.name)}
               >
-                <CompanyLogo name={company.name} size="md" />
+                <Logo name={company.name} size="md" />
                 <span className="row-card__body">
                   <span className="row-card__name">{company.name}</span>
                   <span className="row-card__meta">Carrier</span>

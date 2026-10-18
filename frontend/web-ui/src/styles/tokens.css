@@ -1,5 +1,6 @@
 /* =========================================================================
-   Freight Marketplace — design tokens
+   Freight Marketplace — design tokens and base element styles
+   Shared by the fleet web app and the shipper web app.
    Single source of truth for color, type, spacing, radius, elevation.
    Every screen composes these; no screen hard-codes a hex value or a pixel
    gap that isn't on the scale below.

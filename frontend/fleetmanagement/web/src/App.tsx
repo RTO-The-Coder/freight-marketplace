@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react'
 import './App.css'
 import { Chevron } from './components/Chevron'
-import { SimClockBar } from './components/SimClockBar'
+import { SimClockBar } from '@freight/web-ui'
 import { useSimClock } from '@freight/fleetmanagement-core'
 import { TruckDetailScreen } from './screens/TruckDetailScreen'
 import { TruckingCompaniesScreen } from './screens/TruckingCompaniesScreen'
