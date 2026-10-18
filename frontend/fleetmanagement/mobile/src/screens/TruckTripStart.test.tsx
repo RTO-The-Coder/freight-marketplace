@@ -11,6 +11,7 @@ const stop = (extra = {}) => ({
   kind: 'Pickup',
   status: 'Pending',
   sequence: 10,
+  placeName: 'Depot — 1100 Favoriten, Vienna',
   latitude: 51,
   longitude: 17,
   incomingLegDistanceKm: 42,
@@ -79,7 +80,7 @@ it('does nothing when the pickers are cancelled', async () => {
 it('is hidden once the truck has moved along its leg', async () => {
   installFakeApi({ 'GET /trucks/t1': truck([stop()]), 'GET /trucks/t1/position': position({ legProgressFraction: 0.2 }) })
   renderTruck()
-  await screen.findByText('Leg 42 km / 55 min · Pending')
+  await screen.findByText('Depot — 1100 Favoriten, Vienna\nLeg 42 km / 55 min · Pending')
   expect(screen.queryByText('Change trip start')).toBeNull()
 })
 

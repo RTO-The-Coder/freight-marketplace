@@ -10,6 +10,7 @@ const stop = (stopId: string, kind: string, sequence: number, extra = {}) => ({
   kind,
   status: 'Pending',
   sequence,
+  placeName: kind === 'Pickup' ? 'Depot — 1100 Favoriten, Vienna' : 'Warehouse — 80803 Schwabing, Munich',
   latitude: 51,
   longitude: 17,
   incomingLegDistanceKm: 0,
@@ -65,8 +66,9 @@ it('shows identity, capacity, drivers, stops in route order and compliance', asy
   // Number formatting follows the device locale (as on web), so build the expectation the same way.
   expect(screen.getByText(`${(9000).toLocaleString()} kg · 45 m³`)).toBeOnTheScreen()
   expect(screen.getByText('Jan Kowalski')).toBeOnTheScreen()
-  expect(screen.getByText(/^Leg 42 km \/ 55 min · Reached/)).toBeOnTheScreen()
-  expect(screen.getByText('Leg 210 km / 200 min · Pending')).toBeOnTheScreen()
+  // Each stop: its place name, then the leg and status on the next line.
+  expect(screen.getByText(/^Depot — 1100 Favoriten, Vienna\sLeg 42 km \/ 55 min · Reached/)).toBeOnTheScreen()
+  expect(screen.getByText('Warehouse — 80803 Schwabing, Munich\nLeg 210 km / 200 min · Pending')).toBeOnTheScreen()
   const kinds = screen.getAllByText(/^(Pickup|Delivery)$/).map((n) => n.props.children)
   expect(kinds).toEqual(['Pickup', 'Delivery'])
   expect(
