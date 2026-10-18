@@ -86,6 +86,52 @@ public sealed class TruckControllerTests : ApiTestBase
     }
 
     [Fact]
+    public async Task AssignTruckToCompany_TruckStillInAnotherCompany_Returns400()
+    {
+        var company = await Factory.SeedTruckingCompanyAsync("Nordwest");
+        var otherCompany = await Factory.SeedTruckingCompanyAsync("Kessler");
+        var truckResponse = await AddTruckAsync();
+        await Client.PostAsJsonAsync($"/trucks/{truckResponse.TruckId}/company", new { TruckingCompanyId = company.Id }, JsonOptions);
+
+        var response = await Client.PostAsJsonAsync($"/trucks/{truckResponse.TruckId}/company", new { TruckingCompanyId = otherCompany.Id }, JsonOptions);
+
+        Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
+        var detail = await Client.GetFromJsonAsync<TruckDetailDto>($"/trucks/{truckResponse.TruckId}", JsonOptions);
+        Assert.Equal(company.Id, detail!.TruckingCompanyId);
+    }
+
+    [Fact]
+    public async Task UnassignTruckFromCompany_WithDriver_TakesTheDriverOff()
+    {
+        var company = await Factory.SeedTruckingCompanyAsync();
+        var truckResponse = await AddTruckAsync();
+        await Client.PostAsJsonAsync($"/trucks/{truckResponse.TruckId}/company", new { TruckingCompanyId = company.Id }, JsonOptions);
+        var driverId = await AddDriverAsync(company.Id);
+        await Client.PatchAsJsonAsync($"/trucks/{truckResponse.TruckId}/drivers", new { PrimaryDriverId = driverId, SecondaryDriverId = (Guid?)null }, JsonOptions);
+
+        var response = await Client.DeleteAsync($"/trucks/{truckResponse.TruckId}/company");
+
+        Assert.Equal(HttpStatusCode.NoContent, response.StatusCode);
+        var detail = await Client.GetFromJsonAsync<TruckDetailDto>($"/trucks/{truckResponse.TruckId}", JsonOptions);
+        Assert.Null(detail!.TruckingCompanyId);
+        Assert.Null(detail.PrimaryDriver);
+    }
+
+    [Fact]
+    public async Task AssignDrivers_DriverOfAnotherCompany_Returns400()
+    {
+        var company = await Factory.SeedTruckingCompanyAsync("Nordwest");
+        var otherCompany = await Factory.SeedTruckingCompanyAsync("Kessler");
+        var truckResponse = await AddTruckAsync();
+        await Client.PostAsJsonAsync($"/trucks/{truckResponse.TruckId}/company", new { TruckingCompanyId = company.Id }, JsonOptions);
+        var otherCompanysDriverId = await AddDriverAsync(otherCompany.Id);
+
+        var response = await Client.PatchAsJsonAsync($"/trucks/{truckResponse.TruckId}/drivers", new { PrimaryDriverId = otherCompanysDriverId, SecondaryDriverId = (Guid?)null }, JsonOptions);
+
+        Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
+    }
+
+    [Fact]
     public async Task ActivateTruck_WithoutCompanyOrDriver_Returns400ViaExceptionMiddleware()
     {
         var truckResponse = await AddTruckAsync();
@@ -101,7 +147,7 @@ public sealed class TruckControllerTests : ApiTestBase
         var company = await Factory.SeedTruckingCompanyAsync();
         var truckResponse = await AddTruckAsync();
         await Client.PostAsJsonAsync($"/trucks/{truckResponse.TruckId}/company", new { TruckingCompanyId = company.Id }, JsonOptions);
-        var driverId = await AddDriverAsync();
+        var driverId = await AddDriverAsync(company.Id);
         await Client.PatchAsJsonAsync($"/trucks/{truckResponse.TruckId}/drivers", new { PrimaryDriverId = driverId, SecondaryDriverId = (Guid?)null }, JsonOptions);
 
         var activateResponse = await Client.PostAsync($"/trucks/{truckResponse.TruckId}/activate", null);
@@ -117,8 +163,10 @@ public sealed class TruckControllerTests : ApiTestBase
     [Fact]
     public async Task AssignDrivers_ThenRemoveDrivers_Returns204Both()
     {
+        var company = await Factory.SeedTruckingCompanyAsync();
         var truckResponse = await AddTruckAsync();
-        var driverId = await AddDriverAsync();
+        await Client.PostAsJsonAsync($"/trucks/{truckResponse.TruckId}/company", new { TruckingCompanyId = company.Id }, JsonOptions);
+        var driverId = await AddDriverAsync(company.Id);
 
         var assignResponse = await Client.PatchAsJsonAsync($"/trucks/{truckResponse.TruckId}/drivers", new { PrimaryDriverId = driverId, SecondaryDriverId = (Guid?)null }, JsonOptions);
         Assert.Equal(HttpStatusCode.NoContent, assignResponse.StatusCode);
@@ -181,7 +229,7 @@ public sealed class TruckControllerTests : ApiTestBase
         return (await response.Content.ReadFromJsonAsync<AddTruckResponse>(JsonOptions))!;
     }
 
-    private async Task<Guid> AddDriverAsync()
+    private async Task<Guid> AddDriverAsync(Guid companyId)
     {
         var response = await Client.PostAsJsonAsync("/drivers", new
         {
@@ -190,7 +238,8 @@ public sealed class TruckControllerTests : ApiTestBase
             BreakRule = DrivingBreakRule.FullBreak,
             DailyRestRule = DailyRestRule.FullRest,
             WeeklyRestRule = WeeklyRestRule.FullWeeklyRest,
-            ExtendDailyDrivingWhenEligible = false
+            ExtendDailyDrivingWhenEligible = false,
+            TruckingCompanyId = companyId
         }, JsonOptions);
         var body = await response.Content.ReadFromJsonAsync<AddDriverResponse>(JsonOptions);
         return body!.DriverId;

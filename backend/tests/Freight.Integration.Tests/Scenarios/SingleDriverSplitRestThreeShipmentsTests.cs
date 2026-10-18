@@ -104,7 +104,7 @@ public sealed class SingleDriverSplitRestThreeShipmentsTests(ITestOutputHelper o
 
         var truckId = await Api.AddTruckAsync(TestTrucks.MediumRefrigerated());
         await Api.AssignTruckToCompanyAsync(truckId, company.Id);
-        var driverId = await Api.AddDriverAsync(TestDrivers.SplitRest());
+        var driverId = await Api.AddDriverAsync(company.Id, TestDrivers.SplitRest());
         await Api.AssignDriversAsync(truckId, driverId);
         await Api.ActivateTruckAsync(truckId);
 

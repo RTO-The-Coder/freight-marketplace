@@ -99,6 +99,9 @@ internal sealed class FakeDriverRepository : FakeRepository<Driver>, IDriverRepo
 {
     public Task<IReadOnlyList<Driver>> GetAllAsync(CancellationToken cancellationToken = default) =>
         Task.FromResult<IReadOnlyList<Driver>>([.. Items.Values]);
+
+    public Task<IReadOnlyList<Driver>> GetByTruckingCompanyIdAsync(Guid truckingCompanyId, CancellationToken cancellationToken = default) =>
+        Task.FromResult<IReadOnlyList<Driver>>([.. Items.Values.Where(d => d.TruckingCompanyId == truckingCompanyId)]);
 }
 
 internal sealed class FakeShipmentRepository : FakeRepository<Shipment>, IShipmentRepository

@@ -127,7 +127,8 @@ public sealed class OfferFlowTests : ApiTestBase
             BreakRule = DrivingBreakRule.FullBreak,
             DailyRestRule = DailyRestRule.FullRest,
             WeeklyRestRule = WeeklyRestRule.FullWeeklyRest,
-            ExtendDailyDrivingWhenEligible = false
+            ExtendDailyDrivingWhenEligible = false,
+            TruckingCompanyId = company.Id
         }, JsonOptions);
         var driverId = (await driverResponse.Content.ReadFromJsonAsync<AddDriverResponse>(JsonOptions))!.DriverId;
         await Client.PatchAsJsonAsync($"/trucks/{truckId}/drivers", new { PrimaryDriverId = driverId, SecondaryDriverId = (Guid?)null }, JsonOptions);

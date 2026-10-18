@@ -40,7 +40,7 @@ public sealed class BookAssignAdvanceEtaConsistencyTests
 
         var addDriverHandler = new AddDriverHandler(unitOfWork);
         var driverResponse = await addDriverHandler.AddDriverAsync(new AddDriverRequest(
-            "Jane", "Doe", DrivingBreakRule.FullBreak, DailyRestRule.FullRest, WeeklyRestRule.FullWeeklyRest, false));
+            "Jane", "Doe", DrivingBreakRule.FullBreak, DailyRestRule.FullRest, WeeklyRestRule.FullWeeklyRest, false, company.Id));
 
         var assignDriversHandler = new AssignDriversHandler(unitOfWork);
         await assignDriversHandler.AssignDriversAsync(new AssignDriversRequest(truckResponse.TruckId, driverResponse.DriverId, null));

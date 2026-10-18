@@ -27,7 +27,7 @@ public sealed class CheckDriverEligibilityHandlerTests
     [Fact]
     public async Task CheckDriverEligibilityAsync_FreshlyDispatchedDriver_IsEligibleWithinBreakBoundary()
     {
-        var driver = Driver.Create(Guid.NewGuid(), "Jane", "Doe", SomeRules());
+        var driver = Driver.Create(Guid.NewGuid(), "Jane", "Doe", SomeRules(), Guid.NewGuid());
         driver.ResetComplianceForNewTrip(new DateTime(2026, 1, 1, 6, 0, 0));
         var unitOfWork = SetUp(driver);
 
@@ -41,7 +41,7 @@ public sealed class CheckDriverEligibilityHandlerTests
     [Fact]
     public async Task CheckDriverEligibilityAsync_PastBreakBoundary_ReturnsIneligibleWithReason()
     {
-        var driver = Driver.Create(Guid.NewGuid(), "Jane", "Doe", SomeRules());
+        var driver = Driver.Create(Guid.NewGuid(), "Jane", "Doe", SomeRules(), Guid.NewGuid());
         driver.ResetComplianceForNewTrip(new DateTime(2026, 1, 1, 6, 0, 0));
         var unitOfWork = SetUp(driver);
 
@@ -56,7 +56,7 @@ public sealed class CheckDriverEligibilityHandlerTests
     [Fact]
     public async Task CheckDriverEligibilityAsync_IsGenuinelyReadOnly_NeverMutatesRealLedger()
     {
-        var driver = Driver.Create(Guid.NewGuid(), "Jane", "Doe", SomeRules());
+        var driver = Driver.Create(Guid.NewGuid(), "Jane", "Doe", SomeRules(), Guid.NewGuid());
         var tripStart = new DateTime(2026, 1, 1, 6, 0, 0);
         driver.ResetComplianceForNewTrip(tripStart);
         var unitOfWork = SetUp(driver);
@@ -98,7 +98,7 @@ public sealed class CheckDriverEligibilityHandlerTests
     [Fact]
     public async Task CheckDriverEligibilityAsync_DriverNeverStartedDriving_ThrowsDistinctMessageFromNotFound()
     {
-        var driver = Driver.Create(Guid.NewGuid(), "Jane", "Doe", SomeRules());
+        var driver = Driver.Create(Guid.NewGuid(), "Jane", "Doe", SomeRules(), Guid.NewGuid());
         var unitOfWork = SetUp(driver);
 
         var handler = new CheckDriverEligibilityHandler(unitOfWork.Object, new DriverRuleEngine());

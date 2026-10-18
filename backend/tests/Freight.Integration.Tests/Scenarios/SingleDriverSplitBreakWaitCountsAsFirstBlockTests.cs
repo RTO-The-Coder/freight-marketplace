@@ -79,7 +79,7 @@ public sealed class SingleDriverSplitBreakWaitCountsAsFirstBlockTests(ITestOutpu
 
         var truckId = await Api.AddTruckAsync(TestTrucks.MediumRefrigerated());
         await Api.AssignTruckToCompanyAsync(truckId, company.Id);
-        var driverId = await Api.AddDriverAsync(TestDrivers.SplitBreak());
+        var driverId = await Api.AddDriverAsync(company.Id, TestDrivers.SplitBreak());
         await Api.AssignDriversAsync(truckId, driverId);
         await Api.ActivateTruckAsync(truckId);
 

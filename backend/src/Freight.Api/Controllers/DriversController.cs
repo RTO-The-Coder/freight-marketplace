@@ -12,7 +12,8 @@ public sealed class DriversController(
     GetDriversHandler getDriversHandler,
     GetTruckForDriverHandler getTruckForDriverHandler,
     GetDriverDetailHandler getDriverDetailHandler,
-    CheckDriverEligibilityHandler checkDriverEligibilityHandler) : ControllerBase
+    CheckDriverEligibilityHandler checkDriverEligibilityHandler,
+    SetDriverCompanyHandler setDriverCompanyHandler) : ControllerBase
 {
     [HttpPost("drivers")]
     public async Task<ActionResult<AddDriverResponse>> AddDriver(AddDriverBody body, CancellationToken cancellationToken)
@@ -24,16 +25,34 @@ public sealed class DriversController(
                 body.BreakRule,
                 body.DailyRestRule,
                 body.WeeklyRestRule,
-                body.ExtendDailyDrivingWhenEligible),
+                body.ExtendDailyDrivingWhenEligible,
+                body.TruckingCompanyId),
             cancellationToken);
         return CreatedAtAction(nameof(GetDriverDetail), new { driverId = response.DriverId }, response);
     }
 
     [HttpGet("drivers")]
-    public async Task<ActionResult<GetDriversResponse>> GetDrivers([FromQuery] bool unassigned, CancellationToken cancellationToken)
+    public async Task<ActionResult<GetDriversResponse>> GetDrivers(
+        [FromQuery] bool unassigned,
+        [FromQuery] Guid? truckingCompanyId,
+        CancellationToken cancellationToken)
     {
-        var response = await getDriversHandler.GetDriversAsync(new GetDriversRequest(unassigned), cancellationToken);
+        var response = await getDriversHandler.GetDriversAsync(new GetDriversRequest(unassigned, truckingCompanyId), cancellationToken);
         return Ok(response);
+    }
+
+    [HttpPost("drivers/{driverId:guid}/company")]
+    public async Task<IActionResult> AssignDriverToCompany(Guid driverId, AssignDriverToCompanyBody body, CancellationToken cancellationToken)
+    {
+        await setDriverCompanyHandler.SetDriverCompanyAsync(new SetDriverCompanyRequest(driverId, body.TruckingCompanyId), cancellationToken);
+        return NoContent();
+    }
+
+    [HttpDelete("drivers/{driverId:guid}/company")]
+    public async Task<IActionResult> UnassignDriverFromCompany(Guid driverId, CancellationToken cancellationToken)
+    {
+        await setDriverCompanyHandler.SetDriverCompanyAsync(new SetDriverCompanyRequest(driverId, null), cancellationToken);
+        return NoContent();
     }
 
     [HttpGet("drivers/{driverId:guid}/truck")]
@@ -71,6 +90,9 @@ public sealed record AddDriverBody(
     DrivingBreakRule BreakRule,
     DailyRestRule DailyRestRule,
     WeeklyRestRule WeeklyRestRule,
-    bool ExtendDailyDrivingWhenEligible);
+    bool ExtendDailyDrivingWhenEligible,
+    Guid TruckingCompanyId);
+
+public sealed record AssignDriverToCompanyBody(Guid TruckingCompanyId);
 
 public sealed record CheckDriverEligibilityBody(int AfterMinutes);

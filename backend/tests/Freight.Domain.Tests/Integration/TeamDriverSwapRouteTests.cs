@@ -30,10 +30,11 @@ public class TeamDriverSwapRouteTests
     [Fact]
     public void CalculateEtasForTeam_AgreesWithManualTickByTickEvaluateTeamReplay_OnFinalLegCompletionTime()
     {
-        var primaryDriver = Driver.Create(Guid.NewGuid(), "Primary", "Driver", FullRules());
-        var secondaryDriver = Driver.Create(Guid.NewGuid(), "Secondary", "Driver", FullRules());
+        var companyId = Guid.NewGuid();
+        var primaryDriver = Driver.Create(Guid.NewGuid(), "Primary", "Driver", FullRules(), companyId);
+        var secondaryDriver = Driver.Create(Guid.NewGuid(), "Secondary", "Driver", FullRules(), companyId);
         var truck = Truck.Create(Guid.NewGuid(), "Truck-1", TruckType.Refrigerated, TruckSize.Large);
-        truck.AssignToCompany(Guid.NewGuid());
+        truck.AssignToCompany(companyId);
         truck.AssignDrivers(primaryDriver, secondaryDriver);
         Assert.Equal(DriverConfigurationType.Team, truck.DriverAssignment!.ConfigurationType);
         truck.Activate();

@@ -24,13 +24,16 @@ public class TruckAndDriverRoundTripTests : IAsyncLifetime
 
     public Task DisposeAsync() => Task.CompletedTask;
 
+    // No foreign key from Drivers/Trucks to TruckingCompanies, so any id will do.
+    private static readonly Guid CompanyId = Guid.NewGuid();
+
     private static DrivingRules SampleRules() =>
         DrivingRules.Create(DrivingBreakRule.SplitBreak, DailyRestRule.ReducedRest, WeeklyRestRule.ReducedWeeklyRest, extendDailyDrivingWhenEligible: true);
 
     [Fact]
     public async Task Driver_PersistedAndReloaded_RoundTripsRules()
     {
-        var driver = Driver.Create(Guid.NewGuid(), "Jane", "Doe", SampleRules());
+        var driver = Driver.Create(Guid.NewGuid(), "Jane", "Doe", SampleRules(), CompanyId);
 
         await using (var writeContext = new FreightDbContext(Options()))
         {
@@ -53,7 +56,7 @@ public class TruckAndDriverRoundTripTests : IAsyncLifetime
     public async Task Driver_WithComplianceLedger_RoundTripsLedgerIncludingLastRestEndedAt()
     {
         var tripStartedAt = new DateTime(2026, 1, 1, 6, 0, 0, DateTimeKind.Utc);
-        var driver = Driver.Create(Guid.NewGuid(), "Ledger", "Driver", SampleRules());
+        var driver = Driver.Create(Guid.NewGuid(), "Ledger", "Driver", SampleRules(), CompanyId);
         driver.ResetComplianceForNewTrip(tripStartedAt);
 
         await using (var writeContext = new FreightDbContext(Options()))
@@ -101,8 +104,9 @@ public class TruckAndDriverRoundTripTests : IAsyncLifetime
     [Fact]
     public async Task Truck_WithSingleDriver_RoundTripsDriverAssignmentByReference()
     {
-        var driver = Driver.Create(Guid.NewGuid(), "Primary", "Driver", SampleRules());
+        var driver = Driver.Create(Guid.NewGuid(), "Primary", "Driver", SampleRules(), CompanyId);
         var truck = Truck.Create(Guid.NewGuid(), "Truck-2", TruckType.Flatbed, TruckSize.Large);
+        truck.AssignToCompany(CompanyId);
         truck.AssignDrivers(driver);
         truck.SetActiveDriver(driver.Id);
 
@@ -126,9 +130,9 @@ public class TruckAndDriverRoundTripTests : IAsyncLifetime
     [Fact]
     public async Task Truck_DriverAssignmentClearedByRemoveDrivers_RoundTripsAsNull()
     {
-        var driver = Driver.Create(Guid.NewGuid(), "Primary", "Driver", SampleRules());
+        var driver = Driver.Create(Guid.NewGuid(), "Primary", "Driver", SampleRules(), CompanyId);
         var truck = Truck.Create(Guid.NewGuid(), "Truck-2b", TruckType.Flatbed, TruckSize.Large);
-        truck.AssignToCompany(Guid.NewGuid());
+        truck.AssignToCompany(CompanyId);
         truck.AssignDrivers(driver);
         truck.Activate();
 
@@ -158,9 +162,10 @@ public class TruckAndDriverRoundTripTests : IAsyncLifetime
     [Fact]
     public async Task Truck_WithTeamDrivers_RoundTripsBothDriverReferences()
     {
-        var primary = Driver.Create(Guid.NewGuid(), "Primary", "Driver", SampleRules());
-        var secondary = Driver.Create(Guid.NewGuid(), "Secondary", "Driver", SampleRules());
+        var primary = Driver.Create(Guid.NewGuid(), "Primary", "Driver", SampleRules(), CompanyId);
+        var secondary = Driver.Create(Guid.NewGuid(), "Secondary", "Driver", SampleRules(), CompanyId);
         var truck = Truck.Create(Guid.NewGuid(), "Truck-3", TruckType.Tanker, TruckSize.Large);
+        truck.AssignToCompany(CompanyId);
         truck.AssignDrivers(primary, secondary);
 
         await using (var writeContext = new FreightDbContext(Options()))
@@ -181,10 +186,10 @@ public class TruckAndDriverRoundTripTests : IAsyncLifetime
     [Fact]
     public async Task Trip_WithAssignedShipmentStops_RoundTripsRouteStopsInOrder()
     {
-        var driver = Driver.Create(Guid.NewGuid(), "Route", "Driver", SampleRules());
+        var company = TruckingCompany.Create(CompanyId, "Route Co", GeoLocation.Create(52.52, 13.405));
+        var driver = Driver.Create(Guid.NewGuid(), "Route", "Driver", SampleRules(), CompanyId);
         var truck = Truck.Create(Guid.NewGuid(), "Truck-4", TruckType.BoxVan, TruckSize.Small);
-        var company = TruckingCompany.Create(Guid.NewGuid(), "Route Co", GeoLocation.Create(52.52, 13.405));
-        truck.AssignToCompany(company.Id);
+        truck.AssignToCompany(CompanyId);
         truck.AssignDrivers(driver);
 
         var trip = Trip.Open(truck.Id, company.Id, new DateTime(2026, 1, 1, 6, 0, 0, DateTimeKind.Utc));

@@ -10,7 +10,7 @@ public class DriverAssignmentTests
     private static DrivingRules SomeRules() =>
         DrivingRules.Create(DrivingBreakRule.FullBreak, DailyRestRule.FullRest, WeeklyRestRule.FullWeeklyRest, extendDailyDrivingWhenEligible: false);
 
-    private static Driver SomeDriver() => Driver.Create(Guid.NewGuid(), "Jane", "Doe", SomeRules());
+    private static Driver SomeDriver() => Driver.Create(Guid.NewGuid(), "Jane", "Doe", SomeRules(), Guid.NewGuid());
 
     [Fact]
     public void Single_ValidDriver_SetsPrimaryAndActiveDriver()

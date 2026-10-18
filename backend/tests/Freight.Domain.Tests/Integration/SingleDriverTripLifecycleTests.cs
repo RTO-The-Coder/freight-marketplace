@@ -31,9 +31,10 @@ public class SingleDriverTripLifecycleTests
     [Fact]
     public void ProjectedAndActualWalks_AgreeOnBreakTimingAndStopReachedTimes()
     {
-        var driver = Driver.Create(Guid.NewGuid(), "Jane", "Doe", FullRules());
+        var companyId = Guid.NewGuid();
+        var driver = Driver.Create(Guid.NewGuid(), "Jane", "Doe", FullRules(), companyId);
         var truck = Truck.Create(Guid.NewGuid(), "Truck-1", TruckType.Refrigerated, TruckSize.Medium);
-        truck.AssignToCompany(Guid.NewGuid());
+        truck.AssignToCompany(companyId);
         truck.AssignDrivers(driver);
         truck.Activate();
         truck.BeginTripCompliance(StartedAt);
@@ -85,9 +86,10 @@ public class SingleDriverTripLifecycleTests
     [Fact]
     public void FullTripLifecycle_MultipleStopsReached_RunningTotalsMatchSumOfLegs()
     {
-        var driver = Driver.Create(Guid.NewGuid(), "Jane", "Doe", FullRules());
+        var companyId = Guid.NewGuid();
+        var driver = Driver.Create(Guid.NewGuid(), "Jane", "Doe", FullRules(), companyId);
         var truck = Truck.Create(Guid.NewGuid(), "Truck-1", TruckType.Refrigerated, TruckSize.Medium);
-        truck.AssignToCompany(Guid.NewGuid());
+        truck.AssignToCompany(companyId);
         truck.AssignDrivers(driver);
         truck.Activate();
         truck.BeginTripCompliance(StartedAt);

@@ -14,14 +14,15 @@ public sealed class GetFleetTreeHandlerTests
     private static DrivingRules SomeRules() =>
         DrivingRules.Create(DrivingBreakRule.FullBreak, DailyRestRule.FullRest, WeeklyRestRule.FullWeeklyRest, false);
 
-    private static Driver SomeDriver() => Driver.Create(Guid.NewGuid(), "Jane", "Doe", SomeRules());
+    private static Driver SomeDriver(Guid companyId, string firstName = "Jane") =>
+        Driver.Create(Guid.NewGuid(), firstName, "Doe", SomeRules(), companyId);
 
-    private static Mock<IUnitOfWork> SetUp(Guid companyId, IReadOnlyList<Truck> companyTrucks, IReadOnlyList<Driver> allDrivers)
+    private static Mock<IUnitOfWork> SetUp(Guid companyId, IReadOnlyList<Truck> companyTrucks, IReadOnlyList<Driver> companyDrivers)
     {
         var truckRepo = new Mock<ITruckRepository>();
         truckRepo.Setup(t => t.GetByTruckingCompanyIdAsync(companyId, It.IsAny<CancellationToken>())).ReturnsAsync(companyTrucks);
         var driverRepo = new Mock<IDriverRepository>();
-        driverRepo.Setup(d => d.GetAllAsync(It.IsAny<CancellationToken>())).ReturnsAsync(allDrivers);
+        driverRepo.Setup(d => d.GetByTruckingCompanyIdAsync(companyId, It.IsAny<CancellationToken>())).ReturnsAsync(companyDrivers);
         var tripRepo = new Mock<ITripRepository>();
         tripRepo.Setup(t => t.GetOpenTripByTruckIdAsync(It.IsAny<Guid>(), It.IsAny<CancellationToken>())).ReturnsAsync((Trip?)null);
 
@@ -33,7 +34,7 @@ public sealed class GetFleetTreeHandlerTests
     }
 
     [Fact]
-    public async Task HandleAsync_QueriesTrucksScopedToCompany()
+    public async Task HandleAsync_QueriesTrucksAndDriversScopedToCompany()
     {
         var companyId = Guid.NewGuid();
         var unitOfWork = SetUp(companyId, [], []);
@@ -42,13 +43,15 @@ public sealed class GetFleetTreeHandlerTests
         await handler.HandleAsync(new GetFleetTreeRequest(companyId));
 
         Mock.Get(unitOfWork.Object.Trucks).Verify(t => t.GetByTruckingCompanyIdAsync(companyId, It.IsAny<CancellationToken>()), Times.Once);
+        Mock.Get(unitOfWork.Object.Drivers).Verify(d => d.GetByTruckingCompanyIdAsync(companyId, It.IsAny<CancellationToken>()), Times.Once);
+        Mock.Get(unitOfWork.Object.Drivers).Verify(d => d.GetAllAsync(It.IsAny<CancellationToken>()), Times.Never);
     }
 
     [Fact]
     public async Task HandleAsync_TruckWithDriverAssignment_MapsPerTruckStatusUsingItsOwnOpenTrip()
     {
         var companyId = Guid.NewGuid();
-        var driver = SomeDriver();
+        var driver = SomeDriver(companyId);
         var truck = Truck.Create(Guid.NewGuid(), "Truck-1", TruckType.Refrigerated, TruckSize.Medium);
         truck.AssignToCompany(companyId);
         truck.AssignDrivers(driver);
@@ -65,12 +68,12 @@ public sealed class GetFleetTreeHandlerTests
     }
 
     [Fact]
-    public async Task HandleAsync_UnassignedDrivers_ExcludesBothPrimaryAndSecondaryWithinScopedCompany()
+    public async Task HandleAsync_UnassignedDrivers_ExcludesBothPrimaryAndSecondary()
     {
         var companyId = Guid.NewGuid();
-        var primary = SomeDriver();
-        var secondary = SomeDriver();
-        var unassigned = SomeDriver();
+        var primary = SomeDriver(companyId);
+        var secondary = SomeDriver(companyId);
+        var unassigned = SomeDriver(companyId);
         var teamTruck = Truck.Create(Guid.NewGuid(), "Truck-Team", TruckType.Refrigerated, TruckSize.Large);
         teamTruck.AssignToCompany(companyId);
         teamTruck.AssignDrivers(primary, secondary);
@@ -84,29 +87,49 @@ public sealed class GetFleetTreeHandlerTests
     }
 
     [Fact]
-    public async Task HandleAsync_DriverAssignedToTruckInAnotherCompany_IncorrectlyShowsAsUnassignedHere()
+    public async Task HandleAsync_Drivers_ListsEveryCompanyDriverWithItsAssignedTruck()
     {
-        // Documents a real cross-company leak: UnassignedDrivers is computed from the
-        // GLOBAL driver list minus only the drivers assigned within THIS company's trucks
-        // (GetByTruckingCompanyIdAsync-scoped). A driver whose truck belongs to a
-        // DIFFERENT company is not excluded, so they appear here as "unassigned" even
-        // though they are actually assigned elsewhere.
         var companyId = Guid.NewGuid();
-        var otherCompanyId = Guid.NewGuid();
-        var driverInOtherCompany = SomeDriver();
-        var truckInOtherCompany = Truck.Create(Guid.NewGuid(), "Truck-Other", TruckType.Refrigerated, TruckSize.Medium);
-        truckInOtherCompany.AssignToCompany(otherCompanyId);
-        truckInOtherCompany.AssignDrivers(driverInOtherCompany);
-
-        // SetUp only returns trucks scoped to `companyId` - truckInOtherCompany is never in
-        // that list, matching what GetByTruckingCompanyIdAsync would actually return.
-        var unitOfWork = SetUp(companyId, [], [driverInOtherCompany]);
+        var primary = SomeDriver(companyId, "Lena");
+        var secondary = SomeDriver(companyId, "Jonas");
+        var unassigned = SomeDriver(companyId, "Paul");
+        var teamTruck = Truck.Create(Guid.NewGuid(), "Flatbed 1", TruckType.Flatbed, TruckSize.Large);
+        teamTruck.AssignToCompany(companyId);
+        teamTruck.AssignDrivers(primary, secondary);
+        var unitOfWork = SetUp(companyId, [teamTruck], [primary, secondary, unassigned]);
 
         var handler = new GetFleetTreeHandler(unitOfWork.Object);
         var response = await handler.HandleAsync(new GetFleetTreeRequest(companyId));
 
-        var dto = Assert.Single(response.UnassignedDrivers);
-        Assert.Equal(driverInOtherCompany.Id, dto.DriverId);
+        Assert.Equal(3, response.Drivers.Count);
+        var lena = Assert.Single(response.Drivers, d => d.DriverId == primary.Id);
+        Assert.Equal("Lena", lena.FirstName);
+        Assert.Equal(teamTruck.Id, lena.AssignedTruckId);
+        Assert.Equal("Flatbed 1", lena.AssignedTruckName);
+        var jonas = Assert.Single(response.Drivers, d => d.DriverId == secondary.Id);
+        Assert.Equal(teamTruck.Id, jonas.AssignedTruckId);
+        var paul = Assert.Single(response.Drivers, d => d.DriverId == unassigned.Id);
+        Assert.Null(paul.AssignedTruckId);
+        Assert.Null(paul.AssignedTruckName);
+    }
+
+    [Fact]
+    public async Task HandleAsync_DriverOfAnotherCompany_IsNotListed()
+    {
+        // The repository returns only this company's drivers, so another company's driver -
+        // assigned or not - never appears in either list.
+        var companyId = Guid.NewGuid();
+        var otherCompanysDriver = SomeDriver(Guid.NewGuid());
+        var unitOfWork = SetUp(companyId, [], []);
+        Mock.Get(unitOfWork.Object.Drivers)
+            .Setup(d => d.GetAllAsync(It.IsAny<CancellationToken>()))
+            .ReturnsAsync([otherCompanysDriver]);
+
+        var handler = new GetFleetTreeHandler(unitOfWork.Object);
+        var response = await handler.HandleAsync(new GetFleetTreeRequest(companyId));
+
+        Assert.Empty(response.UnassignedDrivers);
+        Assert.Empty(response.Drivers);
     }
 
     [Fact]

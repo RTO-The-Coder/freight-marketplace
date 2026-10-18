@@ -23,23 +23,37 @@ public sealed record FleetTruckDto(
     TruckStatus Status,
     FleetDriverAssignmentDto? DriverAssignment);
 
+/// <summary>One of the company's drivers, with the truck it is assigned to (if any).</summary>
+public sealed record FleetCompanyDriverDto(
+    Guid DriverId,
+    string FirstName,
+    string LastName,
+    Guid? AssignedTruckId,
+    string? AssignedTruckName);
+
 public sealed record GetFleetTreeResponse(
     IReadOnlyList<FleetTruckDto> Trucks,
-    IReadOnlyList<FleetDriverDto> UnassignedDrivers);
+    IReadOnlyList<FleetDriverDto> UnassignedDrivers,
+    IReadOnlyList<FleetCompanyDriverDto> Drivers);
 
 public sealed class GetFleetTreeHandler(IUnitOfWork unitOfWork)
 {
     public async Task<GetFleetTreeResponse> HandleAsync(GetFleetTreeRequest request, CancellationToken cancellationToken = default)
     {
         var trucks = await unitOfWork.Trucks.GetByTruckingCompanyIdAsync(request.TruckingCompanyId, cancellationToken);
-        var allDrivers = await unitOfWork.Drivers.GetAllAsync(cancellationToken);
+        var companyDrivers = await unitOfWork.Drivers.GetByTruckingCompanyIdAsync(request.TruckingCompanyId, cancellationToken);
 
-        var assignedDriverIds = trucks
+        // driverId -> the company truck it is assigned to.
+        var truckByDriverId = trucks
             .Where(truck => truck.DriverAssignment is not null)
             .SelectMany(truck => truck.DriverAssignment!.SecondaryDriver is null
-                ? [truck.DriverAssignment.PrimaryDriver.Id]
-                : (IEnumerable<Guid>)[truck.DriverAssignment.PrimaryDriver.Id, truck.DriverAssignment.SecondaryDriver.Id])
-            .ToHashSet();
+                ? [(DriverId: truck.DriverAssignment.PrimaryDriver.Id, Truck: truck)]
+                : (IEnumerable<(Guid DriverId, Truck Truck)>)
+                [
+                    (truck.DriverAssignment.PrimaryDriver.Id, truck),
+                    (truck.DriverAssignment.SecondaryDriver.Id, truck)
+                ])
+            .ToDictionary(pair => pair.DriverId, pair => pair.Truck);
 
         var truckDtos = new List<FleetTruckDto>();
 
@@ -63,12 +77,20 @@ public sealed class GetFleetTreeHandler(IUnitOfWork unitOfWork)
                         truck.DriverAssignment.ActiveDriverId)));
         }
 
-        var unassignedDrivers = allDrivers
-            .Where(driver => !assignedDriverIds.Contains(driver.Id))
+        var unassignedDrivers = companyDrivers
+            .Where(driver => !truckByDriverId.ContainsKey(driver.Id))
             .Select(ToDto)
             .ToList();
 
-        return new GetFleetTreeResponse(truckDtos, unassignedDrivers);
+        var drivers = companyDrivers
+            .Select(driver =>
+            {
+                var truck = truckByDriverId.GetValueOrDefault(driver.Id);
+                return new FleetCompanyDriverDto(driver.Id, driver.FirstName, driver.LastName, truck?.Id, truck?.TruckName);
+            })
+            .ToList();
+
+        return new GetFleetTreeResponse(truckDtos, unassignedDrivers, drivers);
     }
 
     private static FleetDriverDto ToDto(Driver driver) => new(driver.Id, driver.FirstName, driver.LastName);

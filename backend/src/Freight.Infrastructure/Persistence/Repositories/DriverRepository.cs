@@ -9,4 +9,9 @@ public sealed class DriverRepository(FreightDbContext dbContext)
 {
     public async Task<IReadOnlyList<Driver>> GetAllAsync(CancellationToken cancellationToken = default) =>
         await DbContext.Set<Driver>().ToListAsync(cancellationToken);
+
+    public async Task<IReadOnlyList<Driver>> GetByTruckingCompanyIdAsync(Guid truckingCompanyId, CancellationToken cancellationToken = default) =>
+        await DbContext.Set<Driver>()
+            .Where(driver => driver.TruckingCompanyId == truckingCompanyId)
+            .ToListAsync(cancellationToken);
 }

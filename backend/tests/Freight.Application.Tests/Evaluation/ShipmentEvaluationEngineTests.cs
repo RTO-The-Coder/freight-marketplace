@@ -41,7 +41,7 @@ public sealed class ShipmentEvaluationEngineTests
         truck.AssignToCompany(companyId);
         if (active)
         {
-            truck.AssignDrivers(Driver.Create(Guid.NewGuid(), "Jane", "Doe", SomeRules()));
+            truck.AssignDrivers(Driver.Create(Guid.NewGuid(), "Jane", "Doe", SomeRules(), companyId));
             truck.Activate();
         }
 
@@ -125,7 +125,7 @@ public sealed class ShipmentEvaluationEngineTests
         var companyId = Guid.NewGuid();
         var truck = Truck.Create(Guid.NewGuid(), "Truck-1", TruckType.Refrigerated, TruckSize.Medium);
         truck.AssignToCompany(companyId);
-        truck.AssignDrivers(Driver.Create(Guid.NewGuid(), "Jane", "Doe", SomeRules()));
+        truck.AssignDrivers(Driver.Create(Guid.NewGuid(), "Jane", "Doe", SomeRules(), companyId));
         // Never activated - IsActive stays false.
         var shipment = SomeShipment();
         var harness = NewHarnessForOneTruck(truck, shipment);

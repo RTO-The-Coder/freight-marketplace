@@ -14,7 +14,9 @@ public sealed class GetTruckForDriverHandlerTests
     private static DrivingRules SomeRules() =>
         DrivingRules.Create(DrivingBreakRule.FullBreak, DailyRestRule.FullRest, WeeklyRestRule.FullWeeklyRest, false);
 
-    private static Driver SomeDriver() => Driver.Create(Guid.NewGuid(), "Jane", "Doe", SomeRules());
+    private static readonly Guid CompanyId = Guid.NewGuid();
+
+    private static Driver SomeDriver() => Driver.Create(Guid.NewGuid(), "Jane", "Doe", SomeRules(), CompanyId);
 
     private static Mock<IUnitOfWork> SetUp(IReadOnlyList<Truck> trucks)
     {
@@ -34,6 +36,7 @@ public sealed class GetTruckForDriverHandlerTests
     {
         var driver = SomeDriver();
         var truck = Truck.Create(Guid.NewGuid(), "Truck-1", TruckType.Refrigerated, TruckSize.Medium);
+        truck.AssignToCompany(CompanyId);
         truck.AssignDrivers(driver);
         var unitOfWork = SetUp([truck]);
 
@@ -51,8 +54,10 @@ public sealed class GetTruckForDriverHandlerTests
         var primary = SomeDriver();
         var secondary = SomeDriver();
         var otherTruck = Truck.Create(Guid.NewGuid(), "Truck-Other", TruckType.Refrigerated, TruckSize.Medium);
+        otherTruck.AssignToCompany(CompanyId);
         otherTruck.AssignDrivers(SomeDriver());
         var teamTruck = Truck.Create(Guid.NewGuid(), "Truck-Team", TruckType.Refrigerated, TruckSize.Large);
+        teamTruck.AssignToCompany(CompanyId);
         teamTruck.AssignDrivers(primary, secondary);
         var unitOfWork = SetUp([otherTruck, teamTruck]);
 

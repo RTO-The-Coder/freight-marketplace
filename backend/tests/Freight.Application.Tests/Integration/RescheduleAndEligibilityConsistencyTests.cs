@@ -38,7 +38,7 @@ public sealed class RescheduleAndEligibilityConsistencyTests
         var truckResponse = await new AddTruckHandler(unitOfWork).AddTruckAsync(
             new AddTruckRequest("Truck-1", TruckType.Refrigerated, TruckSize.Medium, company.Id));
         var driverResponse = await new AddDriverHandler(unitOfWork).AddDriverAsync(
-            new AddDriverRequest("Jane", "Doe", DrivingBreakRule.FullBreak, DailyRestRule.FullRest, WeeklyRestRule.FullWeeklyRest, false));
+            new AddDriverRequest("Jane", "Doe", DrivingBreakRule.FullBreak, DailyRestRule.FullRest, WeeklyRestRule.FullWeeklyRest, false, company.Id));
         await new AssignDriversHandler(unitOfWork).AssignDriversAsync(new AssignDriversRequest(truckResponse.TruckId, driverResponse.DriverId, null));
         await new SetTruckActivationHandler(unitOfWork).SetTruckActivationAsync(new SetTruckActivationRequest(truckResponse.TruckId, true));
 

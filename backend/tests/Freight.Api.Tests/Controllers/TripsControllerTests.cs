@@ -28,7 +28,7 @@ public sealed class TripsControllerTests : ApiTestBase
         var company = await Factory.SeedTruckingCompanyAsync();
         var truckId = await AddTruckAsync();
         await Client.PostAsJsonAsync($"/trucks/{truckId}/company", new { TruckingCompanyId = company.Id }, JsonOptions);
-        var driverId = await AddDriverAsync();
+        var driverId = await AddDriverAsync(company.Id);
         await Client.PatchAsJsonAsync($"/trucks/{truckId}/drivers", new { PrimaryDriverId = driverId, SecondaryDriverId = (Guid?)null }, JsonOptions);
         await Client.PostAsync($"/trucks/{truckId}/activate", null);
 
@@ -98,7 +98,7 @@ public sealed class TripsControllerTests : ApiTestBase
         return body!.TruckId;
     }
 
-    private async Task<Guid> AddDriverAsync()
+    private async Task<Guid> AddDriverAsync(Guid companyId)
     {
         var response = await Client.PostAsJsonAsync("/drivers", new
         {
@@ -107,7 +107,8 @@ public sealed class TripsControllerTests : ApiTestBase
             BreakRule = DrivingBreakRule.FullBreak,
             DailyRestRule = DailyRestRule.FullRest,
             WeeklyRestRule = WeeklyRestRule.FullWeeklyRest,
-            ExtendDailyDrivingWhenEligible = false
+            ExtendDailyDrivingWhenEligible = false,
+            TruckingCompanyId = companyId
         }, JsonOptions);
         var body = await response.Content.ReadFromJsonAsync<AddDriverResponse>(JsonOptions);
         return body!.DriverId;

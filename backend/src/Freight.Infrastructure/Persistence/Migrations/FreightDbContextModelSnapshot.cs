@@ -164,7 +164,12 @@ namespace Freight.Infrastructure.Persistence.Migrations
                         .IsRequired()
                         .HasColumnType("text");
 
+                    b.Property<Guid?>("TruckingCompanyId")
+                        .HasColumnType("uuid");
+
                     b.HasKey("Id");
+
+                    b.HasIndex("TruckingCompanyId");
 
                     b.ToTable("Drivers", (string)null);
                 });

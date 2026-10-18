@@ -37,7 +37,7 @@ public sealed class AssignShipmentToTruckHandlerTests
         var company = TruckingCompany.Create(Guid.NewGuid(), "Acme Trucking", Office);
         var truck = Truck.Create(Guid.NewGuid(), "Truck-1", type, size);
         truck.AssignToCompany(company.Id);
-        truck.AssignDrivers(Driver.Create(Guid.NewGuid(), "Jane", "Doe", SomeRules()));
+        truck.AssignDrivers(Driver.Create(Guid.NewGuid(), "Jane", "Doe", SomeRules(), company.Id));
         truck.Activate();
         return (truck, company);
     }
@@ -230,7 +230,7 @@ public sealed class AssignShipmentToTruckHandlerTests
         var company = TruckingCompany.Create(Guid.NewGuid(), "Acme Trucking", Office);
         var truck = Truck.Create(Guid.NewGuid(), "Truck-1", TruckType.Refrigerated, TruckSize.Medium);
         truck.AssignToCompany(company.Id);
-        truck.AssignDrivers(Driver.Create(Guid.NewGuid(), "Jane", "Doe", SomeRules()));
+        truck.AssignDrivers(Driver.Create(Guid.NewGuid(), "Jane", "Doe", SomeRules(), company.Id));
         // Not activated.
         var shipment = SomeShipment();
         var harness = new Harness(truck, shipment, company, null);

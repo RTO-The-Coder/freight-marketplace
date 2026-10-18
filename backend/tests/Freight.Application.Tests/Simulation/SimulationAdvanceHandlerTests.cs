@@ -43,7 +43,7 @@ public sealed class SimulationAdvanceHandlerTests
         var truck = Truck.Create(Guid.NewGuid(), "Truck-1", TruckType.Refrigerated, truckSize);
         var companyId = Guid.NewGuid();
         truck.AssignToCompany(companyId);
-        truck.AssignDrivers(Driver.Create(Guid.NewGuid(), "Jane", "Doe", SomeRules()));
+        truck.AssignDrivers(Driver.Create(Guid.NewGuid(), "Jane", "Doe", SomeRules(), companyId));
         truck.BeginTripCompliance(StartedAt);
 
         var trip = Trip.Open(truck.Id, companyId, StartedAt);
@@ -274,8 +274,8 @@ public sealed class SimulationAdvanceHandlerTests
         var truck = Truck.Create(Guid.NewGuid(), "Truck-1", TruckType.Refrigerated, TruckSize.Large);
         var companyId = Guid.NewGuid();
         truck.AssignToCompany(companyId);
-        var primary = Driver.Create(Guid.NewGuid(), "Primary", "Driver", SomeRules());
-        var secondary = Driver.Create(Guid.NewGuid(), "Secondary", "Driver", SomeRules());
+        var primary = Driver.Create(Guid.NewGuid(), "Primary", "Driver", SomeRules(), companyId);
+        var secondary = Driver.Create(Guid.NewGuid(), "Secondary", "Driver", SomeRules(), companyId);
         truck.AssignDrivers(primary, secondary);
         truck.BeginTripCompliance(StartedAt);
         // Force primary near the daily cap so a swap is required almost immediately - drive
@@ -320,8 +320,8 @@ public sealed class SimulationAdvanceHandlerTests
         var truck = Truck.Create(Guid.NewGuid(), "Truck-1", TruckType.Refrigerated, TruckSize.Large);
         var companyId = Guid.NewGuid();
         truck.AssignToCompany(companyId);
-        var primary = Driver.Create(Guid.NewGuid(), "Primary", "Driver", SomeRules());
-        var secondary = Driver.Create(Guid.NewGuid(), "Secondary", "Driver", SomeRules());
+        var primary = Driver.Create(Guid.NewGuid(), "Primary", "Driver", SomeRules(), companyId);
+        var secondary = Driver.Create(Guid.NewGuid(), "Secondary", "Driver", SomeRules(), companyId);
         truck.AssignDrivers(primary, secondary);
         truck.BeginTripCompliance(StartedAt);
 

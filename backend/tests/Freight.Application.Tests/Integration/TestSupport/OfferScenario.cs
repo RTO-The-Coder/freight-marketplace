@@ -44,7 +44,7 @@ internal sealed class OfferScenario
         var truck = await new AddTruckHandler(UnitOfWork).AddTruckAsync(
             new AddTruckRequest($"Truck-{_truckCount}", TruckType.Refrigerated, TruckSize.Medium, companyId));
         var driver = await new AddDriverHandler(UnitOfWork).AddDriverAsync(
-            new AddDriverRequest($"Driver{_truckCount}", "Doe", DrivingBreakRule.FullBreak, DailyRestRule.FullRest, WeeklyRestRule.FullWeeklyRest, false));
+            new AddDriverRequest($"Driver{_truckCount}", "Doe", DrivingBreakRule.FullBreak, DailyRestRule.FullRest, WeeklyRestRule.FullWeeklyRest, false, companyId));
         await new AssignDriversHandler(UnitOfWork).AssignDriversAsync(new AssignDriversRequest(truck.TruckId, driver.DriverId, null));
         await new SetTruckActivationHandler(UnitOfWork).SetTruckActivationAsync(new SetTruckActivationRequest(truck.TruckId, true));
         return truck.TruckId;

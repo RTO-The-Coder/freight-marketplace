@@ -17,7 +17,9 @@ public sealed class RemoveDriversHandlerTests
     private static Truck TruckWithDriver()
     {
         var truck = Truck.Create(Guid.NewGuid(), "Truck-1", TruckType.Refrigerated, TruckSize.Medium);
-        truck.AssignDrivers(Driver.Create(Guid.NewGuid(), "Jane", "Doe", SomeRules()));
+        var companyId = Guid.NewGuid();
+        truck.AssignToCompany(companyId);
+        truck.AssignDrivers(Driver.Create(Guid.NewGuid(), "Jane", "Doe", SomeRules(), companyId));
         return truck;
     }
 

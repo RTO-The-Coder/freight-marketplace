@@ -17,8 +17,9 @@ public sealed class SetTruckActivationHandlerTests
     private static Truck ActivatableTruck()
     {
         var truck = Truck.Create(Guid.NewGuid(), "Truck-1", TruckType.Refrigerated, TruckSize.Medium);
-        truck.AssignToCompany(Guid.NewGuid());
-        truck.AssignDrivers(Driver.Create(Guid.NewGuid(), "Jane", "Doe", SomeRules()));
+        var companyId = Guid.NewGuid();
+        truck.AssignToCompany(companyId);
+        truck.AssignDrivers(Driver.Create(Guid.NewGuid(), "Jane", "Doe", SomeRules(), companyId));
         return truck;
     }
 
@@ -61,8 +62,8 @@ public sealed class SetTruckActivationHandlerTests
     [Fact]
     public async Task SetTruckActivationAsync_ActivateWithoutCompany_DomainRejectionPropagatesUnwrapped()
     {
+        // A truck without a company can't be given drivers either.
         var truck = Truck.Create(Guid.NewGuid(), "Truck-1", TruckType.Refrigerated, TruckSize.Medium);
-        truck.AssignDrivers(Driver.Create(Guid.NewGuid(), "Jane", "Doe", SomeRules()));
         var unitOfWork = SetUp(truck);
 
         var handler = new SetTruckActivationHandler(unitOfWork.Object);

@@ -14,9 +14,20 @@ public class TruckTests
     private static DrivingRules SomeRules() =>
         DrivingRules.Create(DrivingBreakRule.FullBreak, DailyRestRule.FullRest, WeeklyRestRule.FullWeeklyRest, extendDailyDrivingWhenEligible: false);
 
-    private static Driver SomeDriver() => Driver.Create(Guid.NewGuid(), "Jane", "Doe", SomeRules());
+    private static readonly Guid CompanyId = Guid.NewGuid();
 
-    private static Truck SomeTruck(TruckSize size = TruckSize.Medium) =>
+    private static Driver SomeDriver(Guid? companyId = null) =>
+        Driver.Create(Guid.NewGuid(), "Jane", "Doe", SomeRules(), companyId ?? CompanyId);
+
+    /// <summary>A truck in <see cref="CompanyId"/>'s fleet, so <see cref="SomeDriver"/> can be assigned to it.</summary>
+    private static Truck SomeTruck(TruckSize size = TruckSize.Medium)
+    {
+        var truck = TruckWithoutCompany(size);
+        truck.AssignToCompany(CompanyId);
+        return truck;
+    }
+
+    private static Truck TruckWithoutCompany(TruckSize size = TruckSize.Medium) =>
         Truck.Create(Guid.NewGuid(), "Truck-1", TruckType.Refrigerated, size);
 
     [Fact]
@@ -76,7 +87,7 @@ public class TruckTests
     [Fact]
     public void AssignToCompany_ValidId_SetsTruckingCompanyId()
     {
-        var truck = SomeTruck();
+        var truck = TruckWithoutCompany();
         var companyId = Guid.NewGuid();
 
         truck.AssignToCompany(companyId);
@@ -87,16 +98,46 @@ public class TruckTests
     [Fact]
     public void AssignToCompany_EmptyId_Throws()
     {
-        var truck = SomeTruck();
+        var truck = TruckWithoutCompany();
 
         Assert.Throws<ArgumentException>(() => truck.AssignToCompany(Guid.Empty));
     }
 
     [Fact]
-    public void UnassignFromCompany_ClearsCompanyAndForcesInactive()
+    public void AssignToCompany_SameCompany_IsAccepted()
     {
         var truck = SomeTruck();
-        truck.AssignToCompany(Guid.NewGuid());
+
+        truck.AssignToCompany(CompanyId);
+
+        Assert.Equal(CompanyId, truck.TruckingCompanyId);
+    }
+
+    [Fact]
+    public void AssignToCompany_AnotherCompanyWhileInOne_Throws()
+    {
+        var truck = SomeTruck();
+
+        Assert.Throws<InvalidOperationException>(() => truck.AssignToCompany(Guid.NewGuid()));
+        Assert.Equal(CompanyId, truck.TruckingCompanyId);
+    }
+
+    [Fact]
+    public void AssignToCompany_AfterLeavingCompany_JoinsAnyCompany()
+    {
+        var truck = SomeTruck();
+        truck.UnassignFromCompany();
+        var otherCompanyId = Guid.NewGuid();
+
+        truck.AssignToCompany(otherCompanyId);
+
+        Assert.Equal(otherCompanyId, truck.TruckingCompanyId);
+    }
+
+    [Fact]
+    public void UnassignFromCompany_ClearsCompanyDriversAndForcesInactive()
+    {
+        var truck = SomeTruck();
         truck.AssignDrivers(SomeDriver());
         truck.Activate();
 
@@ -104,15 +145,14 @@ public class TruckTests
 
         Assert.Null(truck.TruckingCompanyId);
         Assert.False(truck.IsActive);
-        // Asymmetric with RemoveDrivers: unassigning the company leaves DriverAssignment untouched.
-        Assert.NotNull(truck.DriverAssignment);
+        // The drivers belong to the company the truck left, so they come off it.
+        Assert.Null(truck.DriverAssignment);
     }
 
     [Fact]
     public void RemoveDrivers_ClearsAssignmentAndForcesInactive()
     {
         var truck = SomeTruck();
-        truck.AssignToCompany(Guid.NewGuid());
         truck.AssignDrivers(SomeDriver());
         truck.Activate();
 
@@ -127,8 +167,8 @@ public class TruckTests
     [Fact]
     public void Activate_MissingCompany_Throws()
     {
-        var truck = SomeTruck();
-        truck.AssignDrivers(SomeDriver());
+        // Without a company a truck can't be given drivers either, so it can't be activated.
+        var truck = TruckWithoutCompany();
 
         Assert.Throws<InvalidOperationException>(() => truck.Activate());
     }
@@ -137,7 +177,6 @@ public class TruckTests
     public void Activate_MissingDriverAssignment_Throws()
     {
         var truck = SomeTruck();
-        truck.AssignToCompany(Guid.NewGuid());
 
         Assert.Throws<InvalidOperationException>(() => truck.Activate());
     }
@@ -146,7 +185,6 @@ public class TruckTests
     public void Activate_CompanyAndDriverPresent_SetsActiveTrue()
     {
         var truck = SomeTruck();
-        truck.AssignToCompany(Guid.NewGuid());
         truck.AssignDrivers(SomeDriver());
 
         truck.Activate();
@@ -158,7 +196,6 @@ public class TruckTests
     public void Deactivate_SetsActiveFalse()
     {
         var truck = SomeTruck();
-        truck.AssignToCompany(Guid.NewGuid());
         truck.AssignDrivers(SomeDriver());
         truck.Activate();
 
@@ -197,6 +234,110 @@ public class TruckTests
         var truck = SomeTruck();
 
         Assert.Throws<ArgumentNullException>(() => truck.AssignDrivers(null!));
+    }
+
+    [Fact]
+    public void AssignDrivers_TruckWithoutCompany_Throws()
+    {
+        var truck = TruckWithoutCompany();
+
+        Assert.Throws<InvalidOperationException>(() => truck.AssignDrivers(SomeDriver()));
+        Assert.Null(truck.DriverAssignment);
+    }
+
+    [Fact]
+    public void AssignDrivers_PrimaryFromAnotherCompany_Throws()
+    {
+        var truck = SomeTruck();
+
+        Assert.Throws<InvalidOperationException>(() => truck.AssignDrivers(SomeDriver(Guid.NewGuid())));
+        Assert.Null(truck.DriverAssignment);
+    }
+
+    [Fact]
+    public void AssignDrivers_SecondaryFromAnotherCompany_Throws()
+    {
+        var truck = SomeTruck(TruckSize.Large);
+
+        Assert.Throws<InvalidOperationException>(() => truck.AssignDrivers(SomeDriver(), SomeDriver(Guid.NewGuid())));
+        Assert.Null(truck.DriverAssignment);
+    }
+
+    [Fact]
+    public void AssignDrivers_DriverWithoutCompany_Throws()
+    {
+        var truck = SomeTruck();
+        var driver = SomeDriver();
+        driver.UnassignFromCompany();
+
+        Assert.Throws<InvalidOperationException>(() => truck.AssignDrivers(driver));
+    }
+
+    [Fact]
+    public void RemoveDriver_SingleDriver_ClearsAssignmentAndForcesInactive()
+    {
+        var truck = SomeTruck();
+        var driver = SomeDriver();
+        truck.AssignDrivers(driver);
+        truck.Activate();
+
+        truck.RemoveDriver(driver.Id);
+
+        Assert.Null(truck.DriverAssignment);
+        Assert.False(truck.IsActive);
+    }
+
+    [Fact]
+    public void RemoveDriver_TeamSecondary_PrimaryStaysAsSingleDriverAndTruckStaysActive()
+    {
+        var truck = SomeTruck(TruckSize.Large);
+        var primary = SomeDriver();
+        var secondary = SomeDriver();
+        truck.AssignDrivers(primary, secondary);
+        truck.Activate();
+
+        truck.RemoveDriver(secondary.Id);
+
+        Assert.Equal(DriverConfigurationType.Single, truck.DriverAssignment!.ConfigurationType);
+        Assert.Same(primary, truck.DriverAssignment.PrimaryDriver);
+        Assert.Null(truck.DriverAssignment.SecondaryDriver);
+        Assert.Equal(primary.Id, truck.DriverAssignment.ActiveDriverId);
+        Assert.True(truck.IsActive);
+    }
+
+    [Fact]
+    public void RemoveDriver_TeamPrimary_SecondaryStaysAsSingleDriverAndTruckStaysActive()
+    {
+        var truck = SomeTruck(TruckSize.Large);
+        var primary = SomeDriver();
+        var secondary = SomeDriver();
+        truck.AssignDrivers(primary, secondary);
+        truck.Activate();
+
+        truck.RemoveDriver(primary.Id);
+
+        Assert.Equal(DriverConfigurationType.Single, truck.DriverAssignment!.ConfigurationType);
+        Assert.Same(secondary, truck.DriverAssignment.PrimaryDriver);
+        Assert.Null(truck.DriverAssignment.SecondaryDriver);
+        Assert.Equal(secondary.Id, truck.DriverAssignment.ActiveDriverId);
+        Assert.True(truck.IsActive);
+    }
+
+    [Fact]
+    public void RemoveDriver_DriverNotOnTruck_Throws()
+    {
+        var truck = SomeTruck();
+        truck.AssignDrivers(SomeDriver());
+
+        Assert.Throws<InvalidOperationException>(() => truck.RemoveDriver(Guid.NewGuid()));
+    }
+
+    [Fact]
+    public void RemoveDriver_NoDrivers_Throws()
+    {
+        var truck = SomeTruck();
+
+        Assert.Throws<InvalidOperationException>(() => truck.RemoveDriver(Guid.NewGuid()));
     }
 
     [Fact]

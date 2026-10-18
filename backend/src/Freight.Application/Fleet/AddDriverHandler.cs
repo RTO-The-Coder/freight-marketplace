@@ -11,7 +11,8 @@ public sealed record AddDriverRequest(
     DrivingBreakRule BreakRule,
     DailyRestRule DailyRestRule,
     WeeklyRestRule WeeklyRestRule,
-    bool ExtendDailyDrivingWhenEligible);
+    bool ExtendDailyDrivingWhenEligible,
+    Guid TruckingCompanyId);
 
 public sealed record AddDriverResponse(
     Guid DriverId,
@@ -20,19 +21,23 @@ public sealed record AddDriverResponse(
     DrivingBreakRule BreakRule,
     DailyRestRule DailyRestRule,
     WeeklyRestRule WeeklyRestRule,
-    bool ExtendDailyDrivingWhenEligible);
+    bool ExtendDailyDrivingWhenEligible,
+    Guid TruckingCompanyId);
 
 public sealed class AddDriverHandler(IUnitOfWork unitOfWork)
 {
     public async Task<AddDriverResponse> AddDriverAsync(AddDriverRequest request, CancellationToken cancellationToken = default)
     {
+        _ = await unitOfWork.TruckingCompanies.GetByIdAsync(request.TruckingCompanyId, cancellationToken)
+            ?? throw new InvalidOperationException($"Trucking company '{request.TruckingCompanyId}' was not found.");
+
         var rules = DrivingRules.Create(
             request.BreakRule,
             request.DailyRestRule,
             request.WeeklyRestRule,
             request.ExtendDailyDrivingWhenEligible);
 
-        var driver = Driver.Create(request.FirstName, request.LastName, rules);
+        var driver = Driver.Create(request.FirstName, request.LastName, rules, request.TruckingCompanyId);
 
         unitOfWork.Drivers.Add(driver);
         await unitOfWork.SaveChangesAsync(cancellationToken);
@@ -44,6 +49,7 @@ public sealed class AddDriverHandler(IUnitOfWork unitOfWork)
             driver.Rules.BreakRule,
             driver.Rules.DailyRestRule,
             driver.Rules.WeeklyRestRule,
-            driver.Rules.ExtendDailyDrivingWhenEligible);
+            driver.Rules.ExtendDailyDrivingWhenEligible,
+            request.TruckingCompanyId);
     }
 }

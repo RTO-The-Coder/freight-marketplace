@@ -49,7 +49,7 @@ public abstract class IntegrationTestBase(IRoutingService routingService, ITestO
 
         var truckId = await Api.AddTruckAsync(TestTrucks.MediumRefrigerated());
         await Api.AssignTruckToCompanyAsync(truckId, company.Id);
-        var driverId = await Api.AddDriverAsync(driver);
+        var driverId = await Api.AddDriverAsync(company.Id, driver);
         await Api.AssignDriversAsync(truckId, driverId);
         await Api.ActivateTruckAsync(truckId);
 
@@ -66,8 +66,8 @@ public abstract class IntegrationTestBase(IRoutingService routingService, ITestO
 
         var truckId = await Api.AddTruckAsync(TestTrucks.LargeRefrigerated());
         await Api.AssignTruckToCompanyAsync(truckId, company.Id);
-        var driverAId = await Api.AddDriverAsync(driverA);
-        var driverBId = await Api.AddDriverAsync(driverB);
+        var driverAId = await Api.AddDriverAsync(company.Id, driverA);
+        var driverBId = await Api.AddDriverAsync(company.Id, driverB);
         await Api.AssignDriversAsync(truckId, driverAId, driverBId);
         await Api.ActivateTruckAsync(truckId);
 

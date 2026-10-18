@@ -74,12 +74,15 @@ public sealed class GetTrucksHandlerTests
     [Fact]
     public async Task GetTrucksAsync_MapsEveryDtoFieldIncludingHasDriverAssignment()
     {
+        var companyId = Guid.NewGuid();
         var driver = Driver.Create(Guid.NewGuid(), "Jane", "Doe",
             Freight.Domain.ValueObjects.DrivingRules.Create(
                 Freight.Domain.ValueObjects.RuleVariants.DrivingBreakRule.FullBreak,
                 Freight.Domain.ValueObjects.RuleVariants.DailyRestRule.FullRest,
-                Freight.Domain.ValueObjects.RuleVariants.WeeklyRestRule.FullWeeklyRest, false));
+                Freight.Domain.ValueObjects.RuleVariants.WeeklyRestRule.FullWeeklyRest, false),
+            companyId);
         var truck = SomeTruck();
+        truck.AssignToCompany(companyId);
         truck.AssignDrivers(driver);
         var unitOfWork = SetUp([truck]);
 

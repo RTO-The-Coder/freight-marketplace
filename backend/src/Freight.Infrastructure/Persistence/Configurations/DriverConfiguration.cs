@@ -18,6 +18,11 @@ public sealed class DriverConfiguration : IEntityTypeConfiguration<Driver>
         builder.Property(driver => driver.LastName)
             .IsRequired();
 
+        // Null while the driver belongs to no company (it left one and no other took it on).
+        builder.Property(driver => driver.TruckingCompanyId);
+
+        builder.HasIndex(driver => driver.TruckingCompanyId);
+
         builder.OwnsOne(driver => driver.Rules, rules =>
         {
             rules.Property(r => r.BreakRule)

@@ -3,7 +3,7 @@ using Freight.Domain.Fleet;
 
 namespace Freight.Application.Fleet;
 
-public sealed record GetDriversRequest(bool UnassignedOnly);
+public sealed record GetDriversRequest(bool UnassignedOnly, Guid? TruckingCompanyId = null);
 
 public sealed record DriverSummaryDto(Guid DriverId, string FirstName, string LastName);
 
@@ -13,9 +13,11 @@ public sealed class GetDriversHandler(IUnitOfWork unitOfWork)
 {
     public async Task<GetDriversResponse> GetDriversAsync(GetDriversRequest request, CancellationToken cancellationToken = default)
     {
-        var allDrivers = await unitOfWork.Drivers.GetAllAsync(cancellationToken);
+        var drivers = request.TruckingCompanyId is { } companyId
+            ? await unitOfWork.Drivers.GetByTruckingCompanyIdAsync(companyId, cancellationToken)
+            : await unitOfWork.Drivers.GetAllAsync(cancellationToken);
 
-        IEnumerable<Driver> filtered = allDrivers;
+        IEnumerable<Driver> filtered = drivers;
 
         if (request.UnassignedOnly)
         {

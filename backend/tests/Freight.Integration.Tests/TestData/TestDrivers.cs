@@ -6,6 +6,8 @@ namespace Freight.Integration.Tests.TestData;
 /// <summary>
 /// Ready-made POST /drivers bodies, one per EU-561 rule combination a scenario tests. The
 /// name is irrelevant; the rule fields are what each scenario's expected checkpoints depend on.
+/// The company is left empty here: <see cref="TestSupport.FreightApi.AddDriverAsync"/> fills in
+/// the company the scenario seeded.
 /// </summary>
 public static class TestDrivers
 {
@@ -52,5 +54,5 @@ public static class TestDrivers
 
     private static AddDriverBody With(
         DrivingBreakRule breakRule, DailyRestRule dailyRest, WeeklyRestRule weeklyRest, bool extend) =>
-        new("Integration", "Driver", breakRule, dailyRest, weeklyRest, ExtendDailyDrivingWhenEligible: extend);
+        new("Integration", "Driver", breakRule, dailyRest, weeklyRest, ExtendDailyDrivingWhenEligible: extend, TruckingCompanyId: Guid.Empty);
 }

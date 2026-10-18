@@ -14,16 +14,29 @@ public sealed class GetDriversHandlerTests
     private static DrivingRules SomeRules() =>
         DrivingRules.Create(DrivingBreakRule.FullBreak, DailyRestRule.FullRest, WeeklyRestRule.FullWeeklyRest, false);
 
-    private static Driver SomeDriver(string firstName = "Jane") =>
-        Driver.Create(Guid.NewGuid(), firstName, "Doe", SomeRules());
+    private static readonly Guid CompanyId = Guid.NewGuid();
 
-    private static Truck SomeTruck(TruckSize size = TruckSize.Medium) =>
-        Truck.Create(Guid.NewGuid(), "Truck-1", TruckType.Refrigerated, size);
+    private static Driver SomeDriver(string firstName = "Jane", Guid? companyId = null) =>
+        Driver.Create(Guid.NewGuid(), firstName, "Doe", SomeRules(), companyId ?? CompanyId);
 
+    private static Truck SomeTruck(TruckSize size = TruckSize.Medium, Guid? companyId = null)
+    {
+        var truck = Truck.Create(Guid.NewGuid(), "Truck-1", TruckType.Refrigerated, size);
+        truck.AssignToCompany(companyId ?? CompanyId);
+        return truck;
+    }
+
+    /// <summary>
+    /// GetAllAsync returns every driver; GetByTruckingCompanyIdAsync filters that same list by
+    /// company, as the real repository does.
+    /// </summary>
     private static Mock<IUnitOfWork> SetUp(IReadOnlyList<Driver> drivers, IReadOnlyList<Truck> trucks)
     {
         var driverRepo = new Mock<IDriverRepository>();
         driverRepo.Setup(d => d.GetAllAsync(It.IsAny<CancellationToken>())).ReturnsAsync(drivers);
+        driverRepo.Setup(d => d.GetByTruckingCompanyIdAsync(It.IsAny<Guid>(), It.IsAny<CancellationToken>()))
+            .ReturnsAsync((Guid companyId, CancellationToken _) =>
+                drivers.Where(driver => driver.TruckingCompanyId == companyId).ToList());
         var truckRepo = new Mock<ITruckRepository>();
         truckRepo.Setup(t => t.GetAllAsync(It.IsAny<CancellationToken>())).ReturnsAsync(trucks);
 
@@ -101,6 +114,38 @@ public sealed class GetDriversHandlerTests
         var response = await handler.GetDriversAsync(new GetDriversRequest(UnassignedOnly: true));
 
         Assert.Single(response.Drivers);
+    }
+
+    [Fact]
+    public async Task GetDriversAsync_TruckingCompanyId_ReturnsOnlyThatCompanysDrivers()
+    {
+        var ownDriver = SomeDriver("Own");
+        var otherCompanysDriver = SomeDriver("Other", Guid.NewGuid());
+        var unitOfWork = SetUp([ownDriver, otherCompanysDriver], []);
+
+        var handler = new GetDriversHandler(unitOfWork.Object);
+        var response = await handler.GetDriversAsync(new GetDriversRequest(UnassignedOnly: false, TruckingCompanyId: CompanyId));
+
+        var dto = Assert.Single(response.Drivers);
+        Assert.Equal(ownDriver.Id, dto.DriverId);
+    }
+
+    [Fact]
+    public async Task GetDriversAsync_UnassignedOnlyWithTruckingCompanyId_ReturnsThatCompanysUnassignedDriversOnly()
+    {
+        var ownAssigned = SomeDriver("OwnAssigned");
+        var ownUnassigned = SomeDriver("OwnUnassigned");
+        var otherCompanyId = Guid.NewGuid();
+        var otherUnassigned = SomeDriver("OtherUnassigned", otherCompanyId);
+        var ownTruck = SomeTruck();
+        ownTruck.AssignDrivers(ownAssigned);
+        var unitOfWork = SetUp([ownAssigned, ownUnassigned, otherUnassigned], [ownTruck]);
+
+        var handler = new GetDriversHandler(unitOfWork.Object);
+        var response = await handler.GetDriversAsync(new GetDriversRequest(UnassignedOnly: true, TruckingCompanyId: CompanyId));
+
+        var dto = Assert.Single(response.Drivers);
+        Assert.Equal(ownUnassigned.Id, dto.DriverId);
     }
 
     [Fact]

@@ -19,14 +19,16 @@ public sealed class GetTruckEtasHandlerTests
     private static readonly DateTime StartedAt = new(2026, 1, 1, 6, 0, 0);
     private readonly RouteEtaCalculator _calculator = new(new DriverRuleEngine());
 
+    private static readonly Guid CompanyId = Guid.NewGuid();
+
     private static DrivingRules SomeRules() =>
         DrivingRules.Create(DrivingBreakRule.FullBreak, DailyRestRule.FullRest, WeeklyRestRule.FullWeeklyRest, false);
 
     private static (Truck Truck, Trip Trip, Shipment Shipment) OpenTripWithSingleDriver()
     {
-        var driver = Driver.Create(Guid.NewGuid(), "Jane", "Doe", SomeRules());
+        var driver = Driver.Create(Guid.NewGuid(), "Jane", "Doe", SomeRules(), CompanyId);
         var truck = Truck.Create(Guid.NewGuid(), "Truck-1", TruckType.Refrigerated, TruckSize.Medium);
-        truck.AssignToCompany(Guid.NewGuid());
+        truck.AssignToCompany(CompanyId);
         truck.AssignDrivers(driver);
         truck.BeginTripCompliance(StartedAt);
 
@@ -94,10 +96,10 @@ public sealed class GetTruckEtasHandlerTests
     [Fact]
     public async Task GetTruckEtasAsync_TeamDriver_UsesTeamProjection()
     {
-        var primary = Driver.Create(Guid.NewGuid(), "Primary", "Driver", SomeRules());
-        var secondary = Driver.Create(Guid.NewGuid(), "Secondary", "Driver", SomeRules());
+        var primary = Driver.Create(Guid.NewGuid(), "Primary", "Driver", SomeRules(), CompanyId);
+        var secondary = Driver.Create(Guid.NewGuid(), "Secondary", "Driver", SomeRules(), CompanyId);
         var truck = Truck.Create(Guid.NewGuid(), "Truck-1", TruckType.Refrigerated, TruckSize.Large);
-        truck.AssignToCompany(Guid.NewGuid());
+        truck.AssignToCompany(CompanyId);
         truck.AssignDrivers(primary, secondary);
         truck.BeginTripCompliance(StartedAt);
 
@@ -151,7 +153,7 @@ public sealed class GetTruckEtasHandlerTests
     public async Task GetTruckEtasAsync_OpenTripNoDriverAssignment_Throws()
     {
         var truck = Truck.Create(Guid.NewGuid(), "Truck-1", TruckType.Refrigerated, TruckSize.Medium);
-        truck.AssignToCompany(Guid.NewGuid());
+        truck.AssignToCompany(CompanyId);
         var trip = Trip.Open(truck.Id, truck.TruckingCompanyId!.Value, StartedAt);
         var unitOfWork = SetUp(truck, trip, new Dictionary<Guid, Shipment>());
 

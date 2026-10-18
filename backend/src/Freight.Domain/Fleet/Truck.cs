@@ -80,6 +80,10 @@ public sealed class Truck
 
     public void RevokeHazmatCertification() => HazmatCertified = false;
 
+    /// <summary>
+    /// A company adds the truck to its fleet. A truck can't move straight from one company
+    /// to another: it must leave its company first (<see cref="UnassignFromCompany"/>).
+    /// </summary>
     public void AssignToCompany(Guid truckingCompanyId)
     {
         if (truckingCompanyId == Guid.Empty)
@@ -87,12 +91,22 @@ public sealed class Truck
             throw new ArgumentException("Trucking company id cannot be empty.", nameof(truckingCompanyId));
         }
 
+        if (TruckingCompanyId is { } current && current != truckingCompanyId)
+        {
+            throw new InvalidOperationException("This truck belongs to another trucking company. Remove it from that company first.");
+        }
+
         TruckingCompanyId = truckingCompanyId;
     }
 
+    /// <summary>
+    /// The truck leaves its company. Its drivers belong to that company, so they come off
+    /// the truck too. The open-trip guard lives in the handler, not here.
+    /// </summary>
     public void UnassignFromCompany()
     {
         TruckingCompanyId = null;
+        DriverAssignment = null;
         IsActive = false;
     }
 
@@ -118,17 +132,72 @@ public sealed class Truck
     public void Deactivate() => IsActive = false;
 
     /// <summary>
-    /// Assigns one or two drivers. A secondary driver is only permitted on
-    /// <see cref="TruckSize.Large"/> trucks. Replaces any existing assignment with a fresh
-    /// one whose active-driver pointer starts on the (new) primary driver.
+    /// Assigns one or two drivers, all of whom must belong to this truck's company. A
+    /// secondary driver is only permitted on <see cref="TruckSize.Large"/> trucks. Replaces
+    /// any existing assignment with a fresh one whose active-driver pointer starts on the
+    /// (new) primary driver.
     /// </summary>
     public void AssignDrivers(Driver primaryDriver, Driver? secondaryDriver = null)
     {
         ArgumentNullException.ThrowIfNull(primaryDriver);
 
+        if (TruckingCompanyId is null)
+        {
+            throw new InvalidOperationException("Drivers cannot be assigned to a truck that does not belong to a trucking company.");
+        }
+
+        EnsureSameCompany(primaryDriver);
+        if (secondaryDriver is not null)
+        {
+            EnsureSameCompany(secondaryDriver);
+        }
+
         DriverAssignment = secondaryDriver is null
             ? DriverAssignment.Single(primaryDriver)
             : DriverAssignment.Team(primaryDriver, secondaryDriver, Size);
+    }
+
+    /// <summary>
+    /// Takes one driver off the truck (the driver is leaving the company). In a team the
+    /// other driver stays on as the single driver and the truck stays as it was; a single
+    /// driver leaves the truck driverless, which forces <see cref="IsActive"/> false. The
+    /// open-trip guard lives in the handler, not here.
+    /// </summary>
+    public void RemoveDriver(Guid driverId)
+    {
+        if (DriverAssignment is null)
+        {
+            throw new InvalidOperationException("This truck has no drivers assigned.");
+        }
+
+        if (DriverAssignment.SecondaryDriver is { } secondary && secondary.Id == driverId)
+        {
+            DriverAssignment = DriverAssignment.Single(DriverAssignment.PrimaryDriver);
+        }
+        else if (DriverAssignment.PrimaryDriver.Id == driverId)
+        {
+            if (DriverAssignment.SecondaryDriver is { } remaining)
+            {
+                DriverAssignment = DriverAssignment.Single(remaining);
+            }
+            else
+            {
+                RemoveDrivers();
+            }
+        }
+        else
+        {
+            throw new InvalidOperationException($"Driver '{driverId}' is not assigned to this truck.");
+        }
+    }
+
+    private void EnsureSameCompany(Driver driver)
+    {
+        if (driver.TruckingCompanyId != TruckingCompanyId)
+        {
+            throw new InvalidOperationException(
+                $"{driver.FirstName} {driver.LastName} does not belong to this truck's trucking company.");
+        }
     }
 
     /// <summary>

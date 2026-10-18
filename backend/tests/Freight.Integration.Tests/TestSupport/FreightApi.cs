@@ -27,8 +27,9 @@ public sealed class FreightApi(HttpClient client, JsonSerializerOptions jsonOpti
     public Task AssignTruckToCompanyAsync(Guid truckId, Guid companyId) =>
         SendAsync(HttpMethod.Post, $"/trucks/{truckId}/company", new AssignTruckToCompanyBody(companyId));
 
-    public async Task<Guid> AddDriverAsync(AddDriverBody body) =>
-        (await SendAsync<AddDriverResponse>(HttpMethod.Post, "/drivers", body)).DriverId;
+    /// <summary>Adds the driver to <paramref name="companyId"/>, whatever company the body names.</summary>
+    public async Task<Guid> AddDriverAsync(Guid companyId, AddDriverBody body) =>
+        (await SendAsync<AddDriverResponse>(HttpMethod.Post, "/drivers", body with { TruckingCompanyId = companyId })).DriverId;
 
     public Task AssignDriversAsync(Guid truckId, Guid primaryDriverId, Guid? secondaryDriverId = null) =>
         SendAsync(HttpMethod.Patch, $"/trucks/{truckId}/drivers", new AssignDriversBody(primaryDriverId, secondaryDriverId));

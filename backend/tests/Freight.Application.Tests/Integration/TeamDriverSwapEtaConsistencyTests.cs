@@ -39,9 +39,9 @@ public sealed class TeamDriverSwapEtaConsistencyTests
         var truckResponse = await new AddTruckHandler(unitOfWork).AddTruckAsync(
             new AddTruckRequest("Truck-1", TruckType.Refrigerated, TruckSize.Large, company.Id));
         var primaryResponse = await new AddDriverHandler(unitOfWork).AddDriverAsync(
-            new AddDriverRequest("Primary", "Driver", DrivingBreakRule.FullBreak, DailyRestRule.FullRest, WeeklyRestRule.FullWeeklyRest, false));
+            new AddDriverRequest("Primary", "Driver", DrivingBreakRule.FullBreak, DailyRestRule.FullRest, WeeklyRestRule.FullWeeklyRest, false, company.Id));
         var secondaryResponse = await new AddDriverHandler(unitOfWork).AddDriverAsync(
-            new AddDriverRequest("Secondary", "Driver", DrivingBreakRule.FullBreak, DailyRestRule.FullRest, WeeklyRestRule.FullWeeklyRest, false));
+            new AddDriverRequest("Secondary", "Driver", DrivingBreakRule.FullBreak, DailyRestRule.FullRest, WeeklyRestRule.FullWeeklyRest, false, company.Id));
         await new AssignDriversHandler(unitOfWork).AssignDriversAsync(
             new AssignDriversRequest(truckResponse.TruckId, primaryResponse.DriverId, secondaryResponse.DriverId));
         await new SetTruckActivationHandler(unitOfWork).SetTruckActivationAsync(new SetTruckActivationRequest(truckResponse.TruckId, true));

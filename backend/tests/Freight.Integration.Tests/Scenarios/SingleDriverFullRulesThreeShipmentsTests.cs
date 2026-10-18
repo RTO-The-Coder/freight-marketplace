@@ -113,7 +113,7 @@ public sealed class SingleDriverFullRulesThreeShipmentsTests(ITestOutputHelper o
 
         var truckId = await Api.AddTruckAsync(TestTrucks.MediumRefrigerated());
         await Api.AssignTruckToCompanyAsync(truckId, company.Id);
-        var driverId = await Api.AddDriverAsync(TestDrivers.FullRules());
+        var driverId = await Api.AddDriverAsync(company.Id, TestDrivers.FullRules());
         await Api.AssignDriversAsync(truckId, driverId);
         await Api.ActivateTruckAsync(truckId);
 
