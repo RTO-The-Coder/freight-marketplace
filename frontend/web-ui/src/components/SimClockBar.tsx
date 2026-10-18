@@ -3,7 +3,21 @@ import { advanceSummary, amountToTicks, useSimClock, type AdvanceUnit } from '@f
 import { fmtSimDateTime, isoToDatetimeLocal } from '@freight/fleetmanagement-core'
 import { Modal } from './Modal'
 
-/** The simulation clock, with Advance and Set time - in the header of both web apps. */
+/** What the clock popup shows: work in progress, the result for a few seconds, or an error until closed. */
+type ClockNotice =
+  | { kind: 'progress'; text: string }
+  | { kind: 'done'; title: string; detail: string | null }
+  | { kind: 'error'; text: string }
+
+/** What the user asked for - kept here (not in useSimClock) so the popup can say it. */
+type ClockAction = { kind: 'advance'; label: string } | { kind: 'set' }
+
+const RESULT_VISIBLE_MS = 3000
+
+/**
+ * The simulation clock, with Advance and Set time - in the header of both web apps. The bar never
+ * changes size: progress, the result and errors show in a popup over the page.
+ */
 export function SimClockBar() {
   const { currentTime, busy, lastAdvance, error, advance, setTime } = useSimClock()
 
@@ -13,20 +27,50 @@ export function SimClockBar() {
   const [showSet, setShowSet] = useState(false)
   const [setValue, setSetValue] = useState('')
 
-  const [toast, setToast] = useState<string | null>(null)
-  const toastTimer = useRef<number | undefined>(undefined)
+  const [notice, setNotice] = useState<ClockNotice | null>(null)
+  const action = useRef<ClockAction | null>(null)
+  const closeTimer = useRef<number | undefined>(undefined)
 
+  // When a request finishes (busy goes false), show its result or its error. An error with no
+  // request of ours (reading the clock failed) shows too.
   useEffect(() => {
-    if (!lastAdvance) return
-    setToast(advanceSummary(lastAdvance))
-    window.clearTimeout(toastTimer.current)
-    toastTimer.current = window.setTimeout(() => setToast(null), 3200)
-  }, [lastAdvance])
+    if (busy) return
+    const finished = action.current
+    action.current = null
+    window.clearTimeout(closeTimer.current)
+
+    if (error) {
+      setNotice({ kind: 'error', text: error })
+      return
+    }
+    if (!finished) return
+
+    setNotice(
+      finished.kind === 'advance'
+        ? {
+            kind: 'done',
+            title: `Now ${fmtSimDateTime(currentTime)}`,
+            detail: lastAdvance ? advanceSummary(lastAdvance) : null,
+          }
+        : { kind: 'done', title: `Clock set to ${fmtSimDateTime(currentTime)}`, detail: null },
+    )
+    closeTimer.current = window.setTimeout(() => setNotice(null), RESULT_VISIBLE_MS)
+    // Only the end of a request decides what to show; the values are read as they are then.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [busy, error])
+
+  useEffect(() => () => window.clearTimeout(closeTimer.current), [])
 
   const ticks = amountToTicks(amount, unit)
 
   const handleAdvance = () => {
-    if (ticks > 0) void advance(ticks)
+    if (ticks <= 0 || busy) return
+    const n = Number(amount)
+    const label = `${n} ${unit === 'hours' ? (n === 1 ? 'hour' : 'hours') : n === 1 ? 'tick' : 'ticks'}`
+    action.current = { kind: 'advance', label }
+    window.clearTimeout(closeTimer.current)
+    setNotice({ kind: 'progress', text: `Advancing the clock by ${label}…` })
+    void advance(ticks)
   }
 
   const openSet = () => {
@@ -34,10 +78,13 @@ export function SimClockBar() {
     setShowSet(true)
   }
 
-  const applySet = async () => {
+  const applySet = () => {
     if (!setValue) return
-    await setTime(setValue)
     setShowSet(false)
+    action.current = { kind: 'set' }
+    window.clearTimeout(closeTimer.current)
+    setNotice({ kind: 'progress', text: 'Setting the clock…' })
+    void setTime(setValue)
   }
 
   return (
@@ -72,15 +119,46 @@ export function SimClockBar() {
           disabled={busy || ticks <= 0}
           onClick={handleAdvance}
         >
-          {busy ? 'Advancing…' : 'Advance'}
+          Advance
         </button>
         <button type="button" className="btn btn--sm btn--primary" disabled={busy} onClick={openSet}>
           Set time
         </button>
       </span>
 
-      {error && <span className="simclock__error">{error}</span>}
-      {toast && <span className="simclock__toast">{toast}</span>}
+      {notice && (
+        <div
+          className={`simclock-popup simclock-popup--${notice.kind}`}
+          role={notice.kind === 'error' ? 'alert' : 'status'}
+        >
+          {notice.kind === 'progress' && <span className="simclock-popup__spinner" aria-hidden="true" />}
+          {notice.kind === 'done' && (
+            <span className="simclock-popup__icon" aria-hidden="true">
+              ✓
+            </span>
+          )}
+          {notice.kind === 'error' && (
+            <span className="simclock-popup__icon" aria-hidden="true">
+              ⚠
+            </span>
+          )}
+          <span className="simclock-popup__text">
+            {notice.kind === 'done' ? (
+              <>
+                <strong>{notice.title}</strong>
+                {notice.detail && <span>{notice.detail}</span>}
+              </>
+            ) : (
+              notice.text
+            )}
+          </span>
+          {notice.kind === 'error' && (
+            <button type="button" className="simclock-popup__close" onClick={() => setNotice(null)} aria-label="Close">
+              ×
+            </button>
+          )}
+        </div>
+      )}
 
       {showSet && (
         <Modal title="Set simulation time" onClose={() => setShowSet(false)}>
@@ -103,7 +181,7 @@ export function SimClockBar() {
               onClick={applySet}
               disabled={busy || !setValue}
             >
-              {busy ? 'Setting…' : 'Set time'}
+              Set time
             </button>
           </div>
         </Modal>

@@ -70,9 +70,19 @@ test.describe('Sim clock mechanics', () => {
     // Seed anchor: 2026-08-01T05:00:00Z.
     await expect(timeText).toContainText('05:00')
 
-    // Advance by 1 tick (5 minutes) — the default amount/unit.
-    await clock.getByRole('button', { name: 'Advance' }).click()
+    // Advance by 1 tick (5 minutes) — the default amount/unit. The result shows in a popup
+    // over the page; the Advance button keeps its label (the bar never changes size).
+    const advanceButton = clock.getByRole('button', { name: 'Advance' })
+    const buttonWidth = (await advanceButton.boundingBox())?.width
+    await advanceButton.click()
     await expect(timeText).toContainText('05:05')
+    const popup = page.locator('.simclock-popup')
+    await expect(popup).toHaveAttribute('role', 'status')
+    await expect(popup).toContainText('Now ')
+    await expect(popup).toContainText('05:05')
+    expect((await advanceButton.boundingBox())?.width).toBe(buttonWidth)
+    // The result closes by itself after about 3 seconds.
+    await expect(popup).toHaveCount(0, { timeout: 6_000 })
 
     // Switch unit to hours and advance by 2 — 12 ticks/hour, so this jumps
     // 2 real hours, landing on 07:05, not a naive "2 more ticks" (05:15).
@@ -101,6 +111,7 @@ test.describe('Sim clock mechanics', () => {
     await modal.getByRole('button', { name: 'Set time', exact: true }).click()
 
     await expect(modalHeading).not.toBeVisible()
+    await expect(page.locator('.simclock-popup')).toContainText('Clock set to')
     await expect(clock.locator('.simclock__time')).toContainText('Aug 5')
     await expect(clock.locator('.simclock__time')).toContainText('12:00')
   })

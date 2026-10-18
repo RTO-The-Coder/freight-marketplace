@@ -55,7 +55,7 @@ async function advanceAndCheckForError(
   await clock.getByRole('button', { name: 'Advance' }).click()
   await expect(clock.getByRole('button', { name: 'Advance' })).toBeEnabled({ timeout: 180_000 })
 
-  const errorEl = clock.locator('.simclock__error')
+  const errorEl = clock.locator('.simclock-popup--error .simclock-popup__text')
   if (await errorEl.count()) {
     const message = await errorEl.innerText()
     if (/one-directionally/.test(message)) {
