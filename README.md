@@ -89,7 +89,7 @@ docker compose up -d
 dotnet ef database update --project src/Freight.Infrastructure --startup-project src/Freight.Api
 dotnet run --project tools/Freight.Seeder
 ```
-The seeder replaces all data with the demo set: 5 trucking companies, 20 shippers, 23 shipments and the clock at 1 Aug 2026 05:00 UTC. It creates no trucks or drivers.
+The seeder replaces all data with the demo set: 5 trucking companies (in Cologne, Hamburg, Vienna, Prague and Lyon), 20 shippers, 38 shipments (30 booked directly to a company, 17 of them to Rheinfracht Logistik in Cologne, including a 7-day loop for a two-driver Flatbed, and 8 open for offers) and the clock at 1 Aug 2026 05:00 UTC. It creates no trucks or drivers.
 
 ### 2. API
 Create `backend/src/Freight.Api/appsettings.Development.json`. It is gitignored. Only the CORS origins are needed for the web apps:

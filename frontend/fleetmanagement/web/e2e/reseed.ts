@@ -12,7 +12,7 @@ const SEEDER_PROJECT = path.resolve(HERE, '../../../../backend/tools/Freight.See
 
 /**
  * Truncates and repopulates the database with the fixed, deterministic seed
- * dataset (5 companies, 20 shippers, 33 shipments, sim clock at
+ * dataset (5 companies, 20 shippers, 38 shipments, sim clock at
  * 2026-08-01T05:00Z, no trucks/drivers/trips — see Freight.Seeder/Program.cs).
  * Runs the real seeder binary against the real Postgres container; there is
  * no in-memory shortcut because the tests exercise the real API end to end.

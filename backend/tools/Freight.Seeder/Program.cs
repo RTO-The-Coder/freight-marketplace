@@ -96,34 +96,18 @@ if (routePairs.Count == 0)
     throw new InvalidOperationException($"Fixture file at {fixturePath} contains no route pairs.");
 }
 
-var pairsByTier = routePairs.ToLookup(p => p.Tier);
+RoutePairFixture RoutePair(string pairId) =>
+    routePairs.SingleOrDefault(p => p.PairId == pairId)
+    ?? throw new InvalidOperationException($"Route pair '{pairId}' is not in the fixture - run `dotnet run --build-fixture`.");
 
-// Weighted draw across haul tiers for "realistic variety": mostly short/medium regional
-// jobs, with a meaningful minority of long-haul pairs so the 7-day (single-driver) and
-// 10-14-day (team-driver) trip scenarios are always represented once shipments are
-// assigned to a real fleet. CorridorOverlap pairs are deliberately excluded here - they're
-// seeded as their own coordinated set (see SeedCorridorOverlapShipments below), not picked
-// independently, since their whole point is to share compatible, overlapping windows.
-RoutePairFixture RandomRoutePair()
+// A fixture place's coordinates by its name (company offices are fixture places too).
+GeoLocation PlaceLocation(string placeName)
 {
-    var roll = random.NextDouble();
-    var tier = roll switch
-    {
-        < 0.35 => nameof(HaulTier.Short),
-        < 0.65 => nameof(HaulTier.Medium),
-        < 0.90 => nameof(HaulTier.LongHaulSingleDriver),
-        _ => nameof(HaulTier.LongHaulTeamDriver),
-    };
-
-    // Fall back to any non-corridor tier if the chosen one has no fixture entries (e.g. all
-    // its OSRM calls failed when the fixture was built) rather than crashing the whole run.
-    var candidates = pairsByTier[tier].ToList();
-    if (candidates.Count == 0)
-    {
-        candidates = [.. routePairs.Where(p => p.Tier != nameof(HaulTier.CorridorOverlap))];
-    }
-
-    return candidates[random.Next(candidates.Count)];
+    var pair = routePairs.FirstOrDefault(p => p.PickupName == placeName || p.DeliveryName == placeName)
+        ?? throw new InvalidOperationException($"Place '{placeName}' is not in the route-pair fixture.");
+    return pair.PickupName == placeName
+        ? GeoLocation.Create(pair.PickupLat, pair.PickupLon)
+        : GeoLocation.Create(pair.DeliveryLat, pair.DeliveryLon);
 }
 
 // Weighted draw matching the ~40/35/25 Small/Medium/Large truck-size mix, used
@@ -302,29 +286,21 @@ async Task Reseed(DateTime demoAnchor)
 #pragma warning restore EF1002
     Console.WriteLine("Cleared all data.");
 
-    // 1. TruckingCompanies (5) - each with a real office location (drawn from the fixture's
-    // pickup/delivery place list so office coordinates stay consistent with the same
-    // real-place convention used everywhere else).
-    string[] companyNames =
+    // 1. TruckingCompanies (5) - each named after the river of its office city, with a fixed
+    // office at one of the fixture's named places: one company per city, never random.
+    (string Name, string OfficePlace)[] companyDefinitions =
     [
-        "Nordwest Spedition GmbH",
-        "Rheinfracht Logistik AG",
-        "Elbstrom Transporte KG",
-        "Süddeutsche Fernfracht GmbH",
-        "Alpen-Trans Spedition",
+        ("Rheinfracht Logistik AG", "Cologne-Ehrenfeld"),
+        ("Elbstrom Transporte KG", "Hamburg-Altona"),
+        ("Donau-Trans Spedition", "Vienna-Favoriten"),
+        ("Moldau Spedition s.r.o.", "Prague-Vinohrady"),
+        ("Rhône Fret Logistique SA", "Lyon-Part-Dieu"),
     ];
 
-    GeoLocation RandomOfficeLocation()
-    {
-        var pair = routePairs[random.Next(routePairs.Count)];
-        return random.Next(2) == 0
-            ? GeoLocation.Create(pair.PickupLat, pair.PickupLon)
-            : GeoLocation.Create(pair.DeliveryLat, pair.DeliveryLon);
-    }
-
-    var companies = companyNames
-        .Select(name => TruckingCompany.Create(Guid.NewGuid(), name, RandomOfficeLocation()))
-        .ToList();
+    var companyByOffice = companyDefinitions.ToDictionary(
+        company => company.OfficePlace,
+        company => TruckingCompany.Create(Guid.NewGuid(), company.Name, PlaceLocation(company.OfficePlace)));
+    var companies = companyByOffice.Values.ToList();
     db.AddRange(companies);
     Console.WriteLine($"Generated {companies.Count} trucking companies.");
 
@@ -353,70 +329,141 @@ async Task Reseed(DateTime demoAnchor)
     db.Add(clock);
     Console.WriteLine($"SimulationClock set to {demoAnchor:yyyy-MM-dd HH:mm} UTC.");
 
-    // 4. Shipments - 20 total, 5 per TruckType (BoxVan, Flatbed, Refrigerated,
-    // Tanker). Booked at a random point across a 14-day booking window starting at
-    // demoAnchor (not all clustered on the anchor's own calendar date), each on a
-    // random hour of its own booking day - so a demo that advances the simulation
-    // clock keeps finding freshly-booked shipments over roughly the fleet's own
-    // 7-14 day trip horizon, rather than all 20 shipments' pickups landing within the
-    // first day or two. All still relative to demoAnchor (the same value just written to
-    // SimulationClock), not real time. Booked via Shipment.Book(...) - all start Pending,
-    // no TruckingCompanyId, exactly as a real Shipper submission would. Each shipment's
-    // pickup/delivery locations and windows now come from a real route-pair fixture entry
-    // (see DeriveWindows above) instead of independently-random locations + guessed hours.
-    const int BookingSpreadDays = 14;
+    // 4. Shipments - four groups:
+    //   - the 7-day team demo loop: 12 small Flatbed shipments booked directly to the Cologne
+    //     company (the demo's main company, mid-map), with fixed windows (see below),
+    //   - 5 regional ones booked directly to the Cologne company,
+    //   - 3-4 booked directly to each other company, starting near its own office,
+    //   - 8 open ones any company can send offers for: 5 below plus the corridor set (step 5).
+    // Outside the loop the truck type rotates through every group so each type has work.
+    // Direct shipments pick up within the first four days. Open ones are spread over two
+    // weeks, each booked 12-48h before its pickup (never before the anchor), so their 2-hour
+    // offer windows close at different times as the clock moves.
+    const int DirectPickupSpreadDays = 4;
+    const int OpenPickupSpreadDays = 14;
 
+    var truckTypes = Enum.GetValues<TruckType>();
     var shipments = new List<ShipmentAggregate>();
-    foreach (TruckType truckType in Enum.GetValues<TruckType>())
+
+    void AddShipment(string pairId, TruckingCompany? directCompany)
     {
-        for (var i = 0; i < 5; i++)
+        var routePair = RoutePair(pairId);
+        var spreadDays = directCompany is null ? OpenPickupSpreadDays : DirectPickupSpreadDays;
+
+        // A pickup appointment somewhere in a 06:00-18:00 day, never before the anchor itself.
+        var pickupStart = demoAnchor.Date
+            .AddDays(random.Next(0, spreadDays))
+            .AddHours(6 + random.NextDouble() * 12);
+        if (pickupStart < demoAnchor.AddHours(1))
         {
-            // Each shipment's pickup starts on its own random day within the spread
-            // window, at its own random hour - so shipments land throughout the whole
-            // demo period instead of clustering near the anchor date.
-            var pickupStart = demoAnchor.Date
-                .AddDays(random.Next(0, BookingSpreadDays))
-                .AddHours(6 + random.NextDouble() * 12); // pickup appointment somewhere in a 06:00-18:00 day
-
-            // A real Shipper books a day or so before the pickup window opens, not weeks in
-            // advance - bookedAt only drives OfferDeadline (30 min after booking), so this
-            // just needs to be a plausible moment shortly before pickupStart. Never earlier
-            // than demoAnchor itself, since the simulated world doesn't exist before that.
-            var bookedAt = pickupStart.AddHours(-(12 + random.NextDouble() * 36));
-            if (bookedAt < demoAnchor)
-            {
-                bookedAt = demoAnchor;
-            }
-            var shipper = shippers[random.Next(shippers.Count)];
-            var routePair = RandomRoutePair();
-            var (pickupWindow, deliveryWindow) = DeriveWindows(routePair, pickupStart);
-
-            // Kept deliberately small (10-25% of a tier's capacity, vs. a larger
-            // fraction) - these shipments are meant to become stops added onto a
-            // truck's route alongside others, so each one should leave plenty of
-            // remaining capacity for further stops to be added later.
-            var sizeTier = RandomTruckSize();
-            var fraction = 0.10 + random.NextDouble() * 0.15; // 10-25% of the tier's capacity
-            var tierCapacity = Capacity.ForTruckSize(sizeTier);
-            var load = Capacity.Create(
-                Math.Round(tierCapacity.WeightKg * fraction, 0),
-                Math.Round(tierCapacity.VolumeCubicMeters * fraction, 1));
-
-            var pickupLocation = GeoLocation.Create(routePair.PickupLat, routePair.PickupLon);
-            var deliveryLocation = GeoLocation.Create(routePair.DeliveryLat, routePair.DeliveryLon);
-
-            var shipment = ShipmentAggregate.Book(
-                shipper.Id,
-                pickupLocation,
-                deliveryLocation,
-                load,
-                truckType,
-                pickupWindow,
-                deliveryWindow,
-                bookedAt);
-
-            shipments.Add(shipment);
+            pickupStart = demoAnchor.AddHours(1);
         }
+
+        // Only an open shipment's booking time matters: it starts the 2-hour offer window.
+        var bookedAt = directCompany is null ? pickupStart.AddHours(-(12 + random.NextDouble() * 36)) : demoAnchor;
+        if (bookedAt < demoAnchor)
+        {
+            bookedAt = demoAnchor;
+        }
+
+        var (pickupWindow, deliveryWindow) = DeriveWindows(routePair, pickupStart);
+
+        // Kept deliberately small (10-25% of a tier's capacity) - these shipments are meant to
+        // become stops added onto a truck's route alongside others, so each one should leave
+        // plenty of remaining capacity for further stops to be added later.
+        var tierCapacity = Capacity.ForTruckSize(RandomTruckSize());
+        var fraction = 0.10 + random.NextDouble() * 0.15;
+        var load = Capacity.Create(
+            Math.Round(tierCapacity.WeightKg * fraction, 0),
+            Math.Round(tierCapacity.VolumeCubicMeters * fraction, 1));
+
+        shipments.Add(ShipmentAggregate.Book(
+            shippers[random.Next(shippers.Count)].Id,
+            GeoLocation.Create(routePair.PickupLat, routePair.PickupLon),
+            GeoLocation.Create(routePair.DeliveryLat, routePair.DeliveryLon),
+            load,
+            truckTypes[shipments.Count % truckTypes.Length],
+            pickupWindow,
+            deliveryWindow,
+            bookedAt,
+            directCompany?.Id));
+    }
+
+    (string OfficePlace, string[] PairIds)[] directShipments =
+    [
+        ("Cologne-Ehrenfeld",
+        [
+            "short-cologne-duesseldorf", "short-bonn-essen", "short-aachen-cologne", "short-cologne-dortmund",
+            "short-cologne-frankfurt",
+        ]),
+        ("Hamburg-Altona", ["short-hamburg-hannover", "short-hamburg-bremen", "short-kiel-hamburg"]),
+        ("Vienna-Favoriten", ["short-vienna-graz", "short-linz-vienna", "short-vienna-bratislava"]),
+        ("Prague-Vinohrady", ["short-prague-brno", "short-prague-dresden", "short-pilsen-prague"]),
+        ("Lyon-Part-Dieu", ["short-lyon-grenoble", "medium-lyon-marseille", "short-geneva-lyon", "short-lyon-grenoble"]),
+    ];
+
+    foreach (var (officePlace, pairIds) in directShipments)
+    {
+        foreach (var pairId in pairIds)
+        {
+            AddShipment(pairId, companyByOffice[officePlace]);
+        }
+    }
+
+    // The 7-day team demo loop: one Large Flatbed with two drivers, leaving the Cologne office
+    // on the anchor day (a Saturday) and back on day 5 (Thursday), before the six-day mark, so
+    // no weekly rest falls in the trip. Day 0 is packed: about 15h of driving between the
+    // windows, which only a team can do (a single driver may drive 9-10h a day), so the same
+    // assignment fails on a single-driver truck. From day 1 the windows are daytime slots and
+    // the truck parks overnight at the next stop; those waits count as the drivers' rest.
+    // (Day offset from the anchor's date, window opens, window closes), for pickup then delivery.
+    var loopCompany = companyByOffice["Cologne-Ehrenfeld"];
+    ((int Day, string From, string To) Pickup, (int Day, string From, string To) Delivery, double WeightKg, double VolumeCubicMeters)[] teamLoopWindows =
+    [
+        ((0, "07:30", "10:00"), (0, "11:00", "15:00"), 4000, 12), // Brussels -> Paris
+        ((0, "09:00", "12:00"), (0, "15:00", "19:00"), 3000, 10), // Lille -> Metz
+        ((0, "13:00", "17:00"), (0, "18:30", "22:30"), 5000, 15), // Reims -> Basel
+        ((0, "17:00", "21:00"), (1, "08:00", "13:00"), 2500, 8),  // Strasbourg -> Innsbruck
+        ((0, "19:30", "23:55"), (1, "13:00", "17:00"), 6000, 18), // Zurich -> Salzburg
+        ((1, "11:00", "15:00"), (2, "10:00", "14:00"), 3500, 11), // Munich -> Vienna
+        ((2, "08:00", "12:00"), (3, "08:00", "12:00"), 4500, 14), // Linz -> Prague
+        ((2, "12:00", "16:00"), (3, "11:00", "15:00"), 2000, 6),  // Brno -> Leipzig
+        ((3, "09:30", "13:30"), (4, "09:30", "13:30"), 5500, 16), // Dresden -> Magdeburg
+        ((4, "08:00", "12:00"), (5, "08:00", "12:00"), 3000, 9),  // Berlin -> Hamburg
+        ((4, "11:30", "15:30"), (5, "11:00", "15:00"), 4000, 12), // Hannover -> Münster
+        ((5, "09:00", "13:00"), (5, "12:00", "16:00"), 2500, 7),  // Bremen -> Dortmund
+    ];
+
+    DateTime OnDay(int day, string time) => demoAnchor.Date.AddDays(day).Add(TimeSpan.Parse(time));
+
+    var teamLoopPairs = LocationPairs.TeamLoopPairs;
+    for (var i = 0; i < teamLoopPairs.Count; i++)
+    {
+        var routePair = RoutePair(teamLoopPairs[i].PairId);
+        var (pickup, delivery, weightKg, volumeCubicMeters) = teamLoopWindows[i];
+        shipments.Add(ShipmentAggregate.Book(
+            shippers[random.Next(shippers.Count)].Id,
+            GeoLocation.Create(routePair.PickupLat, routePair.PickupLon),
+            GeoLocation.Create(routePair.DeliveryLat, routePair.DeliveryLon),
+            Capacity.Create(weightKg, volumeCubicMeters),
+            TruckType.Flatbed,
+            TimeWindow.Create(OnDay(pickup.Day, pickup.From), OnDay(pickup.Day, pickup.To)),
+            TimeWindow.Create(OnDay(delivery.Day, delivery.From), OnDay(delivery.Day, delivery.To)),
+            demoAnchor,
+            loopCompany.Id));
+    }
+
+    var directCount = shipments.Count;
+
+    // Open shipments across Germany and Europe, including the 7-day and 10-14-day long hauls.
+    string[] openPairIds =
+    [
+        "short-berlin-leipzig", "short-munich-nuremberg", "medium-frankfurt-warsaw",
+        "long-berlin-lisbon", "team-berlin-astana",
+    ];
+    foreach (var pairId in openPairIds)
+    {
+        AddShipment(pairId, directCompany: null);
     }
 
     // 5. Corridor-overlap set - 3 shipments along one shared real corridor (Berlin ->
@@ -429,7 +476,7 @@ async Task Reseed(DateTime demoAnchor)
     Console.WriteLine($"Generated {corridorShipments.Count} corridor-overlap shipments (Berlin-Leipzig-Nuremberg-Munich).");
 
     db.AddRange(shipments);
-    Console.WriteLine($"Generated {shipments.Count} shipments total (20 scattered + {corridorShipments.Count} corridor-overlap).");
+    Console.WriteLine($"Generated {shipments.Count} shipments total ({directCount} direct, {shipments.Count - directCount} open).");
 
     await db.SaveChangesAsync();
 

@@ -8,7 +8,8 @@ namespace Freight.Seeder.Fixtures;
 
 /// <summary>
 /// One-time (or rarely-rerun) tool that calls the real OSRM routing service for every pair
-/// in <see cref="LocationPairs.All"/> and writes the result to <c>Fixtures/route-pairs.json</c>.
+/// in <see cref="LocationPairs.All"/> not already measured, and writes the result to
+/// <c>Fixtures/route-pairs.json</c>.
 /// Run manually via <c>dotnet run --build-fixture</c> whenever the pair list changes; the
 /// ordinary seed run only ever reads the resulting JSON file, never OSRM itself.
 /// </summary>
@@ -27,11 +28,27 @@ public static class FixtureBuilder
         var osrmOptions = Options.Create(new OsrmOptions { MinRequestIntervalMilliseconds = 1100 });
         var routingService = new ThrottlingRoutingService(new OsrmRoutingService(httpClient), osrmOptions);
 
+        // Pairs already in the fixture with unchanged coordinates keep their measured
+        // distance/time, so adding pairs only calls OSRM for the new ones.
+        var existing = File.Exists(outputPath)
+            ? (JsonSerializer.Deserialize<List<RoutePairFixture>>(await File.ReadAllTextAsync(outputPath)) ?? [])
+                .ToDictionary(fixture => fixture.PairId)
+            : [];
+
         var results = new List<RoutePairFixture>();
         var failures = new List<string>();
 
         foreach (var pair in LocationPairs.All)
         {
+            if (existing.TryGetValue(pair.PairId, out var known)
+                && known.PickupLat == pair.Pickup.Lat && known.PickupLon == pair.Pickup.Lon
+                && known.DeliveryLat == pair.Delivery.Lat && known.DeliveryLon == pair.Delivery.Lon)
+            {
+                results.Add(known with { PickupName = pair.Pickup.Name, DeliveryName = pair.Delivery.Name, Tier = pair.Tier.ToString() });
+                Console.WriteLine($"Kept {pair.PairId} from the existing fixture.");
+                continue;
+            }
+
             Console.WriteLine($"Routing {pair.PairId}: {pair.Pickup.Name} -> {pair.Delivery.Name} ...");
             try
             {

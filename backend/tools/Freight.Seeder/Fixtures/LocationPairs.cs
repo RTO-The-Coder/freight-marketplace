@@ -43,6 +43,13 @@ public enum HaulTier
     /// instead of only ever assigning independent point-to-point shipments back to back.
     /// </summary>
     CorridorOverlap,
+
+    /// <summary>
+    /// One leg of the 7-day team demo loop from Cologne (see <see cref="LocationPairs.TeamLoopPairs"/>):
+    /// twelve small shipments chained P1, P2, D1, P3, D2, ... so at most two are on board at a time.
+    /// Seeded with fixed windows (Program.cs), not derived from this pair's distance.
+    /// </summary>
+    TeamLoop,
 }
 
 public sealed record NamedPlace(string Name, double Lat, double Lon);
@@ -83,6 +90,40 @@ public static class LocationPairs
     // from Western/Central Europe without a sea crossing.
     private static readonly NamedPlace AstanaEsil = new("Astana-Esil", 51.1605, 71.4704);
     private static readonly NamedPlace TbilisiOldTown = new("Tbilisi-Old Town", 41.6934, 44.8015);
+
+    // Around the five company offices (Cologne, Hamburg, Vienna, Prague, Lyon), so each
+    // company has direct shipments starting near its own office.
+    private static readonly NamedPlace BonnBeuel = new("Bonn-Beuel", 50.7380, 7.1270);
+    private static readonly NamedPlace DuesseldorfBilk = new("Düsseldorf-Bilk", 51.2080, 6.7720);
+    private static readonly NamedPlace AachenBurtscheid = new("Aachen-Burtscheid", 50.7620, 6.0920);
+    private static readonly NamedPlace EssenRuettenscheid = new("Essen-Rüttenscheid", 51.4340, 7.0060);
+    private static readonly NamedPlace DortmundHoerde = new("Dortmund-Hörde", 51.4880, 7.5100);
+    private static readonly NamedPlace BrusselsIxelles = new("Brussels-Ixelles", 50.8330, 4.3670);
+    private static readonly NamedPlace BremenNeustadt = new("Bremen-Neustadt", 53.0700, 8.7900);
+    private static readonly NamedPlace KielGaarden = new("Kiel-Gaarden", 54.3150, 10.1450);
+    private static readonly NamedPlace GrazLend = new("Graz-Lend", 47.0770, 15.4300);
+    private static readonly NamedPlace LinzUrfahr = new("Linz-Urfahr", 48.3150, 14.2840);
+    private static readonly NamedPlace BratislavaPetrzalka = new("Bratislava-Petržalka", 48.1150, 17.1100);
+    private static readonly NamedPlace DresdenNeustadt = new("Dresden-Neustadt", 51.0650, 13.7500);
+    private static readonly NamedPlace PilsenDoubravka = new("Pilsen-Doubravka", 49.7540, 13.4250);
+    private static readonly NamedPlace LyonPartDieu = new("Lyon-Part-Dieu", 45.7606, 4.8590);
+    private static readonly NamedPlace GrenobleEuropole = new("Grenoble-Europole", 45.1910, 5.7140);
+    private static readonly NamedPlace MarseilleJoliette = new("Marseille-La Joliette", 43.3070, 5.3660);
+    private static readonly NamedPlace GenevaPlainpalais = new("Geneva-Plainpalais", 46.1960, 6.1420);
+
+    // The 7-day team demo loop (with Brussels, Munich, Linz, Vienna, Brno, Prague, Dresden,
+    // Leipzig, Berlin, Hannover, Hamburg, Bremen and Dortmund above).
+    private static readonly NamedPlace LilleWazemmes = new("Lille-Wazemmes", 50.6280, 3.0480);
+    private static readonly NamedPlace ParisBercy = new("Paris-Bercy", 48.8350, 2.3860);
+    private static readonly NamedPlace ReimsClairmarais = new("Reims-Clairmarais", 49.2620, 4.0250);
+    private static readonly NamedPlace MetzSablon = new("Metz-Sablon", 49.1000, 6.1800);
+    private static readonly NamedPlace StrasbourgNeudorf = new("Strasbourg-Neudorf", 48.5680, 7.7600);
+    private static readonly NamedPlace BaselKleinbasel = new("Basel-Kleinbasel", 47.5650, 7.5980);
+    private static readonly NamedPlace ZurichAltstetten = new("Zurich-Altstetten", 47.3900, 8.4880);
+    private static readonly NamedPlace InnsbruckPradl = new("Innsbruck-Pradl", 47.2650, 11.4100);
+    private static readonly NamedPlace SalzburgLehen = new("Salzburg-Lehen", 47.8100, 13.0300);
+    private static readonly NamedPlace MagdeburgSudenburg = new("Magdeburg-Sudenburg", 52.1150, 11.6150);
+    private static readonly NamedPlace MuensterHiltrup = new("Münster-Hiltrup", 51.9050, 7.6400);
 
     public static readonly IReadOnlyList<LocationPairDefinition> All =
     [
@@ -126,6 +167,49 @@ public static class LocationPairs
         new("corridor-1-berlin-munich", BerlinMitte, MunichSchwabing, HaulTier.CorridorOverlap),
         new("corridor-2-leipzig-nuremberg", LeipzigPlagwitz, NurembergGostenhof, HaulTier.CorridorOverlap),
         new("corridor-3-nuremberg-munich", NurembergGostenhof, MunichSchwabing, HaulTier.CorridorOverlap),
+
+        // Around Cologne - the demo company's regional direct shipments (with
+        // short-cologne-frankfurt above).
+        new("short-cologne-duesseldorf", CologneEhrenfeld, DuesseldorfBilk, HaulTier.Short),
+        new("short-bonn-essen", BonnBeuel, EssenRuettenscheid, HaulTier.Short),
+        new("short-aachen-cologne", AachenBurtscheid, CologneEhrenfeld, HaulTier.Short),
+        new("short-cologne-dortmund", CologneEhrenfeld, DortmundHoerde, HaulTier.Short),
+
+        // Around Hamburg (with short-hamburg-hannover above)
+        new("short-hamburg-bremen", HamburgAltona, BremenNeustadt, HaulTier.Short),
+        new("short-kiel-hamburg", KielGaarden, HamburgAltona, HaulTier.Short),
+
+        // Around Vienna
+        new("short-vienna-graz", ViennaFavoriten, GrazLend, HaulTier.Short),
+        new("short-linz-vienna", LinzUrfahr, ViennaFavoriten, HaulTier.Short),
+        new("short-vienna-bratislava", ViennaFavoriten, BratislavaPetrzalka, HaulTier.Short),
+
+        // Around Prague
+        new("short-prague-brno", PragueVinohrady, BrnoZidenice, HaulTier.Short),
+        new("short-prague-dresden", PragueVinohrady, DresdenNeustadt, HaulTier.Short),
+        new("short-pilsen-prague", PilsenDoubravka, PragueVinohrady, HaulTier.Short),
+
+        // Around Lyon
+        new("short-lyon-grenoble", LyonPartDieu, GrenobleEuropole, HaulTier.Short),
+        new("medium-lyon-marseille", LyonPartDieu, MarseilleJoliette, HaulTier.Medium),
+        new("short-geneva-lyon", GenevaPlainpalais, LyonPartDieu, HaulTier.Short),
+
+        // The 7-day team demo loop from Cologne, in route order of the pickups. Stops run
+        // Brussels, Lille, Paris, Reims, Metz, Strasbourg, Basel, Zurich, Innsbruck, Munich,
+        // Salzburg, Linz, Vienna, Brno, Prague, Dresden, Leipzig, Berlin, Magdeburg, Hannover,
+        // Hamburg, Bremen, Münster, Dortmund: P1 P2 D1 P3 D2 P4 D3 ... P12 D11 D12.
+        new("team-loop-01-brussels-paris", BrusselsIxelles, ParisBercy, HaulTier.TeamLoop),
+        new("team-loop-02-lille-metz", LilleWazemmes, MetzSablon, HaulTier.TeamLoop),
+        new("team-loop-03-reims-basel", ReimsClairmarais, BaselKleinbasel, HaulTier.TeamLoop),
+        new("team-loop-04-strasbourg-innsbruck", StrasbourgNeudorf, InnsbruckPradl, HaulTier.TeamLoop),
+        new("team-loop-05-zurich-salzburg", ZurichAltstetten, SalzburgLehen, HaulTier.TeamLoop),
+        new("team-loop-06-munich-vienna", MunichSchwabing, ViennaFavoriten, HaulTier.TeamLoop),
+        new("team-loop-07-linz-prague", LinzUrfahr, PragueVinohrady, HaulTier.TeamLoop),
+        new("team-loop-08-brno-leipzig", BrnoZidenice, LeipzigPlagwitz, HaulTier.TeamLoop),
+        new("team-loop-09-dresden-magdeburg", DresdenNeustadt, MagdeburgSudenburg, HaulTier.TeamLoop),
+        new("team-loop-10-berlin-hamburg", BerlinMitte, HamburgAltona, HaulTier.TeamLoop),
+        new("team-loop-11-hannover-muenster", HannoverLinden, MuensterHiltrup, HaulTier.TeamLoop),
+        new("team-loop-12-bremen-dortmund", BremenNeustadt, DortmundHoerde, HaulTier.TeamLoop),
     ];
 
     /// <summary>
@@ -137,4 +221,8 @@ public static class LocationPairs
     /// </summary>
     public static IReadOnlyList<LocationPairDefinition> CorridorPairs =>
         All.Where(p => p.Tier == HaulTier.CorridorOverlap).ToList();
+
+    /// <summary>The <see cref="HaulTier.TeamLoop"/> entries from <see cref="All"/>, in route order.</summary>
+    public static IReadOnlyList<LocationPairDefinition> TeamLoopPairs =>
+        All.Where(p => p.Tier == HaulTier.TeamLoop).ToList();
 }
