@@ -1,5 +1,6 @@
 import { bookDirectCopy, firstCompanyId, openDirectAssignModal, pendingShipments } from './directShipments'
 import { expect, test } from './fixtures'
+import { fleetRow } from './companyPage'
 
 const API_BASE_URL = 'http://localhost:5017'
 
@@ -117,7 +118,7 @@ test('advancing the clock moves a truck along its route (a Pending stop becomes 
   await page.locator('button.row-card').first().click()
 
   await test.step('build an active truck with a driver', async () => {
-    await page.getByRole('button', { name: '+ Add Truck' }).click()
+    await page.getByRole('button', { name: '+ Add truck' }).click()
     await page.getByPlaceholder('e.g. FL-14').fill('Clock-Truck')
     // Large/BoxVan: the largest capacity tier, to match as many of the
     // seed's randomly-sized pending shipments as possible — this test only
@@ -125,9 +126,9 @@ test('advancing the clock moves a truck along its route (a Pending stop becomes 
     await page.locator('.picker__item', { hasText: 'BoxVan' }).click()
     await page.locator('.picker__item', { hasText: 'Large' }).click()
     await page.getByRole('button', { name: 'Add truck', exact: true }).click()
-    await expect(page.getByText('Clock-Truck')).toBeVisible()
+    await expect(fleetRow(page, 'Clock-Truck')).toBeVisible()
 
-    await page.getByRole('button', { name: '+ Add Driver' }).click()
+    await page.getByRole('button', { name: '+ Add driver' }).click()
     await page.locator('label:has-text("First name") input').fill('Otto')
     await page.locator('label:has-text("Last name") input').fill('Bauer')
     await page.locator('.picker__item', { hasText: 'FullBreak' }).click()
@@ -135,13 +136,13 @@ test('advancing the clock moves a truck along its route (a Pending stop becomes 
     await page.locator('.picker__item', { hasText: 'FullWeeklyRest' }).click()
     await page.getByRole('button', { name: 'Add driver', exact: true }).click()
 
-    await page.getByText('+ Assign driver').click()
+    await fleetRow(page, 'Clock-Truck').getByText('+ Assign driver').click()
     await page.getByPlaceholder('Search by name…').first().fill('Otto')
     await page.locator('.driver-select__option', { hasText: 'Otto Bauer' }).click()
     await page.getByRole('button', { name: 'Save drivers' }).click()
-    await expect(page.getByText('Otto Bauer', { exact: true })).toBeVisible()
+    await expect(fleetRow(page, 'Clock-Truck').getByText('Otto Bauer', { exact: true })).toBeVisible()
 
-    const truckRow = page.locator('.fleet-row', { has: page.getByText('Clock-Truck') })
+    const truckRow = fleetRow(page, 'Clock-Truck')
     await truckRow.getByRole('button', { name: 'Activate' }).click()
     await expect(truckRow.getByRole('button', { name: 'Deactivate' })).toBeVisible()
   })
@@ -177,7 +178,7 @@ test('advancing the clock moves a truck along its route (a Pending stop becomes 
   })
 
   await test.step('confirm the first stop is Pending, in the UI', async () => {
-    await page.locator('.fleet-row', { has: page.getByText('Clock-Truck') }).getByText('Clock-Truck').click()
+    await fleetRow(page, 'Clock-Truck').getByText('Clock-Truck', { exact: true }).click()
     await expect(page.getByRole('heading', { name: 'Clock-Truck' })).toBeVisible()
 
     const firstStop = page.locator('.stops__item').first()
@@ -209,7 +210,7 @@ test('advancing the clock moves a truck along its route (a Pending stop becomes 
 
   await test.step('the first stop now shows Reached', async () => {
     await page.locator('button.row-card').first().click()
-    await page.locator('.fleet-row', { has: page.getByText('Clock-Truck') }).getByText('Clock-Truck').click()
+    await fleetRow(page, 'Clock-Truck').getByText('Clock-Truck', { exact: true }).click()
     await expect(page.getByRole('heading', { name: 'Clock-Truck' })).toBeVisible()
 
     const firstStop = page.locator('.stops__item').first()

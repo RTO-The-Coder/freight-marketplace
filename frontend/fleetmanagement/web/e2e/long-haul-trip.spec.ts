@@ -1,5 +1,6 @@
 import { bookDirectCopy, firstCompanyId, openDirectAssignModal, pendingShipments, type PendingShipment } from './directShipments'
 import { expect, test } from './fixtures'
+import { fleetRow } from './companyPage'
 
 const API_BASE_URL = 'http://localhost:5017'
 
@@ -88,15 +89,15 @@ test('a 10-14 day team-driver shipment runs the sim clock to full trip completio
   await page.locator('button.row-card').first().click()
 
   await test.step('build a Large truck of the matching type with a two-driver team', async () => {
-    await page.getByRole('button', { name: '+ Add Truck' }).click()
+    await page.getByRole('button', { name: '+ Add truck' }).click()
     await page.getByPlaceholder('e.g. FL-14').fill('LongHaul-Truck')
     await page.locator('.picker__item', { hasText: shipment.requiredTruckType }).click()
     await page.locator('.picker__item', { hasText: 'Large' }).click()
     await page.getByRole('button', { name: 'Add truck', exact: true }).click()
-    await expect(page.getByText('LongHaul-Truck')).toBeVisible()
+    await expect(fleetRow(page, 'LongHaul-Truck')).toBeVisible()
 
     // Primary driver.
-    await page.getByRole('button', { name: '+ Add Driver' }).click()
+    await page.getByRole('button', { name: '+ Add driver' }).click()
     await page.locator('label:has-text("First name") input').fill('Jonas')
     await page.locator('label:has-text("Last name") input').fill('Weber')
     await page.locator('.picker__item', { hasText: 'FullBreak' }).click()
@@ -107,7 +108,7 @@ test('a 10-14 day team-driver shipment runs the sim clock to full trip completio
     // Secondary driver — a Large truck may run a two-driver relay team, which
     // is exactly what makes the 10-14 day team-driver tier's realistic span
     // achievable (see DeriveWindows's LongHaulTeamDriver comment).
-    await page.getByRole('button', { name: '+ Add Driver' }).click()
+    await page.getByRole('button', { name: '+ Add driver' }).click()
     await page.locator('label:has-text("First name") input').fill('Mikael')
     await page.locator('label:has-text("Last name") input').fill('Nyqvist')
     await page.locator('.picker__item', { hasText: 'FullBreak' }).click()
@@ -115,7 +116,7 @@ test('a 10-14 day team-driver shipment runs the sim clock to full trip completio
     await page.locator('.picker__item', { hasText: 'FullWeeklyRest' }).click()
     await page.getByRole('button', { name: 'Add driver', exact: true }).click()
 
-    const truckRow = page.locator('.fleet-row', { has: page.getByText('LongHaul-Truck') })
+    const truckRow = fleetRow(page, 'LongHaul-Truck')
     await truckRow.getByText('LongHaul-Truck').click()
     await expect(page.getByRole('heading', { name: 'LongHaul-Truck' })).toBeVisible()
     await page.getByRole('button', { name: 'Assign' }).click()
@@ -136,7 +137,7 @@ test('a 10-14 day team-driver shipment runs the sim clock to full trip completio
   await test.step('activate the truck', async () => {
     await page.goto('/')
     await page.locator('button.row-card').first().click()
-    const truckRow = page.locator('.fleet-row', { has: page.getByText('LongHaul-Truck') })
+    const truckRow = fleetRow(page, 'LongHaul-Truck')
     await truckRow.getByRole('button', { name: 'Activate' }).click()
     await expect(truckRow.getByRole('button', { name: 'Deactivate' })).toBeVisible()
   })
@@ -157,7 +158,7 @@ test('a 10-14 day team-driver shipment runs the sim clock to full trip completio
   })
 
   await test.step('confirm a 3-stop open trip (pickup, delivery, office), all Pending', async () => {
-    await page.locator('.fleet-row', { has: page.getByText('LongHaul-Truck') }).getByText('LongHaul-Truck').click()
+    await fleetRow(page, 'LongHaul-Truck').getByText('LongHaul-Truck', { exact: true }).click()
     await expect(page.getByRole('heading', { name: 'LongHaul-Truck' })).toBeVisible()
     // Every trip ends with an implicit Office return stop after the delivery.
     await expect(page.locator('.stops__item')).toHaveCount(3)
@@ -201,7 +202,7 @@ test('a 10-14 day team-driver shipment runs the sim clock to full trip completio
 
   await test.step('the trip has closed: truck shows no active trip', async () => {
     await page.locator('button.row-card').first().click()
-    await page.locator('.fleet-row', { has: page.getByText('LongHaul-Truck') }).getByText('LongHaul-Truck').click()
+    await fleetRow(page, 'LongHaul-Truck').getByText('LongHaul-Truck', { exact: true }).click()
     await expect(page.getByRole('heading', { name: 'LongHaul-Truck' })).toBeVisible()
 
     await expect(page.getByText('No active trip')).toBeVisible()

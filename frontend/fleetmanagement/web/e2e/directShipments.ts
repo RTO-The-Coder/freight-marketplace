@@ -1,6 +1,6 @@
 import { expect, type Page } from '@playwright/test'
 
-const API_BASE_URL = 'http://localhost:5017'
+export const API_BASE_URL = 'http://localhost:5017'
 
 /** The pending-shipment fields a direct copy needs (GET /shipments/pending returns them all). */
 export interface PendingShipment {
@@ -65,13 +65,13 @@ export async function bookDirectCopy(shipment: PendingShipment, companyId: strin
 }
 
 /**
- * From the company page: "Show shipments" -> Direct tab -> expand a card -> "Assign to a truck →",
+ * From the company page's Shipments column: Direct tab -> expand a card -> "Assign to a truck →",
  * which opens the full assign form (the shipment itself is picked in the form's own step 2).
  */
 export async function openDirectAssignModal(page: Page): Promise<void> {
-  await page.getByRole('button', { name: 'Show shipments' }).click()
-  await page.getByRole('tab', { name: /^Direct/ }).click()
-  await page.locator('.shipment-card__head').first().click()
-  await page.getByRole('button', { name: 'Assign to a truck →' }).click()
+  const shipments = page.getByRole('region', { name: 'Shipments', exact: true })
+  await shipments.getByRole('tab', { name: /^Direct/ }).click()
+  await shipments.locator('.shipment-card__head').first().click()
+  await shipments.getByRole('button', { name: 'Assign to a truck →' }).click()
   await expect(page.getByRole('heading', { name: 'Assign a shipment' })).toBeVisible()
 }

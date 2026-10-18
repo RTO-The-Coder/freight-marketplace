@@ -10,6 +10,11 @@
   padding: var(--space-6) var(--space-5) var(--space-8);
 }
 
+/* The company page uses the whole window — see "Company page: three columns". */
+.app--wide {
+  max-width: none;
+}
+
 .app-header {
   display: flex;
   align-items: center;
@@ -451,6 +456,373 @@
   gap: var(--space-2);
   justify-content: flex-end;
   margin-top: var(--space-3);
+}
+
+/* --- Company page: three columns (Fleet | map | Drivers) ----------- */
+/* The page fills the window: the columns take all the height below the heading,
+   the map stretches to it, and each list scrolls inside its own column. */
+.app--wide {
+  height: 100vh;
+  display: flex;
+  flex-direction: column;
+  padding: var(--space-4) var(--space-5);
+}
+
+.app--wide .app-header {
+  margin-bottom: var(--space-3);
+}
+
+/* Only the columns give up height; the header (with its bottom line), breadcrumb and
+   page heading keep their natural size. */
+.app--wide > .app-header,
+.app--wide > .nav,
+.company-page > .page-head,
+.company-page > .alert {
+  flex-shrink: 0;
+}
+
+.company-page {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+}
+
+.company-head__title {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  flex-wrap: wrap;
+  min-width: 0;
+}
+
+.company-head__title h2 {
+  font-size: var(--text-xl);
+  letter-spacing: -0.02em;
+}
+
+.company-head__name {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+
+.company-head__sub {
+  color: var(--c-text-muted);
+  font-size: var(--text-sm);
+}
+
+.company-page .page-head {
+  align-items: center;
+  margin-bottom: var(--space-4);
+  padding-bottom: var(--space-4);
+  border-bottom: 1px solid var(--c-border);
+}
+
+.company-layout {
+  flex: 1;
+  min-height: 0;
+  display: grid;
+  grid-template-columns: minmax(340px, 1fr) minmax(0, 1.9fr) minmax(360px, 1.05fr);
+  grid-template-rows: minmax(0, 1fr);
+  grid-template-areas: 'left map shipments';
+  gap: var(--space-4);
+}
+
+/* Left column: Fleet gets ~60% of the height, Drivers ~40%; each list scrolls on its own. */
+.company-layout__left {
+  grid-area: left;
+  min-width: 0;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-4);
+}
+
+.company-layout__fleet {
+  flex: 3 1 0;
+  min-width: 0;
+  min-height: 0;
+}
+
+.company-layout__drivers {
+  flex: 2 1 0;
+  min-width: 0;
+  min-height: 0;
+  padding-top: var(--space-4);
+  border-top: 1px solid var(--c-border);
+}
+
+.company-layout__shipments {
+  grid-area: shipments;
+  min-width: 0;
+  min-height: 0;
+}
+
+.company-layout__map {
+  grid-area: map;
+  min-width: 0;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+}
+
+/* The map takes whatever height the column has. */
+.company-layout__map > .tripmap,
+.company-layout__map > .map-placeholder,
+.company-layout__map > .skeleton--map {
+  flex: 1;
+  min-height: 0;
+}
+
+.company-layout__map .tripmap__canvas {
+  flex: 1;
+  height: auto;
+  min-height: 0;
+}
+
+/* In a side column the fleet row is narrow: name and labels on one line, actions below. */
+.company-layout .fleet-row {
+  flex-wrap: wrap;
+}
+
+.company-layout .fleet-row__main {
+  flex-basis: 100%;
+}
+
+.company-layout .fleet-row__drivers {
+  max-width: 60%;
+  margin-right: auto;
+}
+
+.side-panel {
+  height: 100%;
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+}
+
+.side-panel__head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-3);
+  margin-bottom: var(--space-3);
+}
+
+.side-panel__head h3 {
+  font-size: var(--text-md);
+}
+
+.side-panel__body {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  /* Room for row shadows and the scrollbar. */
+  padding: 2px var(--space-2) var(--space-2) 2px;
+}
+
+.side-panel__actions {
+  display: flex;
+  margin-bottom: var(--space-3);
+}
+
+/* Below ~1100px the columns stack (map, Fleet, Drivers) and the page scrolls normally. */
+@media (max-width: 1100px) {
+  .app--wide {
+    height: auto;
+    display: block;
+  }
+
+  .company-layout {
+    grid-template-columns: minmax(0, 1fr);
+    grid-template-rows: auto;
+    grid-template-areas: 'map' 'left' 'shipments';
+  }
+
+  .company-layout__map > .tripmap,
+  .company-layout__map > .map-placeholder,
+  .company-layout__map > .skeleton--map {
+    flex: none;
+  }
+
+  .company-layout__map .tripmap__canvas,
+  .company-layout__map > .skeleton--map {
+    height: 420px;
+  }
+
+  .side-panel {
+    height: auto;
+  }
+
+  .company-layout__fleet,
+  .company-layout__drivers {
+    flex: none;
+  }
+
+  .side-panel__body {
+    overflow: visible;
+  }
+}
+
+/* --- Company page: Drivers list ------------------------------ */
+.drivers-panel__message {
+  margin: 0 0 var(--space-3);
+  padding: var(--space-2) var(--space-3);
+  font-size: var(--text-sm);
+}
+
+.driver-row {
+  width: 100%;
+  text-align: left;
+  cursor: pointer;
+  font: inherit;
+}
+
+.driver-row__main {
+  flex: 1;
+  min-width: 0;
+  display: block;
+}
+
+/* A driver of the truck hovered in the Fleet list. */
+.driver-row--highlighted {
+  background: var(--c-accent-bg);
+  border-color: var(--c-accent-border);
+}
+
+/* --- Company page: map selector (below the map) --------------------- */
+.truck-selector {
+  flex-shrink: 0;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-2) var(--space-5);
+  font-size: var(--text-sm);
+}
+
+.truck-selector__office {
+  font-size: var(--text-sm);
+}
+
+.truck-selector__chips {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-2);
+}
+
+.truck-selector__label {
+  color: var(--c-text-muted);
+}
+
+.truck-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-2);
+  padding: var(--space-1) var(--space-3);
+  border: 1px solid var(--c-border-strong);
+  border-radius: var(--radius-full);
+  background: var(--c-surface);
+  color: var(--c-text-subtle);
+  font: inherit;
+  font-size: var(--text-sm);
+  cursor: pointer;
+}
+
+.truck-chip:hover {
+  border-color: var(--c-accent-border);
+}
+
+.truck-chip--on {
+  color: var(--c-text);
+  font-weight: 600;
+}
+
+.truck-chip__swatch {
+  width: 10px;
+  height: 10px;
+  border-radius: var(--radius-full);
+  opacity: 0.3;
+}
+
+.truck-chip--on .truck-chip__swatch {
+  opacity: 1;
+}
+
+.truck-selector__all {
+  color: var(--c-text-subtle);
+}
+
+.link-button {
+  padding: 0;
+  border: none;
+  background: none;
+  color: var(--c-accent);
+  font: inherit;
+  cursor: pointer;
+}
+
+.link-button:hover {
+  text-decoration: underline;
+}
+
+/* Fleet-map notes ("No active trucks." etc.) sit over the bottom of the map. */
+.fleetmap {
+  position: relative;
+}
+
+.fleetmap__notes {
+  position: absolute;
+  left: 50%;
+  bottom: var(--space-4);
+  transform: translateX(-50%);
+  z-index: 1000; /* above Leaflet's panes and controls */
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: var(--space-2);
+  pointer-events: none;
+}
+
+.fleetmap__note {
+  margin: 0;
+  padding: var(--space-1) var(--space-3);
+  border-radius: var(--radius-full);
+  background: var(--c-surface);
+  border: 1px solid var(--c-border-strong);
+  box-shadow: var(--shadow-sm);
+  color: var(--c-text-muted);
+  font-size: var(--text-sm);
+  white-space: nowrap;
+}
+
+.fleetmap__note--warn {
+  color: var(--c-danger);
+  border-color: var(--c-danger);
+}
+
+/* A truck on the fleet map, ringed in its route colour. */
+.fleetmap-truck {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 100%;
+  height: 100%;
+  border: 3px solid;
+  border-radius: 50%;
+  background: var(--c-surface, #fff);
+  font-size: 15px;
+  line-height: 1;
+  box-shadow: 0 1px 3px rgb(0 0 0 / 0.4);
+  cursor: pointer;
+}
+
+.fleetmap-truck--highlighted {
+  font-size: 19px;
+  box-shadow: 0 0 0 4px rgb(0 0 0 / 0.15), 0 2px 6px rgb(0 0 0 / 0.45);
 }
 
 /* --- Truck detail: compact fact lines ----------------------- */
@@ -929,6 +1301,53 @@
   z-index: 100;
 }
 
+.modal--wide {
+  max-width: 620px;
+}
+
+/* --- Driver popup: rules and tracking ledger ------------------------ */
+.driver-detail {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-4);
+}
+
+.driver-detail__section h4 {
+  margin: 0 0 var(--space-2);
+  font-size: var(--text-xs);
+  font-weight: 600;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--c-text-subtle);
+}
+
+.driver-detail__facts {
+  display: grid;
+  grid-template-columns: minmax(150px, max-content) 1fr;
+  gap: var(--space-2) var(--space-4);
+  margin: 0;
+  font-size: var(--text-sm);
+}
+
+.driver-detail__line {
+  display: contents;
+}
+
+.driver-detail__facts dt {
+  color: var(--c-text-muted);
+}
+
+.driver-detail__facts dd {
+  margin: 0;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+}
+
+.driver-detail__bar {
+  width: 100%;
+}
+
 .modal {
   background: var(--c-surface);
   border: 1px solid var(--c-border);
@@ -1219,6 +1638,11 @@ p[role='alert'] {
   display: block;
   height: 100%;
   background: var(--c-accent);
+}
+
+/* A tracking limit reached: the bar turns red. */
+.capbar__fill--full {
+  background: var(--c-danger);
 }
 
 .capbar__label {

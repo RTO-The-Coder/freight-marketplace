@@ -8,6 +8,7 @@ import {
 import { useCallback, useEffect, useState } from 'react'
 import { ActivationToggle } from '../components/ActivationToggle'
 import { AssignDriversModal } from '../components/AssignDriversModal'
+import { DriverDetailModal } from '../components/DriverDetailModal'
 import { RescheduleTripModal } from '../components/RescheduleTripModal'
 import { StatusPill } from '../components/StatusPill'
 import { TripMap } from '../components/TripMap'
@@ -20,16 +21,17 @@ interface TruckDetailScreenProps {
   /** Bumped when the simulation clock advances — triggers a refetch. */
   simVersion: number
   onTruckLoaded: (name: string) => void
-  onSelectDriver: (driverId: string, driverName: string) => void
 }
 
 const STOP_KIND_LABEL: Record<string, string> = { Pickup: 'Pickup', Delivery: 'Delivery', Office: 'Office' }
 
-export function TruckDetailScreen({ truckId, simVersion, onTruckLoaded, onSelectDriver }: TruckDetailScreenProps) {
+export function TruckDetailScreen({ truckId, simVersion, onTruckLoaded }: TruckDetailScreenProps) {
   const [truck, setTruck] = useState<TruckDetailDto | null>(null)
   const [position, setPosition] = useState<TruckPositionDto | null>(null)
   const [error, setError] = useState<string | null>(null)
   const [modal, setModal] = useState<'assignDrivers' | 'rescheduleTrip' | null>(null)
+  /** The driver whose details popup is open, if any. */
+  const [viewingDriver, setViewingDriver] = useState<{ driverId: string; name: string } | null>(null)
   const [busyAction, setBusyAction] = useState<'drivers' | null>(null)
 
   const [primaryDriverDetail, setPrimaryDriverDetail] = useState<DriverDetailDto | null>(null)
@@ -163,7 +165,8 @@ export function TruckDetailScreen({ truckId, simVersion, onTruckLoaded, onSelect
                   type="button"
                   className="link"
                   onClick={() =>
-                    truck.primaryDriver && onSelectDriver(truck.primaryDriver.driverId, fullName(truck.primaryDriver))
+                    truck.primaryDriver &&
+                    setViewingDriver({ driverId: truck.primaryDriver.driverId, name: fullName(truck.primaryDriver) })
                   }
                 >
                   {fullName(truck.primaryDriver)}
@@ -171,7 +174,20 @@ export function TruckDetailScreen({ truckId, simVersion, onTruckLoaded, onSelect
                 {truck.truckSize === 'Large' && (
                   <>
                     {' · Secondary: '}
-                    {truck.secondaryDriver ? fullName(truck.secondaryDriver) : 'none'}
+                    {truck.secondaryDriver ? (
+                      <button
+                        type="button"
+                        className="link"
+                        onClick={() =>
+                          truck.secondaryDriver &&
+                          setViewingDriver({ driverId: truck.secondaryDriver.driverId, name: fullName(truck.secondaryDriver) })
+                        }
+                      >
+                        {fullName(truck.secondaryDriver)}
+                      </button>
+                    ) : (
+                      'none'
+                    )}
                   </>
                 )}
               </span>
@@ -308,6 +324,13 @@ export function TruckDetailScreen({ truckId, simVersion, onTruckLoaded, onSelect
         </section>
       )}
 
+      {viewingDriver && (
+        <DriverDetailModal
+          driverId={viewingDriver.driverId}
+          driverName={viewingDriver.name}
+          onClose={() => setViewingDriver(null)}
+        />
+      )}
       {modal === 'assignDrivers' && (
         <AssignDriversModal
           truckId={truckId}

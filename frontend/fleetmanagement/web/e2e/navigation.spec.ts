@@ -1,4 +1,5 @@
 import { expect, test } from './fixtures'
+import { firstCompanyId } from './directShipments'
 
 // A UUID (v4-shaped or otherwise): 8-4-4-4-12 hex groups. If this pattern
 // shows up anywhere in visible page text, a raw identifier leaked into the UI
@@ -23,20 +24,28 @@ test.describe('Companies list', () => {
 })
 
 test.describe('Company detail navigation', () => {
-  test('opening a company shows its detail page and a correct breadcrumb', async ({ page }) => {
+  test('opening a company shows its page at its own address; Back returns to the list', async ({ page }) => {
+    const companyId = await firstCompanyId()
     await page.goto('/')
 
     const firstCompany = page.locator('button.row-card').first()
     const companyName = await firstCompany.locator('.row-card__name').innerText()
     await firstCompany.click()
 
-    // Breadcrumb shows Companies / <company name>.
-    await expect(page.locator('nav.crumbs')).toContainText('Companies')
-    await expect(page.locator('nav.crumbs')).toContainText(companyName)
+    // The company page has no breadcrumb or back link: its name is the heading and the address names it.
+    await expect(page.getByRole('heading', { level: 2, name: companyName })).toBeVisible()
+    await expect(page).toHaveURL(new RegExp(`\\?company=${companyId}$`))
+    await expect(page.locator('nav.crumbs')).toHaveCount(0)
+    await expect(page.locator('button.nav__back')).toHaveCount(0)
 
-    // The "back" affordance returns to the companies list.
-    await page.locator('button.nav__back').click()
+    // A refresh stays on the company.
+    await page.reload()
+    await expect(page.getByRole('heading', { level: 2, name: companyName })).toBeVisible()
+
+    // The browser's Back returns to the Companies list at the plain address.
+    await page.goBack()
     await expect(page.getByRole('heading', { name: 'Trucking Companies' })).toBeVisible()
+    await expect(page).toHaveURL(/\/$/)
   })
 
   test('company detail shows no raw UUIDs', async ({ page }) => {

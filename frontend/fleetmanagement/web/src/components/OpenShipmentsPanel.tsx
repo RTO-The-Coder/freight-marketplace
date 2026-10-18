@@ -21,14 +21,12 @@ import {
   truckingCompaniesApi,
   useSimClock,
 } from '@freight/fleetmanagement-core'
-import { Modal } from './Modal'
 import { ShipmentRouteMap } from './ShipmentRouteMap'
 
 interface OpenShipmentsPanelProps {
   /** This company: its shipment lists, and the fleet eligibility is checked against. */
   companyId: string
   companyName: string
-  onClose: () => void
   /** A shipment was added to one of the company's trucks - the fleet view should reload. */
   onFleetChanged: () => void
   /** Open the full assign form (choose truck and exact positions) - for direct shipments. */
@@ -75,7 +73,7 @@ const errorText = (err: unknown, fallback: string) => (err instanceof Error ? er
  * - Approved: the shipper accepted our offer -> Add to trip, at the offered truck and positions.
  * - Direct: booked straight to us by the shipper -> Check eligibility, then assign to a truck.
  */
-export function OpenShipmentsPanel({ companyId, companyName, onClose, onFleetChanged, onAssign }: OpenShipmentsPanelProps) {
+export function OpenShipmentsPanel({ companyId, companyName, onFleetChanged, onAssign }: OpenShipmentsPanelProps) {
   const { currentTime, simVersion } = useSimClock()
   const [board, setBoard] = useState<CompanyShipmentBoardResponse | null>(null)
   const [error, setError] = useState<string | null>(null)
@@ -133,159 +131,151 @@ export function OpenShipmentsPanel({ companyId, companyName, onClose, onFleetCha
   const rows = board ? rowsOf(board, list) : []
 
   return (
-    <Modal title="Shipments" onClose={onClose}>
-      <div className="stack">
-        <div className="tab-row" role="tablist" aria-label="Shipment lists">
-          {(Object.keys(LIST_LABEL) as ListName[]).map((name) => (
-            <button
-              key={name}
-              type="button"
-              role="tab"
-              aria-selected={list === name}
-              className={`btn btn--sm${list === name ? ' btn--primary' : ''}`}
-              onClick={() => {
-                setList(name)
-                setExpanded(null)
-                setEligibleFor(null)
-              }}
-            >
-              {LIST_LABEL[name]}
-              {counts ? ` (${counts[name]})` : ''}
-            </button>
-          ))}
-        </div>
+    <div className="stack shipments-panel">
+      <div className="tab-row" role="tablist" aria-label="Shipment lists">
+        {(Object.keys(LIST_LABEL) as ListName[]).map((name) => (
+          <button
+            key={name}
+            type="button"
+            role="tab"
+            aria-selected={list === name}
+            className={`btn btn--sm${list === name ? ' btn--primary' : ''}`}
+            onClick={() => {
+              setList(name)
+              setExpanded(null)
+              setEligibleFor(null)
+            }}
+          >
+            {LIST_LABEL[name]}
+            {counts ? ` (${counts[name]})` : ''}
+          </button>
+        ))}
+      </div>
 
-        <p style={{ fontSize: 'var(--text-sm)', color: 'var(--c-text-subtle)', margin: 0 }}>
-          Times are simulation-clock times.
-        </p>
+      <p style={{ fontSize: 'var(--text-sm)', color: 'var(--c-text-subtle)', margin: 0 }}>
+        Times are simulation-clock times.
+      </p>
 
-        {error && <p className="alert">{error}</p>}
-        {!board && !error && <p className="notice">Loading…</p>}
-        {board && rows.length === 0 && <p className="notice">{EMPTY_TEXT[list]}</p>}
+      {error && <p className="alert">{error}</p>}
+      {!board && !error && <p className="notice">Loading…</p>}
+      {board && rows.length === 0 && <p className="notice">{EMPTY_TEXT[list]}</p>}
 
-        <ul className="shipment-list">
-          {rows.map((row) => {
-            const s = row.shipment
-            const open = expanded === s.shipmentId
-            const cap = capacityFill(s)
-            return (
-              <li key={s.shipmentId} className="shipment-card">
-                <button type="button" className="shipment-card__head" onClick={() => toggle(s.shipmentId)}>
-                  <span className="shipment-card__type">{s.requiredTruckType}</span>
-                  <span className="shipment-card__pickup">{fmtWindow(s.pickupWindowEarliest, s.pickupWindowLatest)}</span>
-                  <span className="shipment-card__chev">{open ? '▾' : '▸'}</span>
-                </button>
+      <ul className="shipment-list">
+        {rows.map((row) => {
+          const s = row.shipment
+          const open = expanded === s.shipmentId
+          const cap = capacityFill(s)
+          return (
+            <li key={s.shipmentId} className="shipment-card">
+              <button type="button" className="shipment-card__head" onClick={() => toggle(s.shipmentId)}>
+                <span className="shipment-card__type">{s.requiredTruckType}</span>
+                <span className="shipment-card__pickup">{fmtWindow(s.pickupWindowEarliest, s.pickupWindowLatest)}</span>
+                <span className="shipment-card__chev">{open ? '▾' : '▸'}</span>
+              </button>
 
-                {open && (
-                  <div className="shipment-card__body">
-                    <ShipmentRouteMap
-                      pickup={{ latitude: s.pickupLatitude, longitude: s.pickupLongitude }}
-                      delivery={{ latitude: s.deliveryLatitude, longitude: s.deliveryLongitude }}
-                    />
+              {open && (
+                <div className="shipment-card__body">
+                  <ShipmentRouteMap
+                    pickup={{ latitude: s.pickupLatitude, longitude: s.pickupLongitude }}
+                    delivery={{ latitude: s.deliveryLatitude, longitude: s.deliveryLongitude }}
+                  />
 
-                    <dl className="shipment-facts">
-                      <dt>Load</dt>
-                      <dd>
-                        <div className="capbar">
-                          <span className="capbar__fill" style={{ width: `${cap.weightPct}%` }} />
-                        </div>
-                        <span className="capbar__label">
-                          {cap.weightLabel} · {cap.volumeLabel} <span className="muted">vs Large truck</span>
-                        </span>
-                      </dd>
-
-                      <dt>Pickup</dt>
-                      <dd>
-                        {fmtWindow(s.pickupWindowEarliest, s.pickupWindowLatest)}{' '}
-                        <span className="muted">({fmtRelative(s.pickupWindowEarliest, currentTime)})</span>
-                      </dd>
-
-                      <dt>Deliver</dt>
-                      <dd>{fmtWindow(s.deliveryWindowEarliest, s.deliveryWindowLatest)}</dd>
-
-                      {list === 'open' && (
-                        <>
-                          <dt>Offers close</dt>
-                          <dd>{fmtDateTime(s.offerDeadline)}</dd>
-                        </>
-                      )}
-                      {list === 'offered' && (
-                        <>
-                          <dt>Our offers</dt>
-                          <dd>
-                            {row.offers.map((o) => (
-                              <div key={o.offerId}>{`${offerLine(o)} · ${offerLimitLabel(o.limitAt)}`}</div>
-                            ))}
-                          </dd>
-                        </>
-                      )}
-                      {list === 'approved' && (
-                        <>
-                          <dt>Accepted offer</dt>
-                          <dd>{offerLine(row.offers[0])}</dd>
-                        </>
-                      )}
-                      {list === 'direct' && (
-                        <>
-                          <dt>Booked</dt>
-                          <dd>{`Directly to ${companyName}`}</dd>
-                        </>
-                      )}
-                    </dl>
-
-                    {(list === 'open' || list === 'direct') && (
-                      <div className="shipment-card__actions">
-                        <button
-                          type="button"
-                          className="btn btn--sm btn--primary"
-                          onClick={() => setEligibleFor(eligibleFor === s.shipmentId ? null : s.shipmentId)}
-                        >
-                          Check eligibility
-                        </button>
-                        {list === 'direct' && (
-                          <button type="button" className="btn btn--sm" onClick={onAssign}>
-                            Assign to a truck →
-                          </button>
-                        )}
+                  <dl className="shipment-facts">
+                    <dt>Load</dt>
+                    <dd>
+                      <div className="capbar">
+                        <span className="capbar__fill" style={{ width: `${cap.weightPct}%` }} />
                       </div>
+                      <span className="capbar__label">
+                        {cap.weightLabel} · {cap.volumeLabel} <span className="muted">vs Large truck</span>
+                      </span>
+                    </dd>
+
+                    <dt>Pickup</dt>
+                    <dd>
+                      {fmtWindow(s.pickupWindowEarliest, s.pickupWindowLatest)}{' '}
+                      <span className="muted">({fmtRelative(s.pickupWindowEarliest, currentTime)})</span>
+                    </dd>
+
+                    <dt>Deliver</dt>
+                    <dd>{fmtWindow(s.deliveryWindowEarliest, s.deliveryWindowLatest)}</dd>
+
+                    {list === 'open' && (
+                      <>
+                        <dt>Offers close</dt>
+                        <dd>{fmtDateTime(s.offerDeadline)}</dd>
+                      </>
+                    )}
+                    {list === 'offered' && (
+                      <>
+                        <dt>Our offers</dt>
+                        <dd>
+                          {row.offers.map((o) => (
+                            <div key={o.offerId}>{`${offerLine(o)} · ${offerLimitLabel(o.limitAt)}`}</div>
+                          ))}
+                        </dd>
+                      </>
                     )}
                     {list === 'approved' && (
-                      <div className="shipment-card__actions">
-                        <button
-                          type="button"
-                          className="btn btn--sm btn--primary"
-                          disabled={adding !== null}
-                          onClick={() => void addToTrip(s.shipmentId, row.offers[0].offerId)}
-                        >
-                          {adding === row.offers[0].offerId ? 'Adding…' : 'Add to trip'}
+                      <>
+                        <dt>Accepted offer</dt>
+                        <dd>{offerLine(row.offers[0])}</dd>
+                      </>
+                    )}
+                    {list === 'direct' && (
+                      <>
+                        <dt>Booked</dt>
+                        <dd>{`Directly to ${companyName}`}</dd>
+                      </>
+                    )}
+                  </dl>
+
+                  {(list === 'open' || list === 'direct') && (
+                    <div className="shipment-card__actions">
+                      <button
+                        type="button"
+                        className="btn btn--sm btn--primary"
+                        onClick={() => setEligibleFor(eligibleFor === s.shipmentId ? null : s.shipmentId)}
+                      >
+                        Check eligibility
+                      </button>
+                      {list === 'direct' && (
+                        <button type="button" className="btn btn--sm" onClick={onAssign}>
+                          Assign to a truck →
                         </button>
-                      </div>
-                    )}
-                    {cardError?.shipmentId === s.shipmentId && <p className="alert">{cardError.message}</p>}
+                      )}
+                    </div>
+                  )}
+                  {list === 'approved' && (
+                    <div className="shipment-card__actions">
+                      <button
+                        type="button"
+                        className="btn btn--sm btn--primary"
+                        disabled={adding !== null}
+                        onClick={() => void addToTrip(s.shipmentId, row.offers[0].offerId)}
+                      >
+                        {adding === row.offers[0].offerId ? 'Adding…' : 'Add to trip'}
+                      </button>
+                    </div>
+                  )}
+                  {cardError?.shipmentId === s.shipmentId && <p className="alert">{cardError.message}</p>}
 
-                    {eligibleFor === s.shipmentId && (list === 'open' || list === 'direct') && (
-                      <EligibleTrucks
-                        companyId={companyId}
-                        companyName={companyName}
-                        shipment={s}
-                        mode={list === 'open' ? 'offer' : 'assign'}
-                        onDone={() => afterChange(list === 'direct')}
-                      />
-                    )}
-                  </div>
-                )}
-              </li>
-            )
-          })}
-        </ul>
-      </div>
-
-      <div className="modal-actions">
-        <button type="button" className="btn" onClick={onClose}>
-          Close
-        </button>
-      </div>
-    </Modal>
+                  {eligibleFor === s.shipmentId && (list === 'open' || list === 'direct') && (
+                    <EligibleTrucks
+                      companyId={companyId}
+                      companyName={companyName}
+                      shipment={s}
+                      mode={list === 'open' ? 'offer' : 'assign'}
+                      onDone={() => afterChange(list === 'direct')}
+                    />
+                  )}
+                </div>
+              )}
+            </li>
+          )
+        })}
+      </ul>
+    </div>
   )
 }
 

@@ -1,5 +1,6 @@
 import { bookDirectCopy, firstCompanyId, openDirectAssignModal, pendingShipments, type PendingShipment } from './directShipments'
 import { expect, test } from './fixtures'
+import { fleetRow } from './companyPage'
 
 // Per-test reseeding (every test starting from a clean, known DB state) is
 // handled by the `page` fixture in ./fixtures — see its comment for why that's
@@ -73,14 +74,14 @@ function weightLabel(s: ShipmentSummary): string {
 }
 
 async function buildActivatedFlatbedTruck(page: import('@playwright/test').Page, truckName: string) {
-  await page.getByRole('button', { name: '+ Add Truck' }).click()
+  await page.getByRole('button', { name: '+ Add truck' }).click()
   await page.getByPlaceholder('e.g. FL-14').fill(truckName)
   await page.locator('.picker__item', { hasText: 'Flatbed' }).click()
   await page.locator('.picker__item', { hasText: 'Large' }).click()
   await page.getByRole('button', { name: 'Add truck', exact: true }).click()
-  await expect(page.getByText(truckName)).toBeVisible()
+  await expect(fleetRow(page, truckName)).toBeVisible()
 
-  await page.getByRole('button', { name: '+ Add Driver' }).click()
+  await page.getByRole('button', { name: '+ Add driver' }).click()
   await page.locator('label:has-text("First name") input').fill('Lena')
   await page.locator('label:has-text("Last name") input').fill('Fischer')
   await page.locator('.picker__item', { hasText: 'FullBreak' }).click()
@@ -88,18 +89,18 @@ async function buildActivatedFlatbedTruck(page: import('@playwright/test').Page,
   await page.locator('.picker__item', { hasText: 'FullWeeklyRest' }).click()
   await page.getByRole('button', { name: 'Add driver', exact: true }).click()
 
-  await page.getByText('+ Assign driver').click()
+  await fleetRow(page, truckName).getByText('+ Assign driver').click()
   await page.getByPlaceholder('Search by name…').first().fill('Lena')
   await page.locator('.driver-select__option', { hasText: 'Lena Fischer' }).click()
   await page.getByRole('button', { name: 'Save drivers' }).click()
-  await expect(page.getByText('Lena Fischer', { exact: true })).toBeVisible()
+  await expect(fleetRow(page, truckName).getByText('Lena Fischer', { exact: true })).toBeVisible()
 
-  const truckRow = page.locator('.fleet-row', { has: page.getByText(truckName) })
+  const truckRow = fleetRow(page, truckName)
   await truckRow.getByRole('button', { name: 'Activate' }).click()
   await expect(truckRow.getByRole('button', { name: 'Deactivate' })).toBeVisible()
 }
 
-/** Opens the full Assign-Shipment form from a Direct card in the "Show shipments" panel. */
+/** Opens the full Assign-Shipment form from a Direct card in the Shipments column. */
 const openAssignModal = openDirectAssignModal
 
 async function assignShipment(
@@ -174,7 +175,7 @@ test.skip('interleave 3 corridor shipments onto one Flatbed truck via the insert
   })
 
   await test.step('the truck detail route stops show the fully interleaved order', async () => {
-    await page.locator('.fleet-row', { has: page.getByText('Corridor-Truck') }).getByText('Corridor-Truck').click()
+    await fleetRow(page, 'Corridor-Truck').getByText('Corridor-Truck', { exact: true }).click()
     await expect(page.getByRole('heading', { name: 'Corridor-Truck' })).toBeVisible()
 
     // 3 pickups + 3 deliveries + 1 office-return stop = 7.

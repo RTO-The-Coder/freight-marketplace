@@ -9,11 +9,13 @@ const DAILY_REST_RULES: readonly DailyRestRule[] = ['FullRest', 'ReducedRest', '
 const WEEKLY_REST_RULES: readonly WeeklyRestRule[] = ['FullWeeklyRest', 'ReducedWeeklyRest']
 
 interface AddDriverModalProps {
+  /** The company the new driver belongs to. */
+  companyId: string
   onClose: () => void
   onAdded: () => void
 }
 
-export function AddDriverModal({ onClose, onAdded }: AddDriverModalProps) {
+export function AddDriverModal({ companyId, onClose, onAdded }: AddDriverModalProps) {
   const [firstName, setFirstName] = useState('')
   const [lastName, setLastName] = useState('')
   const [breakRule, setBreakRule] = useState<DrivingBreakRule | null>(null)
@@ -42,6 +44,7 @@ export function AddDriverModal({ onClose, onAdded }: AddDriverModalProps) {
         dailyRestRule,
         weeklyRestRule,
         extendDailyDrivingWhenEligible,
+        truckingCompanyId: companyId,
       })
       onAdded()
     } catch (err) {

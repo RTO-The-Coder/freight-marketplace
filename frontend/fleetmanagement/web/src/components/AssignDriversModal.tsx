@@ -14,8 +14,8 @@ interface AssignDriversModalProps {
 export function AssignDriversModal({ truckId, truckSize, onClose, onAssigned }: AssignDriversModalProps) {
   const isLarge = truckSize === 'Large'
 
-  // The unassigned pool plus this truck's own current drivers — so a truck that
-  // already has a primary can still be re-selected / kept while adding a secondary.
+  // The truck company's unassigned pool plus this truck's own current drivers — so a
+  // truck that already has a primary can still be re-selected / kept while adding a secondary.
   const [drivers, setDrivers] = useState<DriverSummaryDto[] | null>(null)
   const [primaryDriverId, setPrimaryDriverId] = useState<string | null>(null)
   const [secondaryDriverId, setSecondaryDriverId] = useState<string | null>(null)
@@ -24,7 +24,16 @@ export function AssignDriversModal({ truckId, truckSize, onClose, onAssigned }: 
 
   useEffect(() => {
     let cancelled = false
-    Promise.all([fleetApi.getDrivers({ unassigned: true }), fleetApi.getTruckDetail(truckId)])
+    // The truck first: only drivers of its own company may drive it.
+    fleetApi
+      .getTruckDetail(truckId)
+      .then(async (detail) => {
+        if (detail.truckingCompanyId === null) {
+          throw new Error('This truck does not belong to a company, so it cannot be given drivers.')
+        }
+        const pool = await fleetApi.getDrivers({ unassigned: true, truckingCompanyId: detail.truckingCompanyId })
+        return [pool, detail] as const
+      })
       .then(([pool, detail]) => {
         if (cancelled) return
 

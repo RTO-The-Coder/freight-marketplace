@@ -25,6 +25,21 @@ export function truckIcon(label?: string): L.DivIcon {
   })
 }
 
+/**
+ * A fleet-map truck: the truck in a ring of its route colour, larger when highlighted.
+ * `offset` shifts it by that many pixels from its position — used to fan out trucks
+ * parked at the office so they don't sit on top of each other.
+ */
+export function fleetTruckIcon(color: string, highlighted = false, offset: [number, number] = [0, 0]): L.DivIcon {
+  const size = highlighted ? 36 : 28
+  return L.divIcon({
+    className: '',
+    iconSize: [size, size],
+    iconAnchor: [size / 2 - offset[0], size / 2 - offset[1]],
+    html: `<span class="fleetmap-truck${highlighted ? ' fleetmap-truck--highlighted' : ''}" style="border-color:${color};">🚚</span>`,
+  })
+}
+
 /** Company-office marker — a square, distinct from round stop pins. */
 export function officeIcon(): L.DivIcon {
   return L.divIcon({

@@ -1,9 +1,8 @@
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import './App.css'
 import { Chevron } from './components/Chevron'
 import { SimClockBar } from './components/SimClockBar'
 import { useSimClock } from '@freight/fleetmanagement-core'
-import { DriverDetailScreen } from './screens/DriverDetailScreen'
 import { TruckDetailScreen } from './screens/TruckDetailScreen'
 import { TruckingCompaniesScreen } from './screens/TruckingCompaniesScreen'
 import { TruckingCompanyDetailScreen } from './screens/TruckingCompanyDetailScreen'
@@ -12,8 +11,12 @@ import { configureApi, type View } from '@freight/fleetmanagement-core'
 // Module top level, not inside a component or effect: must run before any screen fetches.
 configureApi(import.meta.env.VITE_API_BASE_URL as string)
 
-function initialView(): View {
-  // Dev convenience: deep-link with ?company=<id> or ?truck=<id>&company=<id>.
+/**
+ * The address bar always names the page: `/` is the Companies list, `/?company=<id>` a
+ * company, `/?company=<id>&truck=<id>` a truck. So a refresh stays on the page, the address
+ * can be bookmarked, and the browser's Back/Forward move between pages.
+ */
+function viewFromLocation(): View {
   const params = new URLSearchParams(window.location.search)
   const companyId = params.get('company')
   const truckId = params.get('truck')
@@ -23,20 +26,46 @@ function initialView(): View {
   return companyId ? { screen: 'company', companyId, companyName: null } : { screen: 'companies' }
 }
 
+/** The `company` / `truck` address parameters for a view (none for the Companies list). */
+function locationParams(view: View): { company: string | null; truck: string | null } {
+  if (view.screen === 'company') return { company: view.companyId, truck: null }
+  if (view.screen === 'truck') return { company: view.companyId, truck: view.truckId }
+  return { company: null, truck: null }
+}
+
 function App() {
-  const [view, setView] = useState<View>(initialView)
+  const [view, setView] = useState<View>(viewFromLocation)
   const { simVersion } = useSimClock()
+
+  // Keep the address in step with the page. Only company/truck are compared, so other
+  // parameters (e.g. the ?panel=assign dev shortcut) survive the first render.
+  const { company, truck } = locationParams(view)
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search)
+    if (params.get('company') === company && params.get('truck') === truck) return
+    const next = new URLSearchParams()
+    if (company) next.set('company', company)
+    if (truck) next.set('truck', truck)
+    const search = next.toString()
+    window.history.pushState(null, '', search ? `?${search}` : window.location.pathname)
+  }, [company, truck])
+
+  // Browser Back/Forward: show the page the address now names.
+  useEffect(() => {
+    const onPopState = () => setView(viewFromLocation())
+    window.addEventListener('popstate', onPopState)
+    return () => window.removeEventListener('popstate', onPopState)
+  }, [])
 
   /** Screens report a name they've loaded so the breadcrumb can show it. */
   const setCompanyName = (companyName: string) =>
     setView((v) => ('companyName' in v && v.companyName !== companyName ? { ...v, companyName } : v))
   const setTruckName = (truckName: string) =>
     setView((v) => ('truckName' in v && v.truckName !== truckName ? { ...v, truckName } : v))
-  const setDriverName = (driverName: string) =>
-    setView((v) => (v.screen === 'driver' && v.driverName !== driverName ? { ...v, driverName } : v))
 
   return (
-    <div className="app">
+    // The company page's three columns need more room than the other pages.
+    <div className={view.screen === 'company' ? 'app app--wide' : 'app'}>
       <header className="app-header">
         <span className="app-header__title">
           Freight Marketplace <span className="app-header__tag">demo</span>
@@ -44,7 +73,8 @@ function App() {
         <SimClockBar />
       </header>
 
-      {view.screen !== 'companies' && <Crumbs view={view} navigate={setView} />}
+      {/* The company page has no breadcrumb: the Companies list is the plain address (or browser Back). */}
+      {view.screen !== 'companies' && view.screen !== 'company' && <Crumbs view={view} navigate={setView} />}
 
       {view.screen === 'companies' && (
         <TruckingCompaniesScreen
@@ -74,22 +104,7 @@ function App() {
           truckId={view.truckId}
           simVersion={simVersion}
           onTruckLoaded={setTruckName}
-          onSelectDriver={(driverId, driverName) =>
-            setView({
-              screen: 'driver',
-              driverId,
-              driverName,
-              truckId: view.truckId,
-              truckName: view.truckName,
-              companyId: view.companyId,
-              companyName: view.companyName,
-            })
-          }
         />
-      )}
-
-      {view.screen === 'driver' && (
-        <DriverDetailScreen driverId={view.driverId} simVersion={simVersion} onDriverLoaded={setDriverName} />
       )}
     </div>
   )
@@ -102,16 +117,8 @@ interface Crumb {
 
 function Crumbs({ view, navigate }: { view: View; navigate: (v: View) => void }) {
   const toCompanies = () => navigate({ screen: 'companies' })
-  const toCompany = (v: Extract<View, { screen: 'company' | 'truck' | 'driver' }>) =>
+  const toCompany = (v: Extract<View, { screen: 'company' | 'truck' }>) =>
     navigate({ screen: 'company', companyId: v.companyId, companyName: v.companyName })
-  const toTruck = (v: Extract<View, { screen: 'truck' | 'driver' }>) =>
-    navigate({
-      screen: 'truck',
-      truckId: v.truckId,
-      truckName: v.truckName,
-      companyId: v.companyId,
-      companyName: v.companyName,
-    })
 
   const trail: Crumb[] = [{ label: 'Companies', go: toCompanies }]
 
@@ -120,10 +127,6 @@ function Crumbs({ view, navigate }: { view: View; navigate: (v: View) => void })
   } else if (view.screen === 'truck') {
     trail.push({ label: view.companyName ?? 'Company', go: () => toCompany(view) })
     trail.push({ label: view.truckName ?? 'Truck' })
-  } else if (view.screen === 'driver') {
-    trail.push({ label: view.companyName ?? 'Company', go: () => toCompany(view) })
-    trail.push({ label: view.truckName ?? 'Truck', go: () => toTruck(view) })
-    trail.push({ label: view.driverName ?? 'Driver' })
   }
 
   // The immediate parent (last crumb that has a `go`) is also the "back" target.
