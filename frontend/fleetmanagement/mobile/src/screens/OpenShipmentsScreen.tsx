@@ -14,6 +14,7 @@ import {
   offerLimitLabel,
   offerPositionsLabel,
   offersApi,
+  routeLabel,
   sortOpenShipments,
   useSimClock,
 } from '@freight/fleetmanagement-core'
@@ -213,6 +214,9 @@ export function OpenShipmentsScreen({ company }: { company: TruckingCompanySumma
           return (
             <Card style={styles.card} onPress={() => setExpanded(open ? null : s.shipmentId)}>
               <Card.Title title={s.requiredTruckType} subtitle={`Pickup ${fmtWindow(s.pickupWindowEarliest, s.pickupWindowLatest)}`} />
+              <Card.Content>
+                <Text variant="bodyMedium">{routeLabel(s)}</Text>
+              </Card.Content>
               {open && <ShipmentDetails shipment={s} extra={extraFor(row)} actions={actionsFor(row)} />}
             </Card>
           )

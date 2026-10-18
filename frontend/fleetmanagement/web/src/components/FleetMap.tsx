@@ -26,7 +26,8 @@ interface FleetMapProps {
   trucks: FleetMapTruck[]
   /** truckId -> live position. */
   positions: Map<string, TruckPositionDto>
-  office: { latitude: number; longitude: number } | null
+  /** The company office; placeName (e.g. "50825 Ehrenfeld, Cologne") labels its marker. */
+  office: { latitude: number; longitude: number; placeName?: string } | null
   /** The truck hovered in the Fleet list: drawn larger, the others' routes fade. */
   highlightedTruckId: string | null
   /** Shown over the map when there is nothing to draw (e.g. "No active trucks"). */
@@ -88,7 +89,7 @@ export function FleetMap({
 
         {office && (
           <Marker position={[office.latitude, office.longitude]} icon={officeIcon()}>
-            <Tooltip>Company office</Tooltip>
+            <Tooltip>{office.placeName ? `Company office · ${office.placeName}` : 'Company office'}</Tooltip>
           </Marker>
         )}
 
@@ -125,6 +126,7 @@ export function FleetMap({
             >
               <Tooltip>
                 {truck.detail.truckName} · {stop.kind}
+                {stop.placeName && ` · ${stop.placeName}`}
               </Tooltip>
             </Marker>
           )

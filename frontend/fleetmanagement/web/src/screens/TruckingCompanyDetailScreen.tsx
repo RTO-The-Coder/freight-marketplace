@@ -125,11 +125,11 @@ export function TruckingCompanyDetailScreen({
 
   const activeCount = trucks?.filter((t) => t.isActive).length ?? 0
 
-  // Office coordinates anchor the fleet map's office marker; they are not shown
-  // as text (raw lat/lng means nothing to a reader).
+  // Office coordinates anchor the fleet map's office marker; they are not shown as text
+  // (raw lat/lng means nothing to a reader) - the office's place name is, in the header and on the marker.
   const office =
     company?.officeLatitude != null && company?.officeLongitude != null
-      ? { latitude: company.officeLatitude, longitude: company.officeLongitude }
+      ? { latitude: company.officeLatitude, longitude: company.officeLongitude, placeName: company.officePlaceName }
       : null
 
   // Every active truck, in fleet order, with a fixed route colour so a chip and its route match.
@@ -188,6 +188,7 @@ export function TruckingCompanyDetailScreen({
             {trucks && (
               <span className="company-head__sub">
                 {`${trucks.length} truck${trucks.length === 1 ? '' : 's'} · ${activeCount} active`}
+                {company?.officePlaceName && ` · Office ${company.officePlaceName}`}
               </span>
             )}
           </div>

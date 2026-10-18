@@ -36,6 +36,7 @@ describe('fleetScene', () => {
     truckIndex,
     kind,
     status,
+    placeName: 'Depot — 1100 Favoriten, Vienna',
     latitude: 51,
     longitude: 17,
     sequence: 1,
@@ -57,8 +58,8 @@ describe('fleetScene', () => {
       { path: legs[1].path, color: ROUTE_COLORS[1], width: 3.5, opacity: 0.85, dashed: true },
     ])
     expect(scene.dots.map((d) => [d.label, d.color, d.dimmed])).toEqual([
-      ['FL-01 · Pickup', STOP_KIND_COLOR.Pickup, true],
-      ['FL-02 · Delivery', STOP_KIND_COLOR.Delivery, false],
+      ['FL-01 · Pickup · Depot — 1100 Favoriten, Vienna', STOP_KIND_COLOR.Pickup, true],
+      ['FL-02 · Delivery · Depot — 1100 Favoriten, Vienna', STOP_KIND_COLOR.Delivery, false],
     ])
     expect(scene.trucks).toEqual([{ id: 't1', latitude: 50, longitude: 16, label: 'FL-01' }])
     expect(scene.office).toEqual({ latitude: 49, longitude: 15 })
@@ -83,6 +84,7 @@ describe('tripScene', () => {
     id,
     kind,
     status,
+    placeName: 'Depot — 1100 Favoriten, Vienna',
     latitude: 51,
     longitude: 17,
     sequence: 1,
@@ -96,7 +98,10 @@ describe('tripScene', () => {
       ['#94a3b8', 3],
       ['#2563eb', 4],
     ])
-    expect(scene.dots.map((d) => d.label)).toEqual(['Pickup · reached', 'Delivery · pending'])
+    expect(scene.dots.map((d) => d.label)).toEqual([
+      'Pickup · Depot — 1100 Favoriten, Vienna · reached',
+      'Delivery · Depot — 1100 Favoriten, Vienna · pending',
+    ])
     expect(scene.trucks).toEqual([{ id: 't1', latitude: 50, longitude: 16, label: '40% along current leg' }])
   })
 

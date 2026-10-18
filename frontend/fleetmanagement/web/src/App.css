@@ -1469,7 +1469,12 @@
   font-size: var(--text-base);
 }
 
-.stops__coords {
+.stops__place {
+  font-size: var(--text-sm);
+  color: var(--c-text);
+}
+
+.stops__leg {
   font-family: var(--font-mono);
   font-size: var(--text-xs);
   color: var(--c-text-subtle);

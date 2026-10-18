@@ -102,6 +102,7 @@ export function CompanyDetailScreen({ companyId, onLoaded, onSelectTruck }: Prop
             <Text variant="bodyMedium">
               {`${trucks.length} truck${trucks.length === 1 ? '' : 's'} · ${activeCount} active`}
             </Text>
+            {company?.officePlaceName ? <Text variant="bodySmall">{`Office ${company.officePlaceName}`}</Text> : null}
           </View>
         </View>
         <Divider />

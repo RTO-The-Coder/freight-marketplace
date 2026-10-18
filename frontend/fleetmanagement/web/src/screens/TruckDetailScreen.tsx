@@ -258,11 +258,12 @@ export function TruckDetailScreen({ truckId, simVersion, onTruckLoaded }: TruckD
                     <span className={`stops__index stops__index--${stop.kind.toLowerCase()}`} />
                     <span className="stops__body">
                       <span className="stops__kind">{STOP_KIND_LABEL[stop.kind] ?? stop.kind}</span>
-                      <span className="stops__coords">
-                        {stop.latitude.toFixed(4)}, {stop.longitude.toFixed(4)}
-                        {stop.incomingLegDistanceKm > 0 &&
-                          ` · leg ${stop.incomingLegDistanceKm.toFixed(0)} km / ${stop.incomingLegTimeTick * 5} min`}
-                      </span>
+                      <span className="stops__place">{stop.placeName}</span>
+                      {stop.incomingLegDistanceKm > 0 && (
+                        <span className="stops__leg">
+                          {`leg ${stop.incomingLegDistanceKm.toFixed(0)} km / ${stop.incomingLegTimeTick * 5} min`}
+                        </span>
+                      )}
                       <span className="stops__when">
                         {reached && stop.reachedAt
                           ? `Reached ${fmtSimDateTime(stop.reachedAt)}`

@@ -233,7 +233,15 @@ export function TruckDetailScreen({ truckId, onLoaded, onSelectDriver }: Props) 
               : ''
           const when =
             stop.status === 'Reached' && stop.reachedAt ? `Reached ${fmtSimDateTime(stop.reachedAt)}` : 'Pending'
-          return <List.Item key={stop.stopId} title={stop.kind} description={leg + when} />
+          return (
+            <List.Item
+              key={stop.stopId}
+              title={stop.kind}
+              description={`${stop.placeName}
+${leg}${when}`}
+              descriptionNumberOfLines={3}
+            />
+          )
         })
       )}
 

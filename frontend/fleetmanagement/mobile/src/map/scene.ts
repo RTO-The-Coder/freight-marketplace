@@ -85,7 +85,7 @@ export function fleetScene(
       longitude: s.longitude,
       color: stopColor(s.kind),
       dimmed: s.status === 'Reached',
-      label: `${running[s.truckIndex]?.truckName ?? 'Truck'} · ${s.kind}`,
+      label: [running[s.truckIndex]?.truckName ?? 'Truck', s.kind, s.placeName].filter(Boolean).join(' · '),
     })),
     trucks,
     office,
@@ -118,7 +118,7 @@ export function tripScene(
       longitude: s.longitude,
       color: stopColor(s.kind),
       dimmed: s.status === 'Reached',
-      label: `${s.kind} · ${s.status === 'Reached' ? 'reached' : 'pending'}`,
+      label: [s.kind, s.placeName, s.status === 'Reached' ? 'reached' : 'pending'].filter(Boolean).join(' · '),
     })),
     trucks: position?.tripId
       ? [

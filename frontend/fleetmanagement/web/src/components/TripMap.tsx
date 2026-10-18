@@ -65,6 +65,7 @@ export function TripMap({ stops, position }: TripMapProps) {
           >
             <Tooltip>
               {stop.kind}
+              {stop.placeName && ` · ${stop.placeName}`}
               {stop.status === 'Reached' ? ' · reached' : ' · pending'}
             </Tooltip>
           </Marker>

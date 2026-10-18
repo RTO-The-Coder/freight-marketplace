@@ -1,8 +1,8 @@
 import type { ShipmentSummaryDto, TruckingCompanySummaryDto } from '@freight/api-client'
 import { useCallback, useEffect, useState } from 'react'
 import { RefreshControl, ScrollView, StyleSheet } from 'react-native'
-import { Button, Card } from 'react-native-paper'
-import { fmtWindow, offersApi, useSimClock } from '@freight/fleetmanagement-core'
+import { Button, Card, Text } from 'react-native-paper'
+import { fmtWindow, offersApi, routeLabel, useSimClock } from '@freight/fleetmanagement-core'
 import { EmptyState, ErrorState, LoadingState, errorMessage } from '../components/ScreenState'
 import { ShipmentActions } from '../components/ShipmentActions'
 import { ShipmentDetails } from '../components/ShipmentDetails'
@@ -55,6 +55,9 @@ export function ShipmentDetailScreen({ shipmentId, company }: { shipmentId: stri
           title={shipment.requiredTruckType}
           subtitle={`Pickup ${fmtWindow(shipment.pickupWindowEarliest, shipment.pickupWindowLatest)}`}
         />
+        <Card.Content>
+          <Text variant="bodyMedium">{routeLabel(shipment)}</Text>
+        </Card.Content>
         <ShipmentDetails
           shipment={shipment}
           actions={
