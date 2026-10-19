@@ -18,6 +18,8 @@ interface ShipmentCardProps {
   list: ShipmentListName
   companyId: string
   companyName: string
+  /** The truck page: Open checks only this truck, Direct opens the assign form for it. Null on the company page. */
+  truckId?: string | null
   /** Selected: the card shows its actions. */
   open: boolean
   onToggle: () => void
@@ -36,7 +38,7 @@ const errorText = (err: unknown, fallback: string) => (err instanceof Error ? er
  * delivery (place and window), then a note for the list (offers close, our offers, the accepted
  * offer, booked directly). Its summary selects it; selected, it shows the list's actions.
  */
-export function ShipmentCard({ row, list, companyId, companyName, open, onToggle, onAssign, onDone }: ShipmentCardProps) {
+export function ShipmentCard({ row, list, companyId, companyName, truckId = null, open, onToggle, onAssign, onDone }: ShipmentCardProps) {
   const [adding, setAdding] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const s = row.shipment
@@ -98,16 +100,25 @@ export function ShipmentCard({ row, list, companyId, companyName, open, onToggle
           {error && <p className="alert">{error}</p>}
 
           {/* Checked as soon as the card opens: the trucks that could take it. */}
-          {(list === 'open' || list === 'direct') && (
+          {(list === 'open' || (list === 'direct' && !truckId)) && (
             <EligibleTrucks
               companyId={companyId}
               companyName={companyName}
               shipment={s}
               mode={list === 'open' ? 'offer' : 'assign'}
+              onlyTruckId={truckId}
               onDone={() => onDone(list === 'direct')}
             />
           )}
-          {list === 'direct' && (
+          {/* The truck page: the assign form opens with this truck already chosen. */}
+          {list === 'direct' && truckId && (
+            <div className="ship-row__actions">
+              <button type="button" className="btn btn--sm btn--primary" onClick={() => onAssign(s)}>
+                Assign →
+              </button>
+            </div>
+          )}
+          {list === 'direct' && !truckId && (
             <div className="ship-row__actions">
               <button type="button" className="btn btn--sm" onClick={() => onAssign(s)}>
                 Choose positions by hand →

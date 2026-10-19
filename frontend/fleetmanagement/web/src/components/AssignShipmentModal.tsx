@@ -30,6 +30,8 @@ interface AssignShipmentModalProps {
    * the truck (of its type, big enough) and the positions. Null: pick a truck, then a shipment.
    */
   shipment?: ShipmentSummaryDto | null
+  /** Opened from a truck's page: that truck is already chosen and the only one offered. */
+  fixedTruckId?: string | null
   trucks: TruckSummaryDto[]
   truckDetails: Map<string, TruckDetailDto>
   onClose: () => void
@@ -44,12 +46,20 @@ type FeasibilityState =
   | { kind: 'error'; message: string }
 
 /** Screen 5 — pick a truck (and, without a shipment given, one that fits it), place on route. */
-export function AssignShipmentModal({ companyId, shipment: given = null, trucks, truckDetails, onClose, onAssigned }: AssignShipmentModalProps) {
+export function AssignShipmentModal({
+  companyId,
+  shipment: given = null,
+  fixedTruckId = null,
+  trucks,
+  truckDetails,
+  onClose,
+  onAssigned,
+}: AssignShipmentModalProps) {
   const { currentTime } = useSimClock()
   const [shipments, setShipments] = useState<ShipmentSummaryDto[] | null>(null)
   const [loadError, setLoadError] = useState<string | null>(null)
 
-  const [truckId, setTruckId] = useState<string | null>(null)
+  const [truckId, setTruckId] = useState<string | null>(fixedTruckId)
   const [shipmentId, setShipmentId] = useState<string | null>(given?.shipmentId ?? null)
 
   // Trip start (new trips only). datetime-local string; '' means "use sim now".
@@ -68,8 +78,11 @@ export function AssignShipmentModal({ companyId, shipment: given = null, trucks,
   // Only trucks that can legally take a shipment: active, has a driver, on a company -
   // and, for a given shipment, of its type and big enough for it.
   const eligibleTrucks = useMemo(
-    () => trucksReadyForAssignment(trucks).filter((t) => !given || shipmentsFittingTruck(t, [given]).length > 0),
-    [trucks, given],
+    () =>
+      trucksReadyForAssignment(trucks).filter(
+        (t) => (!fixedTruckId || t.truckId === fixedTruckId) && (!given || shipmentsFittingTruck(t, [given]).length > 0),
+      ),
+    [trucks, given, fixedTruckId],
   )
 
   const truck = truckId ? trucks.find((t) => t.truckId === truckId) ?? null : null
@@ -189,7 +202,7 @@ export function AssignShipmentModal({ companyId, shipment: given = null, trucks,
 
         {/* Step 1 — pick a truck */}
         <div className="assign-step">
-          <h4>Step 1 — Pick a truck</h4>
+          <h4>{fixedTruckId ? 'Step 1 — Truck' : 'Step 1 — Pick a truck'}</h4>
           {eligibleTrucks.length === 0 ? (
             <p className="notice">
               {given

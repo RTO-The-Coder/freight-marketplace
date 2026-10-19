@@ -31,6 +31,8 @@ interface ShipmentFilterBarProps {
   onSortKeyChange: (key: ShipmentSortKey) => void
   sortDirection: SortDirection
   onSortDirectionChange: (direction: SortDirection) => void
+  /** False on a page for one truck: the type is the truck's, so there is nothing to pick. */
+  showType?: boolean
 }
 
 /**
@@ -45,6 +47,7 @@ export function ShipmentFilterBar({
   onSortKeyChange,
   sortDirection,
   onSortDirectionChange,
+  showType = true,
 }: ShipmentFilterBarProps) {
   const [advancedOpen, setAdvancedOpen] = useState(false)
   const set = (change: Partial<ShipmentFilters>) => onChange({ ...filters, ...change })
@@ -62,20 +65,22 @@ export function ShipmentFilterBar({
   return (
     <div className="shipment-filters" role="group" aria-label="Shipment filters">
       <div className="shipment-filters__line">
-        <label className="shipment-filters__field">
-          Type
-          <select
-            value={filters.truckType ?? ''}
-            onChange={(e) => set({ truckType: e.target.value ? (e.target.value as TruckType) : null })}
-          >
-            <option value="">All</option>
-            {TRUCK_TYPES.map((t) => (
-              <option key={t} value={t}>
-                {t}
-              </option>
-            ))}
-          </select>
-        </label>
+        {showType && (
+          <label className="shipment-filters__field">
+            Type
+            <select
+              value={filters.truckType ?? ''}
+              onChange={(e) => set({ truckType: e.target.value ? (e.target.value as TruckType) : null })}
+            >
+              <option value="">All</option>
+              {TRUCK_TYPES.map((t) => (
+                <option key={t} value={t}>
+                  {t}
+                </option>
+              ))}
+            </select>
+          </label>
+        )}
 
         <span className="shipment-filters__field">
           <label className="shipment-filters__field">

@@ -30,12 +30,15 @@ export function EligibleTrucks({
   companyName,
   shipment,
   mode,
+  onlyTruckId = null,
   onDone,
 }: {
   companyId: string
   companyName: string
   shipment: ShipmentSummaryDto
   mode: 'offer' | 'assign'
+  /** The truck page: show only this truck's result. */
+  onlyTruckId?: string | null
   onDone: () => void
 }) {
   const [eligible, setEligible] = useState<{
@@ -53,19 +56,22 @@ export function EligibleTrucks({
     // The evaluation only returns truck ids; the fleet list supplies names and status.
     Promise.all([truckingCompaniesApi.evaluateShipment(companyId, shipment.shipmentId), fleetApi.getTrucks({ truckingCompanyId: companyId })])
       .then(([evaluation, fleet]) => {
+        const shown = (truckId: string) => onlyTruckId === null || truckId === onlyTruckId
         const feasibleIds = new Set(evaluation.trucks.filter((t) => t.isFeasible).map((t) => t.truckId))
         setEligible({
           // Least extra driving first.
           trucks: evaluation.trucks
-            .filter((t) => t.isFeasible)
+            .filter((t) => t.isFeasible && shown(t.truckId))
             .sort((a, b) => (a.addedDistanceKm ?? Infinity) - (b.addedDistanceKm ?? Infinity)),
           // Trucks of another type are left out: only the needed type is worth explaining.
-          unfit: fleet.trucks.filter((t) => t.truckType === shipment.requiredTruckType && !feasibleIds.has(t.truckId)),
+          unfit: fleet.trucks.filter(
+            (t) => t.truckType === shipment.requiredTruckType && !feasibleIds.has(t.truckId) && shown(t.truckId),
+          ),
           fleet: new Map(fleet.trucks.map((t) => [t.truckId, t])),
         })
       })
       .catch((err) => setLoadError(errorText(err, 'Evaluation failed.')))
-  }, [companyId, shipment.shipmentId, shipment.requiredTruckType])
+  }, [companyId, shipment.shipmentId, shipment.requiredTruckType, onlyTruckId])
 
   if (loadError) return <p className="alert">{loadError}</p>
   if (!eligible) return <p className="notice">Checking…</p>
@@ -122,7 +128,10 @@ export function EligibleTrucks({
 
   return (
     <div className="stack">
-      {eligible.trucks.length === 0 && <p className="notice">{`No truck at ${companyName} can currently take this shipment.`}</p>}
+      {/* For one truck, its reason below says it all. */}
+      {eligible.trucks.length === 0 && onlyTruckId === null && (
+        <p className="notice">{`No truck at ${companyName} can currently take this shipment.`}</p>
+      )}
       <ul className="eligibility-list">
         {eligible.trucks.map((t) =>
           mode === 'offer' ? (

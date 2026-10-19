@@ -1,4 +1,4 @@
-import type { CompanyShipmentBoardResponse, ShipmentSummaryDto } from '@freight/api-client'
+import type { CompanyShipmentBoardResponse, ShipmentSummaryDto, TruckType } from '@freight/api-client'
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import {
   boardRows,
@@ -10,6 +10,8 @@ import {
   SHIPMENT_LIST_LABEL,
   SHIPMENT_LISTS,
   sortShipments,
+  TRUCK_SHIPMENT_LISTS,
+  truckBoardRows,
   useSimClock,
   type ShipmentFilters,
   type ShipmentListName,
@@ -32,11 +34,19 @@ interface OpenShipmentsPanelProps {
   onFleetChanged: () => void
   /** Open the full assign form for a direct shipment (choose truck and exact positions). */
   onAssign: (shipment: ShipmentSummaryDto) => void
+  /**
+   * The truck page: only shipments of this truck's type, Offered / Approved only with this
+   * truck's offer, and every action for this truck. Left out on the company page.
+   */
+  truck?: { truckId: string; truckType: TruckType } | null
 }
 
-/** Offers close only means something while offers can be sent or are waiting. */
-const sortKeysFor = (list: ShipmentListName): ShipmentSortKey[] =>
-  list === 'open' || list === 'offered' ? ['pickup', 'delivery', 'load', 'type', 'offersClose'] : ['pickup', 'delivery', 'load', 'type']
+/** Offers close only means something while offers can be sent or are waiting; type only with mixed types. */
+const sortKeysFor = (list: ShipmentListName, oneType: boolean): ShipmentSortKey[] =>
+  (list === 'open' || list === 'offered'
+    ? (['pickup', 'delivery', 'load', 'type', 'offersClose'] as ShipmentSortKey[])
+    : (['pickup', 'delivery', 'load', 'type'] as ShipmentSortKey[])
+  ).filter((key) => !oneType || key !== 'type')
 
 const errorText = (err: unknown, fallback: string) => (err instanceof Error ? err.message : fallback)
 
@@ -53,11 +63,13 @@ export function OpenShipmentsPanel({
   reloadKey,
   onFleetChanged,
   onAssign,
+  truck = null,
 }: OpenShipmentsPanelProps) {
   const { simVersion } = useSimClock()
   const [board, setBoard] = useState<CompanyShipmentBoardResponse | null>(null)
   const [error, setError] = useState<string | null>(null)
-  const [list, setList] = useState<ShipmentListName>('open')
+  const lists = truck ? TRUCK_SHIPMENT_LISTS : SHIPMENT_LISTS
+  const [list, setList] = useState<ShipmentListName>(truck ? 'direct' : 'open')
   const [filters, setFilters] = useState<ShipmentFilters>(EMPTY_SHIPMENT_FILTERS)
   const [sortKey, setSortKey] = useState<ShipmentSortKey>('pickup')
   const [sortDirection, setSortDirection] = useState<SortDirection>('asc')
@@ -78,16 +90,28 @@ export function OpenShipmentsPanel({
     void load()
   }, [load, simVersion, reloadKey])
 
-  // Every list, filtered - the tabs count these.
-  const filtered = useMemo(() => {
+  // Every list before the filters - on the truck page cut to the truck.
+  const truckId = truck?.truckId ?? null
+  const truckType = truck?.truckType ?? null
+  const all = useMemo(() => {
     if (!board) return null
     const byList = {} as Record<ShipmentListName, ReturnType<typeof boardRows>>
-    for (const name of SHIPMENT_LISTS) byList[name] = boardRows(board, name).filter((r) => matchesShipmentFilters(r.shipment, filters))
+    for (const name of SHIPMENT_LISTS)
+      byList[name] = truckId && truckType ? truckBoardRows(board, name, { truckId, truckType }) : boardRows(board, name)
     return byList
-  }, [board, filters])
+  }, [board, truckId, truckType])
+
+  // Every list, filtered - the tabs count these.
+  const filtered = useMemo(() => {
+    if (!all) return null
+    const byList = {} as Record<ShipmentListName, ReturnType<typeof boardRows>>
+    for (const name of SHIPMENT_LISTS) byList[name] = all[name].filter((r) => matchesShipmentFilters(r.shipment, filters))
+    return byList
+  }, [all, filters])
 
   // Offers close isn't offered on Approved/Direct: those lists sort by pickup instead.
-  const effectiveSortKey = sortKeysFor(list).includes(sortKey) ? sortKey : 'pickup'
+  const sortKeys = sortKeysFor(list, truck !== null)
+  const effectiveSortKey = sortKeys.includes(sortKey) ? sortKey : 'pickup'
   const rows = useMemo(
     () => (filtered ? sortShipments(filtered[list], effectiveSortKey, sortDirection, (r) => r.shipment) : []),
     [filtered, list, effectiveSortKey, sortDirection],
@@ -104,12 +128,12 @@ export function OpenShipmentsPanel({
     if (fleetChanged) onFleetChanged()
   }
 
-  const allInList = board ? boardRows(board, list).length : 0
+  const allInList = all ? all[list].length : 0
 
   return (
     <div className="stack shipments-panel">
       <div className="tab-row" role="tablist" aria-label="Shipment lists">
-        {SHIPMENT_LISTS.map((name) => (
+        {lists.map((name) => (
           <button
             key={name}
             type="button"
@@ -133,11 +157,19 @@ export function OpenShipmentsPanel({
         filters={filters}
         onChange={setFilters}
         sortKey={effectiveSortKey}
-        sortKeys={sortKeysFor(list)}
+        sortKeys={sortKeys}
         onSortKeyChange={setSortKey}
         sortDirection={sortDirection}
         onSortDirectionChange={setSortDirection}
+        showType={truck === null}
       />
+
+      {/* ADR 0010: a company sends all its offers for a shipment at once. */}
+      {truck && list === 'open' && (
+        <p className="shipment-filters__note">
+          A shipment leaves Open once any truck of this company has offered on it, until the shipper changes its times.
+        </p>
+      )}
 
       {error && <p className="alert">{error}</p>}
       {!board && !error && <p className="notice">Loading…</p>}
@@ -156,6 +188,7 @@ export function OpenShipmentsPanel({
             list={list}
             companyId={companyId}
             companyName={companyName}
+            truckId={truckId}
             open={selectedShipmentId === row.shipment.shipmentId}
             onToggle={() => onSelectShipment(selectedShipmentId === row.shipment.shipmentId ? null : row.shipment)}
             onAssign={onAssign}
