@@ -119,6 +119,8 @@ export function OpenShipmentsPanel({
             onClick={() => {
               setList(name)
               onSelectShipment(null)
+              // Shipments booked since the last load (e.g. a new direct one) show up on a tab click.
+              void load()
             }}
           >
             {SHIPMENT_LIST_LABEL[name]}
