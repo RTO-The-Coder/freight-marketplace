@@ -196,6 +196,41 @@ export interface TruckPositionDto {
   legProgressFraction: number
 }
 
+/** One stop of the truck's open trip with its forecast arrival (GET /trucks/{id}/etas). */
+export interface TruckEtaStopDto {
+  stopId: string
+  shipmentId: string | null
+  kind: StopKind
+  status: StopStatus
+  sequence: number
+  reachedAt: string | null
+  /** Forecast arrival for a Pending stop; null for a Reached one. */
+  projectedArrival: string | null
+  /** Planned wait at the stop for its window, in 5-minute ticks, and how much of it has passed. */
+  waitTimeTick: number
+  waitTimeTickElapsed: number
+}
+
+/** The truck is parked until the next stop's window opens. */
+export interface WaitingInfoDto {
+  stopId: string
+  stopKind: StopKind
+  windowOpensAt: string
+}
+
+/**
+ * Forecast arrival at every stop of a truck's open trip. No open trip: {@link tripId} null and
+ * no stops. Only this response reports `Parked` (waiting for a stop's window).
+ */
+export interface TruckEtasDto {
+  truckId: string
+  tripId: string | null
+  projectionStart: string | null
+  status: TruckStatus | 'Parked'
+  waiting: WaitingInfoDto | null
+  stops: TruckEtaStopDto[]
+}
+
 export type IneligibilityReason =
   | 'OnBreak'
   | 'OnDailyRest'

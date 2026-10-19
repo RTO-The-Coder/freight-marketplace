@@ -12,6 +12,7 @@ import type {
   GetTruckForDriverResponse,
   GetTrucksResponse,
   TruckDetailDto,
+  TruckEtasDto,
   TruckPositionDto,
   TruckSize,
   TruckType,
@@ -81,6 +82,8 @@ export function createFleetApi(client: ApiClient) {
     getTruckDetail: (truckId: string) => client.get<TruckDetailDto>(`/trucks/${truckId}`),
 
     getTruckPosition: (truckId: string) => client.get<TruckPositionDto>(`/trucks/${truckId}/position`),
+
+    getTruckEtas: (truckId: string) => client.get<TruckEtasDto>(`/trucks/${truckId}/etas`),
 
     getDriverDetail: (driverId: string) => client.get<DriverDetailDto>(`/drivers/${driverId}`),
 

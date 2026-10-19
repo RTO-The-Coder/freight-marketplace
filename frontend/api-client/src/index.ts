@@ -34,11 +34,14 @@ export type {
   TruckDetailDriverDto,
   TruckDetailDto,
   TruckDetailStopDto,
+  TruckEtaStopDto,
+  TruckEtasDto,
   TruckPositionDto,
   TruckSize,
   TruckStatus,
   TruckSummaryDto,
   TruckType,
+  WaitingInfoDto,
   WeeklyRestRule,
 } from './fleetTypes'
 export { CAPACITY_BY_SIZE, MAX_CAPACITY } from './fleetConstants'
