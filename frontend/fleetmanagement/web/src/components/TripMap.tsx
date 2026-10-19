@@ -2,16 +2,18 @@ import { useMemo } from 'react'
 import { MapContainer, Marker, Polyline, TileLayer, Tooltip } from 'react-leaflet'
 import type { TruckDetailStopDto, TruckPositionDto } from '@freight/api-client'
 import { STOP_KIND_COLOR, collectFitPoints, tripRoute, useRouteGeometry } from '@freight/fleetmanagement-core'
-import { dotIcon, FitBounds, OSM_ATTRIBUTION, OSM_TILE_URL, truckIcon } from '@freight/web-ui'
+import { dotIcon, FitBounds, InvalidateSizeOnResize, officeIcon, OSM_ATTRIBUTION, OSM_TILE_URL, truckIcon } from '@freight/web-ui'
 
 interface TripMapProps {
   stops: TruckDetailStopDto[]
   /** Live truck position (GET /trucks/{id}/position); null while loading. */
   position: TruckPositionDto | null
+  /** Labels the office marker drawn when there is no trip (the truck's position is then the office). */
+  officePlaceName?: string | null
 }
 
 /** One truck's full trip on a map: road-following legs, stop pins, live position. */
-export function TripMap({ stops, position }: TripMapProps) {
+export function TripMap({ stops, position, officePlaceName = null }: TripMapProps) {
   // The first leg is drawn too: from where the truck actually is now (its live
   // position — the office for a not-yet-moved truck) to the first stop.
   const { ordered, origin } = useMemo(() => tripRoute(stops, position), [stops, position])
@@ -25,7 +27,19 @@ export function TripMap({ stops, position }: TripMapProps) {
   )
 
   if (ordered.length === 0) {
-    return <p className="notice">No active trip — the truck is at its company office.</p>
+    // No trip: the truck stands at its company office - show the office.
+    if (!position) return <p className="notice">No trip — the truck is at the office.</p>
+    return (
+      <div className="tripmap">
+        <MapContainer className="tripmap__canvas" center={[position.latitude, position.longitude]} zoom={11} scrollWheelZoom={false}>
+          <TileLayer attribution={OSM_ATTRIBUTION} url={OSM_TILE_URL} />
+          <Marker position={[position.latitude, position.longitude]} icon={officeIcon()}>
+            <Tooltip>{officePlaceName ? `Office · ${officePlaceName}` : 'Office'}</Tooltip>
+          </Marker>
+          <InvalidateSizeOnResize />
+        </MapContainer>
+      </div>
+    )
   }
 
   return (
@@ -81,6 +95,7 @@ export function TripMap({ stops, position }: TripMapProps) {
         )}
 
         <FitBounds points={allPoints} />
+        <InvalidateSizeOnResize />
       </MapContainer>
 
       {legs === null && <p className="tripmap__status">Loading road routes…</p>}

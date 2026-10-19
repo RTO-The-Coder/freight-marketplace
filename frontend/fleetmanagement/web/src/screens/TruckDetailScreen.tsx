@@ -1,20 +1,27 @@
 import {
   ApiError,
   CAPACITY_BY_SIZE,
-  type DriverDetailDto,
+  type ShipmentSummaryDto,
   type TruckDetailDto,
+  type TruckEtasDto,
+  type TruckingCompanySummaryDto,
   type TruckPositionDto,
+  type TruckSummaryDto,
 } from '@freight/api-client'
 import { useCallback, useEffect, useState } from 'react'
 import { ActivationToggle } from '../components/ActivationToggle'
+import { AddDriverModal } from '../components/AddDriverModal'
 import { AssignDriversModal } from '../components/AssignDriversModal'
+import { AssignShipmentModal } from '../components/AssignShipmentModal'
 import { DriverDetailModal } from '../components/DriverDetailModal'
+import { OpenShipmentsPanel } from '../components/OpenShipmentsPanel'
 import { RescheduleTripModal } from '../components/RescheduleTripModal'
 import { StatusPill } from '../components/StatusPill'
 import { TripMap } from '../components/TripMap'
-import { fullName } from '@freight/fleetmanagement-core'
-import { fmtSimDateTime } from '@freight/fleetmanagement-core'
-import { fleetApi, isTripNotMovedYet } from '@freight/fleetmanagement-core'
+import { TripStops } from '../components/TripStops'
+import { TruckDriversPanel } from '../components/TruckDriversPanel'
+import { fleetApi, isTripNotMovedYet, truckingCompaniesApi } from '@freight/fleetmanagement-core'
+import { SidePanel } from '@freight/web-ui'
 
 interface TruckDetailScreenProps {
   truckId: string
@@ -23,22 +30,32 @@ interface TruckDetailScreenProps {
   onTruckLoaded: (name: string) => void
 }
 
-const STOP_KIND_LABEL: Record<string, string> = { Pickup: 'Pickup', Delivery: 'Delivery', Office: 'Office' }
+/** How long the "Driver added" message stays up. */
+const DRIVER_ADDED_MESSAGE_MS = 5000
 
+/**
+ * One truck's page, laid out like the company page: the truck on top, then three columns -
+ * its drivers on the left, the whole trip (map and stops) in the middle, and the shipments
+ * of its type on the right.
+ */
 export function TruckDetailScreen({ truckId, simVersion, onTruckLoaded }: TruckDetailScreenProps) {
   const [truck, setTruck] = useState<TruckDetailDto | null>(null)
   const [position, setPosition] = useState<TruckPositionDto | null>(null)
+  const [etas, setEtas] = useState<TruckEtasDto | null>(null)
+  const [company, setCompany] = useState<TruckingCompanySummaryDto | null>(null)
   const [error, setError] = useState<string | null>(null)
-  const [modal, setModal] = useState<'assignDrivers' | 'rescheduleTrip' | null>(null)
+  const [modal, setModal] = useState<'addDriver' | 'assignDrivers' | 'rescheduleTrip' | 'assignShipment' | null>(null)
+  const [driverMessage, setDriverMessage] = useState<string | null>(null)
   /** The driver whose details popup is open, if any. */
   const [viewingDriver, setViewingDriver] = useState<{ driverId: string; name: string } | null>(null)
-  const [busyAction, setBusyAction] = useState<'drivers' | null>(null)
-
-  const [primaryDriverDetail, setPrimaryDriverDetail] = useState<DriverDetailDto | null>(null)
-  const [eligibilityAfterMinutes, setEligibilityAfterMinutes] = useState(60)
-  const [eligibilityResult, setEligibilityResult] = useState<string | null>(null)
-  const [eligibilityError, setEligibilityError] = useState<string | null>(null)
-  const [isCheckingEligibility, setIsCheckingEligibility] = useState(false)
+  const [removingDrivers, setRemovingDrivers] = useState(false)
+  /** The shipment expanded in the Shipments column. */
+  const [selectedShipment, setSelectedShipment] = useState<ShipmentSummaryDto | null>(null)
+  /** The direct shipment the assign form is open for, and the company's trucks the form needs. */
+  const [assigningShipment, setAssigningShipment] = useState<ShipmentSummaryDto | null>(null)
+  const [companyTrucks, setCompanyTrucks] = useState<TruckSummaryDto[] | null>(null)
+  /** Bumped after the assign form assigns - the Shipments column reloads. */
+  const [shipmentsReloadKey, setShipmentsReloadKey] = useState(0)
 
   const load = useCallback(() => {
     fleetApi
@@ -48,282 +65,178 @@ export function TruckDetailScreen({ truckId, simVersion, onTruckLoaded }: TruckD
         onTruckLoaded(t.truckName)
       })
       .catch((err) => setError(err instanceof Error ? err.message : 'Failed to load truck.'))
-    // Position is best-effort — the map still draws the route without it.
+    // Position and forecast are best-effort — the trip still shows without them.
     fleetApi
       .getTruckPosition(truckId)
       .then(setPosition)
       .catch(() => setPosition(null))
+    fleetApi
+      .getTruckEtas(truckId)
+      .then(setEtas)
+      .catch(() => setEtas(null))
   }, [truckId, onTruckLoaded])
 
   // Reload on mount and whenever the simulation clock advances (position,
-  // status and reached stops all change as trips move forward).
+  // status, reached stops and forecasts all change as trips move forward).
   useEffect(() => {
     load()
   }, [load, simVersion])
 
+  // The "Driver added" message clears itself.
   useEffect(() => {
-    const primaryDriverId = truck?.primaryDriver?.driverId
-    if (!primaryDriverId) {
-      setPrimaryDriverDetail(null)
-      return
-    }
+    if (!driverMessage) return
+    const timer = window.setTimeout(() => setDriverMessage(null), DRIVER_ADDED_MESSAGE_MS)
+    return () => window.clearTimeout(timer)
+  }, [driverMessage])
+
+  // The company: its name for the shipment notes, its office for the heading and the office marker.
+  const companyId = truck?.truckingCompanyId ?? null
+  useEffect(() => {
+    if (!companyId) return
+    truckingCompaniesApi
+      .getById(companyId)
+      .then(setCompany)
+      .catch(() => setCompany(null))
+  }, [companyId])
+
+  // The assign form picks from the company's trucks: load them when it opens.
+  const openAssign = (shipment: ShipmentSummaryDto) => {
+    if (!companyId) return
+    setAssigningShipment(shipment)
+    setCompanyTrucks(null)
+    setModal('assignShipment')
     fleetApi
-      .getDriverDetail(primaryDriverId)
-      .then(setPrimaryDriverDetail)
-      .catch(() => setPrimaryDriverDetail(null))
-  }, [truck?.primaryDriver?.driverId])
+      .getTrucks({ truckingCompanyId: companyId })
+      .then((response) => setCompanyTrucks(response.trucks))
+      .catch((err) => {
+        setModal(null)
+        setError(err instanceof Error ? err.message : 'Failed to load trucks.')
+      })
+  }
+
+  const closeAssign = () => {
+    setModal(null)
+    setAssigningShipment(null)
+  }
 
   const handleRemoveDrivers = async () => {
     setError(null)
-    setBusyAction('drivers')
+    setRemovingDrivers(true)
     try {
       await fleetApi.removeDrivers(truckId)
       load()
     } catch (err) {
       setError(err instanceof ApiError ? `Could not remove drivers: ${err.message}` : 'Could not remove drivers.')
     } finally {
-      setBusyAction(null)
-    }
-  }
-
-  const handleCheckEligibility = async () => {
-    const primaryDriverId = truck?.primaryDriver?.driverId
-    if (!primaryDriverId) return
-    setEligibilityError(null)
-    setEligibilityResult(null)
-    setIsCheckingEligibility(true)
-    try {
-      const result = await fleetApi.checkDriverEligibility(primaryDriverId, eligibilityAfterMinutes)
-      setEligibilityResult(
-        result.isEligible
-          ? `Eligible to drive after ${eligibilityAfterMinutes} minutes.`
-          : `Not eligible after ${eligibilityAfterMinutes} minutes — ${result.reason ?? 'unknown reason'}.`,
-      )
-    } catch (err) {
-      setEligibilityError(err instanceof ApiError ? err.message : 'Failed to check driver eligibility.')
-    } finally {
-      setIsCheckingEligibility(false)
+      setRemovingDrivers(false)
     }
   }
 
   if (error && !truck) return <p className="alert">{error}</p>
-  if (!truck) return <p className="notice">Loading…</p>
 
-  const capacity = CAPACITY_BY_SIZE[truck.truckSize]
-  const hasOpenTrip = truck.stops.length > 0
-  const ledger = primaryDriverDetail?.complianceState ?? null
-
-  const notMovedYet = isTripNotMovedYet(truck, position)
+  const capacity = truck ? CAPACITY_BY_SIZE[truck.truckSize] : null
+  const hasOpenTrip = (truck?.stops.length ?? 0) > 0
   const openTripId = position?.tripId ?? null
+  const canChangeStart = truck !== null && isTripNotMovedYet(truck, position) && openTripId !== null
+  const drivers = truck ? [truck.primaryDriver, truck.secondaryDriver].filter((d) => d !== null) : []
+  const officePlaceName = company?.officePlaceName ?? null
 
   return (
-    <div>
+    <div className="columns-page">
       {error && <p className="alert">{error}</p>}
 
-      {/* --- Identity ------------------------------------------------ */}
-      <div className="page-head">
-        <div className="page-head__text">
-          <h2>{truck.truckName}</h2>
-          <p
-            className="page-head__sub"
-            style={{ display: 'flex', gap: 'var(--space-2)', alignItems: 'center', flexWrap: 'wrap' }}
-          >
-            <span className="pill pill--plain">{truck.truckType}</span>
-            <span className="pill pill--plain">{truck.truckSize}</span>
-            <StatusPill status={truck.status} />
-            <span style={{ color: 'var(--c-text-subtle)' }}>
-              {capacity.weightKg.toLocaleString()} kg · {capacity.volumeCubicMeters} m³
-            </span>
-          </p>
-        </div>
-        <ActivationToggle
-          truckId={truck.truckId}
-          isActive={truck.isActive}
-          hasDriver={truck.primaryDriver !== null}
-          onChanged={load}
-          onError={setError}
-        />
-      </div>
-
-      {/* Drivers as a compact info line, not a big card. The company is shown
-          in the breadcrumb, so it is not repeated here. */}
-      <dl className="truck-facts">
-        <dt>Drivers</dt>
-        <dd style={{ flexWrap: 'wrap' }}>
-          {truck.primaryDriver === null ? (
-            <>
-              <span style={{ color: 'var(--c-status-idle)' }}>None — assign a driver to activate this truck</span>
-              <button type="button" className="btn btn--ghost btn--sm" onClick={() => setModal('assignDrivers')}>
-                Assign
-              </button>
-            </>
-          ) : (
-            <>
-              <span>
-                Primary:{' '}
-                <button
-                  type="button"
-                  className="link"
-                  onClick={() =>
-                    truck.primaryDriver &&
-                    setViewingDriver({ driverId: truck.primaryDriver.driverId, name: fullName(truck.primaryDriver) })
-                  }
-                >
-                  {fullName(truck.primaryDriver)}
-                </button>
-                {truck.truckSize === 'Large' && (
-                  <>
-                    {' · Secondary: '}
-                    {truck.secondaryDriver ? (
-                      <button
-                        type="button"
-                        className="link"
-                        onClick={() =>
-                          truck.secondaryDriver &&
-                          setViewingDriver({ driverId: truck.secondaryDriver.driverId, name: fullName(truck.secondaryDriver) })
-                        }
-                      >
-                        {fullName(truck.secondaryDriver)}
-                      </button>
-                    ) : (
-                      'none'
-                    )}
-                  </>
-                )}
+      {/* One row: the truck, its type and capacity under its name, status and the Activate switch. */}
+      <div className="page-head columns-head">
+        <div className="columns-head__title">
+          <div className="columns-head__name">
+            <h2>{truck?.truckName ?? 'Loading…'}</h2>
+            {truck && capacity && (
+              <span className="columns-head__sub">
+                {`${truck.truckType} · ${truck.truckSize} · ${capacity.weightKg.toLocaleString()} kg · ${capacity.volumeCubicMeters} m³`}
+                {officePlaceName && ` · Office ${officePlaceName}`}
               </span>
-              <button type="button" className="btn btn--ghost btn--sm" onClick={() => setModal('assignDrivers')}>
-                Reassign
-              </button>
-              <button
-                type="button"
-                className="btn btn--ghost btn--sm"
-                onClick={handleRemoveDrivers}
-                disabled={busyAction === 'drivers' || hasOpenTrip}
-                title={hasOpenTrip ? 'A truck with an open trip cannot lose its drivers' : undefined}
-              >
-                {busyAction === 'drivers' ? 'Removing…' : 'Remove'}
-              </button>
-            </>
-          )}
-        </dd>
-      </dl>
-
-      {/* --- Route map (Leaflet + OSRM road geometry) ------------------ */}
-      <section className="section">
-        <div className="section__head">
-          <h3>Route</h3>
-          {hasOpenTrip && (
-            <span className="section__meta">
-              {truck.stops.length} stop{truck.stops.length === 1 ? '' : 's'}
-              {notMovedYet && openTripId && (
-                <>
-                  {' · '}
-                  <button
-                    type="button"
-                    className="link"
-                    onClick={() => setModal('rescheduleTrip')}
-                  >
-                    Change trip start
-                  </button>
-                </>
-              )}
-            </span>
-          )}
+            )}
+          </div>
         </div>
-        {hasOpenTrip ? (
-          <TripMap stops={truck.stops} position={position} />
-        ) : (
-          <div className="map-placeholder">
-            <span className="map-placeholder__badge">Map</span>
-            <p>No active trip</p>
-            <p className="map-placeholder__hint">
-              The truck is at its company office. Assign a shipment to give it a route.
-            </p>
+        {truck && (
+          <div className="truck-head__status">
+            <StatusPill status={truck.status} />
+            <ActivationToggle
+              truckId={truck.truckId}
+              isActive={truck.isActive}
+              hasDriver={truck.primaryDriver !== null}
+              onChanged={load}
+              onError={setError}
+            />
           </div>
         )}
-      </section>
+      </div>
 
-      {/* --- Route stops -------------------------------------------- */}
-      {hasOpenTrip && (
-        <section className="section">
-          <div className="section__head">
-            <h3>Route stops</h3>
-          </div>
-          <div className="card card--pad">
-            <ol className="stops">
-              {truck.stops.map((stop) => {
-                const reached = stop.status === 'Reached'
-                return (
-                  <li key={stop.stopId} className={`stops__item${reached ? ' stops__item--reached' : ''}`}>
-                    <span className={`stops__index stops__index--${stop.kind.toLowerCase()}`} />
-                    <span className="stops__body">
-                      <span className="stops__kind">{STOP_KIND_LABEL[stop.kind] ?? stop.kind}</span>
-                      <span className="stops__place">{stop.placeName}</span>
-                      {stop.incomingLegDistanceKm > 0 && (
-                        <span className="stops__leg">
-                          {`leg ${stop.incomingLegDistanceKm.toFixed(0)} km / ${stop.incomingLegTimeTick * 5} min`}
-                        </span>
-                      )}
-                      <span className="stops__when">
-                        {reached && stop.reachedAt
-                          ? `Reached ${fmtSimDateTime(stop.reachedAt)}`
-                          : 'Pending'}
-                      </span>
-                    </span>
-                  </li>
-                )
-              })}
-            </ol>
-          </div>
-        </section>
-      )}
-
-      {/* --- Compliance -------------------------------------------- */}
-      {truck.primaryDriver && (
-        <section className="section">
-          <div className="section__head">
-            <h3>Primary driver compliance</h3>
-          </div>
-          {ledger === null ? (
-            <p className="notice">
-              {primaryDriverDetail === null
-                ? 'Loading…'
-                : 'Driver has not started driving yet — no compliance ledger.'}
-            </p>
+      <div className="columns">
+        {/* --- Middle: the whole trip, map above the stops (first when stacked) --- */}
+        <section className="columns__map" aria-label="Truck trip">
+          {truck ? (
+            <TripMap stops={truck.stops} position={position} officePlaceName={officePlaceName} />
           ) : (
-            <div className="card card--pad stack">
-              <p style={{ fontSize: 'var(--text-base)' }}>
-                <strong>{ledger.currentActivity}</strong> · continuous{' '}
-                {ledger.continuousDrivingMinutesSinceBreak} min · daily {ledger.dailyDrivingMinutesToday} min · weekly{' '}
-                {ledger.weeklyDrivingMinutesThisWeek} min
-              </p>
-              <div style={{ display: 'flex', gap: 'var(--space-3)', alignItems: 'flex-end', flexWrap: 'wrap' }}>
-                <label className="field" style={{ maxWidth: '200px' }}>
-                  <span>Check eligibility after (minutes)</span>
-                  <input
-                    type="number"
-                    min={0}
-                    value={eligibilityAfterMinutes}
-                    onChange={(e) => setEligibilityAfterMinutes(Number(e.target.value))}
-                  />
-                </label>
-                <button
-                  type="button"
-                  className="btn btn--sm"
-                  onClick={handleCheckEligibility}
-                  disabled={isCheckingEligibility}
-                >
-                  {isCheckingEligibility ? 'Checking…' : 'Check'}
-                </button>
-              </div>
-              {eligibilityError && <p className="alert">{eligibilityError}</p>}
-              {eligibilityResult && (
-                <p style={{ fontSize: 'var(--text-sm)', color: 'var(--c-text-muted)' }}>{eligibilityResult}</p>
-              )}
-            </div>
+            <div className="skeleton skeleton--map" />
           )}
+          <div className="truck-trip__stops">
+            <SidePanel title="Trip" count={hasOpenTrip ? (truck?.stops.length ?? null) : null}>
+              {truck ? (
+                <TripStops
+                  stops={truck.stops}
+                  position={position}
+                  etas={etas}
+                  onChangeStart={canChangeStart ? () => setModal('rescheduleTrip') : null}
+                />
+              ) : (
+                <ul className="row-list">
+                  {Array.from({ length: 3 }).map((_, i) => (
+                    <li key={i} className="skeleton skeleton--row" />
+                  ))}
+                </ul>
+              )}
+            </SidePanel>
+          </div>
         </section>
-      )}
+
+        {/* --- Left: Drivers ------------------------------------------------ */}
+        <div className="columns__left">
+          <SidePanel title="Drivers" count={truck ? drivers.length : null}>
+            {truck && (
+              <TruckDriversPanel
+                drivers={drivers}
+                hasOpenTrip={hasOpenTrip}
+                removing={removingDrivers}
+                message={driverMessage}
+                onAddDriver={companyId ? () => setModal('addDriver') : null}
+                onAssign={() => setModal('assignDrivers')}
+                onRemove={() => void handleRemoveDrivers()}
+                onSelectDriver={(driverId, name) => setViewingDriver({ driverId, name })}
+              />
+            )}
+          </SidePanel>
+        </div>
+
+        {/* --- Right: Shipments of this truck's type -------------------------- */}
+        <div className="columns__right">
+          <SidePanel title={truck ? `Shipments (${truck.truckType})` : 'Shipments'} count={null}>
+            {truck && companyId && (
+              <OpenShipmentsPanel
+                companyId={companyId}
+                companyName={company?.name ?? 'this company'}
+                selectedShipmentId={selectedShipment?.shipmentId ?? null}
+                onSelectShipment={setSelectedShipment}
+                reloadKey={shipmentsReloadKey}
+                onFleetChanged={load}
+                onAssign={openAssign}
+                truck={{ truckId: truck.truckId, truckType: truck.truckType }}
+              />
+            )}
+            {truck && !companyId && <p className="notice">This truck belongs to no company.</p>}
+          </SidePanel>
+        </div>
+      </div>
 
       {viewingDriver && (
         <DriverDetailModal
@@ -332,13 +245,39 @@ export function TruckDetailScreen({ truckId, simVersion, onTruckLoaded }: TruckD
           onClose={() => setViewingDriver(null)}
         />
       )}
-      {modal === 'assignDrivers' && (
+      {modal === 'addDriver' && companyId && (
+        <AddDriverModal
+          companyId={companyId}
+          onClose={() => setModal(null)}
+          onAdded={() => {
+            setModal(null)
+            setDriverMessage('Driver added — put them on this truck with Assign / Reassign.')
+          }}
+        />
+      )}
+      {modal === 'assignDrivers' && truck && (
         <AssignDriversModal
           truckId={truckId}
           truckSize={truck.truckSize}
           onClose={() => setModal(null)}
           onAssigned={() => {
             setModal(null)
+            load()
+          }}
+        />
+      )}
+      {modal === 'assignShipment' && truck && companyId && companyTrucks && (
+        <AssignShipmentModal
+          companyId={companyId}
+          shipment={assigningShipment}
+          fixedTruckId={truck.truckId}
+          trucks={companyTrucks}
+          truckDetails={new Map([[truck.truckId, truck]])}
+          onClose={closeAssign}
+          onAssigned={() => {
+            closeAssign()
+            setSelectedShipment(null)
+            setShipmentsReloadKey((k) => k + 1)
             load()
           }}
         />

@@ -64,8 +64,8 @@ function App() {
     setView((v) => ('truckName' in v && v.truckName !== truckName ? { ...v, truckName } : v))
 
   return (
-    // The company page's three columns need more room than the other pages.
-    <div className={view.screen === 'company' ? 'app app--wide' : 'app'}>
+    // The company and truck pages' three columns need more room than the Companies list.
+    <div className={view.screen === 'company' || view.screen === 'truck' ? 'app app--wide' : 'app'}>
       <header className="app-header">
         <span className="app-header__title">
           Freight Marketplace <span className="app-header__tag">demo</span>
