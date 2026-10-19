@@ -1,6 +1,7 @@
 import { bookDirectCopy, firstCompanyId, openDirectAssignModal, pendingShipments } from './directShipments'
 import { expect, test } from './fixtures'
 import { fleetRow } from './companyPage'
+import { tripStopLabels, tripStopTimes } from './truckPage'
 
 const API_BASE_URL = 'http://localhost:5017'
 
@@ -175,12 +176,12 @@ test('advancing the clock moves a truck along its route (a Pending stop becomes 
     await expect(page.getByRole('heading', { name: 'Assign a shipment' })).not.toBeVisible()
   })
 
-  await test.step('confirm the first stop is Pending, in the UI', async () => {
+  await test.step('confirm the first stop is not reached yet, in the UI', async () => {
     await fleetRow(page, 'Clock-Truck').getByText('Clock-Truck', { exact: true }).click()
     await expect(page.getByRole('heading', { name: 'Clock-Truck' })).toBeVisible()
 
-    const firstStop = page.locator('.stops__item').first()
-    await expect(firstStop.locator('.stops__when')).toHaveText('Pending')
+    await expect(tripStopLabels(page).first()).not.toHaveClass(/trip-stops__cell--reached/)
+    await expect(tripStopTimes(page).first()).toHaveText(/^(ETA|Parked until) /)
   })
 
   await test.step('advance the clock past the real, compliance-aware projected arrival', async () => {
@@ -211,8 +212,7 @@ test('advancing the clock moves a truck along its route (a Pending stop becomes 
     await fleetRow(page, 'Clock-Truck').getByText('Clock-Truck', { exact: true }).click()
     await expect(page.getByRole('heading', { name: 'Clock-Truck' })).toBeVisible()
 
-    const firstStop = page.locator('.stops__item').first()
-    await expect(firstStop).toHaveClass(/stops__item--reached/)
-    await expect(firstStop.locator('.stops__when')).toContainText('Reached')
+    await expect(tripStopLabels(page).first()).toHaveClass(/trip-stops__cell--reached/)
+    await expect(tripStopTimes(page).first()).toContainText('Reached')
   })
 })

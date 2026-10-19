@@ -1,5 +1,6 @@
 import { expect, test } from './fixtures'
 import { addDriverViaApi, companyIds, driversPanel, fleetPanel, fleetRow, shipmentsPanel } from './companyPage'
+import { tripPanel, truckShipmentsPanel } from './truckPage'
 
 /**
  * Suite 2 — building a fleet from scratch, exactly as the seeded database
@@ -114,5 +115,42 @@ test('build a fleet: add truck, add + assign driver, activate', async ({ page })
 
     await expect(fleetRow(page, 'E2E-Truck-1').getByRole('button', { name: 'Deactivate' })).toBeVisible()
     await expect(page.getByText('2 trucks · 1 active')).toBeVisible()
+  })
+
+  await test.step("the truck's page: its drivers, no trip, and the shipments of its type", async () => {
+    await fleetRow(page, 'E2E-Truck-1').getByText('E2E-Truck-1', { exact: true }).click()
+    await expect(page.getByRole('heading', { level: 2, name: 'E2E-Truck-1' })).toBeVisible()
+    await expect(page.getByText(/^Flatbed · Large · /)).toBeVisible()
+
+    const driverCard = driversPanel(page).locator('.truck-driver', { hasText: 'Erika Mustermann' })
+    await expect(driverCard).toContainText('Not driven yet')
+    await expect(tripPanel(page).getByText('No trip — the truck is at the office.')).toBeVisible()
+
+    const shipments = truckShipmentsPanel(page)
+    await expect(shipments).toHaveAccessibleName('Shipments (Flatbed)')
+    const tabs = await shipments.getByRole('tab').allTextContents()
+    expect(tabs.map((t) => t.replace(/ \(\d+\)$/, ''))).toEqual(['Direct', 'Open', 'Offered', 'Approved'])
+    // The type is the truck's: no type filter.
+    await expect(shipments.getByLabel('Type')).toHaveCount(0)
+  })
+
+  await test.step('a driver can be added from the truck page', async () => {
+    await driversPanel(page).getByRole('button', { name: '+ Add driver' }).click()
+    await expect(page.getByRole('heading', { name: 'Add Driver' })).toBeVisible()
+    await page.locator('label:has-text("First name") input').fill('Max')
+    await page.locator('label:has-text("Last name") input').fill('Muster')
+    await page.locator('.picker__item', { hasText: 'FullBreak' }).click()
+    await page.locator('.picker__item', { hasText: 'FullRest' }).click()
+    await page.locator('.picker__item', { hasText: 'FullWeeklyRest' }).click()
+    await page.getByRole('button', { name: 'Add driver', exact: true }).click()
+
+    await expect(page.getByRole('heading', { name: 'Add Driver' })).not.toBeVisible()
+    await expect(driversPanel(page).getByText(/^Driver added/)).toBeVisible()
+
+    // The new driver can now be put on this truck (a Large truck: the secondary seat).
+    await driversPanel(page).getByRole('button', { name: 'Reassign drivers' }).click()
+    const secondarySlot = page.locator('.assign-slot', { hasText: 'Secondary driver' })
+    await secondarySlot.getByPlaceholder('Search by name…').fill('Max')
+    await expect(secondarySlot.locator('.driver-select__option', { hasText: 'Max Muster' })).toBeVisible()
   })
 })

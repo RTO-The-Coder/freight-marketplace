@@ -1,6 +1,7 @@
 import { bookDirectCopy, firstCompanyId, openDirectAssignModal, pendingShipments, type PendingShipment } from './directShipments'
 import { expect, test } from './fixtures'
 import { fleetRow } from './companyPage'
+import { tripStopLabels } from './truckPage'
 
 // Per-test reseeding (every test starting from a clean, known DB state) is
 // handled by the `page` fixture in ./fixtures — see its comment for why that's
@@ -177,8 +178,8 @@ test.skip('interleave 3 corridor shipments onto one Flatbed truck via the insert
     await expect(page.getByRole('heading', { name: 'Corridor-Truck' })).toBeVisible()
 
     // 3 pickups + 3 deliveries + 1 office-return stop = 7.
-    await expect(page.locator('.stops__item')).toHaveCount(7)
-    const kinds = await page.locator('.stops__kind').allInnerTexts()
+    await expect(tripStopLabels(page)).toHaveCount(7)
+    const kinds = await tripStopLabels(page).allTextContents()
     // Pickup(c1), Pickup(c2), Delivery(c2), Pickup(c3), Delivery(c3), Delivery(c1), Office
     // — matching the real chronological window order verified in
     // findCorridorShipments's doc comment above.

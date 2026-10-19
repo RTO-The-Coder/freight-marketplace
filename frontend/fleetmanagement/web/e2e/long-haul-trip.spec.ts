@@ -1,6 +1,7 @@
 import { bookDirectCopy, firstCompanyId, openDirectAssignModal, pendingShipments, type PendingShipment } from './directShipments'
 import { expect, test } from './fixtures'
-import { fleetRow } from './companyPage'
+import { driversPanel, fleetRow } from './companyPage'
+import { tripPanel, tripStopLabels, tripStopTimes } from './truckPage'
 
 const API_BASE_URL = 'http://localhost:5017'
 
@@ -126,7 +127,7 @@ test('a 10-14 day team-driver shipment runs the sim clock to full trip completio
     const truckRow = fleetRow(page, 'LongHaul-Truck')
     await truckRow.getByText('LongHaul-Truck').click()
     await expect(page.getByRole('heading', { name: 'LongHaul-Truck' })).toBeVisible()
-    await page.getByRole('button', { name: 'Assign' }).click()
+    await driversPanel(page).getByRole('button', { name: '+ Assign driver' }).click()
 
     const primarySlot = page.locator('.assign-slot', { hasText: 'Primary driver' })
     await primarySlot.getByPlaceholder('Search by name…').fill('Jonas')
@@ -137,8 +138,9 @@ test('a 10-14 day team-driver shipment runs the sim clock to full trip completio
     await secondarySlot.locator('.driver-select__option', { hasText: 'Mikael Nyqvist' }).click()
 
     await page.getByRole('button', { name: 'Save drivers' }).click()
-    await expect(page.getByText('Jonas Weber', { exact: true })).toBeVisible()
-    await expect(page.getByText('Mikael Nyqvist', { exact: true })).toBeVisible()
+    // The truck page's Drivers column shows both drivers.
+    await expect(driversPanel(page).getByText('Jonas Weber', { exact: true })).toBeVisible()
+    await expect(driversPanel(page).getByText('Mikael Nyqvist', { exact: true })).toBeVisible()
   })
 
   await test.step('activate the truck', async () => {
@@ -161,12 +163,14 @@ test('a 10-14 day team-driver shipment runs the sim clock to full trip completio
     await expect(page.getByRole('heading', { name: 'Assign a shipment' })).not.toBeVisible()
   })
 
-  await test.step('confirm a 3-stop open trip (pickup, delivery, office), all Pending', async () => {
+  await test.step('confirm a 3-stop open trip (pickup, delivery, office), none reached yet', async () => {
     await fleetRow(page, 'LongHaul-Truck').getByText('LongHaul-Truck', { exact: true }).click()
     await expect(page.getByRole('heading', { name: 'LongHaul-Truck' })).toBeVisible()
     // Every trip ends with an implicit Office return stop after the delivery.
-    await expect(page.locator('.stops__item')).toHaveCount(3)
-    await expect(page.locator('.stops__when').first()).toHaveText('Pending')
+    await expect(tripStopLabels(page)).toHaveCount(3)
+    expect(await tripStopLabels(page).allTextContents()).toEqual(['Pickup', 'Delivery', 'Office'])
+    // Not reached yet: the first stop shows its forecast arrival (or the window it waits for).
+    await expect(tripStopTimes(page).first()).toHaveText(/^(ETA|Parked until) /)
   })
 
   await test.step('run the simulation clock forward in visible 12-hour steps until the trip completes', async () => {
@@ -208,7 +212,7 @@ test('a 10-14 day team-driver shipment runs the sim clock to full trip completio
     await fleetRow(page, 'LongHaul-Truck').getByText('LongHaul-Truck', { exact: true }).click()
     await expect(page.getByRole('heading', { name: 'LongHaul-Truck' })).toBeVisible()
 
-    await expect(page.getByText('No active trip')).toBeVisible()
-    await expect(page.locator('.stops__item')).toHaveCount(0)
+    await expect(tripPanel(page).getByText('No trip — the truck is at the office.')).toBeVisible()
+    await expect(tripStopLabels(page)).toHaveCount(0)
   })
 })
