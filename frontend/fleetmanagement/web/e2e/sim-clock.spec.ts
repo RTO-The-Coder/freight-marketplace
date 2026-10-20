@@ -178,7 +178,7 @@ test('advancing the clock moves a truck along its route (a Pending stop becomes 
 
   await test.step('confirm the first stop is not reached yet, in the UI', async () => {
     await fleetRow(page, 'Clock-Truck').getByText('Clock-Truck', { exact: true }).click()
-    await expect(page.getByRole('heading', { name: 'Clock-Truck' })).toBeVisible()
+    await expect(page.getByRole('heading', { name: 'Clock-Truck', exact: true })).toBeVisible()
 
     // The first stop (the pickup) is not reached: the shipment is still to pick up, with its
     // forecast pickup time.
@@ -212,7 +212,7 @@ test('advancing the clock moves a truck along its route (a Pending stop becomes 
   await test.step('the first stop now shows Reached', async () => {
     await page.locator('button.row-card').first().click()
     await fleetRow(page, 'Clock-Truck').getByText('Clock-Truck', { exact: true }).click()
-    await expect(page.getByRole('heading', { name: 'Clock-Truck' })).toBeVisible()
+    await expect(page.getByRole('heading', { name: 'Clock-Truck', exact: true })).toBeVisible()
 
     // The pickup is reached: its dot is filled and the shipment is now on board.
     await expect(tripStopDots(page).first()).toHaveClass(REACHED_DOT)

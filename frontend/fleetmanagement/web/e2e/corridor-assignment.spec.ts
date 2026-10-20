@@ -175,7 +175,7 @@ test.skip('interleave 3 corridor shipments onto one Flatbed truck via the insert
 
   await test.step('the truck detail route stops show the fully interleaved order', async () => {
     await fleetRow(page, 'Corridor-Truck').getByText('Corridor-Truck', { exact: true }).click()
-    await expect(page.getByRole('heading', { name: 'Corridor-Truck' })).toBeVisible()
+    await expect(page.getByRole('heading', { name: 'Corridor-Truck', exact: true })).toBeVisible()
 
     // 3 pickups + 3 deliveries + 1 office-return stop = 7 dots on the trip card's stop line.
     await expect(tripStopDots(page)).toHaveCount(7)

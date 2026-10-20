@@ -126,7 +126,7 @@ test('a 10-14 day team-driver shipment runs the sim clock to full trip completio
 
     const truckRow = fleetRow(page, 'LongHaul-Truck')
     await truckRow.getByText('LongHaul-Truck').click()
-    await expect(page.getByRole('heading', { name: 'LongHaul-Truck' })).toBeVisible()
+    await expect(page.getByRole('heading', { name: 'LongHaul-Truck', exact: true })).toBeVisible()
     await driversPanel(page).getByRole('button', { name: '+ Assign driver' }).click()
 
     const primarySlot = page.locator('.assign-slot', { hasText: 'Primary driver' })
@@ -165,7 +165,7 @@ test('a 10-14 day team-driver shipment runs the sim clock to full trip completio
 
   await test.step('confirm a 3-stop open trip (pickup, delivery, office), none reached yet', async () => {
     await fleetRow(page, 'LongHaul-Truck').getByText('LongHaul-Truck', { exact: true }).click()
-    await expect(page.getByRole('heading', { name: 'LongHaul-Truck' })).toBeVisible()
+    await expect(page.getByRole('heading', { name: 'LongHaul-Truck', exact: true })).toBeVisible()
     // Every trip ends with an implicit Office return stop after the delivery.
     await expect(tripStopDots(page)).toHaveCount(3)
     expect(await tripStopKinds(page)).toEqual(['Pickup', 'Delivery', 'Office'])
@@ -212,7 +212,7 @@ test('a 10-14 day team-driver shipment runs the sim clock to full trip completio
   await test.step('the trip has closed: truck shows no active trip', async () => {
     await page.locator('button.row-card').first().click()
     await fleetRow(page, 'LongHaul-Truck').getByText('LongHaul-Truck', { exact: true }).click()
-    await expect(page.getByRole('heading', { name: 'LongHaul-Truck' })).toBeVisible()
+    await expect(page.getByRole('heading', { name: 'LongHaul-Truck', exact: true })).toBeVisible()
 
     await expect(tripPanel(page).getByText('No trip — the truck is at the office.')).toBeVisible()
     await expect(tripStopDots(page)).toHaveCount(0)
