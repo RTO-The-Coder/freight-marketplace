@@ -1,7 +1,7 @@
 /**
  * Navigation is a small stack of views. The app opens on the Trucking
  * Companies list; every other screen is reached by drilling in from there
- * (company → truck). A driver's details open in a popup over the company or
+ * (company → truck, company → tracking). A driver's details open in a popup over the company or
  * truck page, not as a view of their own. There is no landing menu and no
  * standalone global Trucks / Drivers list anymore — those pools live on a company.
  *
@@ -20,3 +20,5 @@ export type View =
       companyId: string
       companyName: string | null
     }
+  /** The company's Tracking page; `truckId` pre-sets its Truck filter (opened from a truck page). */
+  | { screen: 'tracking'; companyId: string; companyName: string | null; truckId: string | null }

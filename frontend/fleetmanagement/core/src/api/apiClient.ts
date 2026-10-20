@@ -5,6 +5,7 @@ import {
   createRoutingApi,
   createShipmentsApi,
   createSimulationApi,
+  createTrackingApi,
   createTripsApi,
   createTruckingCompaniesApi,
 } from '@freight/api-client'
@@ -19,6 +20,7 @@ export let simulationApi: ReturnType<typeof createSimulationApi>
 export let routingApi: ReturnType<typeof createRoutingApi>
 export let tripsApi: ReturnType<typeof createTripsApi>
 export let offersApi: ReturnType<typeof createOffersApi>
+export let trackingApi: ReturnType<typeof createTrackingApi>
 
 export function configureApi(baseUrl: string): void {
   apiClient = createApiClient({ baseUrl })
@@ -29,4 +31,5 @@ export function configureApi(baseUrl: string): void {
   routingApi = createRoutingApi(apiClient)
   tripsApi = createTripsApi(apiClient)
   offersApi = createOffersApi(apiClient)
+  trackingApi = createTrackingApi(apiClient)
 }
