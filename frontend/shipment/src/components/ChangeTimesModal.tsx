@@ -1,9 +1,9 @@
 import { ApiError, type ShipmentSummaryDto } from '@freight/api-client'
-import { useState } from 'react'
+import { useId, useState } from 'react'
 import { shipmentsApi } from '../apiClient'
 import { fromDatetimeLocal, toDatetimeLocal } from '../formatDateTime'
 import { splitPlaceName } from '../placeName'
-import { Modal } from '@freight/web-ui'
+import { DateTimeFields, Modal } from '@freight/web-ui'
 
 interface ChangeTimesModalProps {
   shipment: ShipmentSummaryDto
@@ -20,6 +20,7 @@ interface ChangeTimesModalProps {
  * a direct shipment it notifies only that company.
  */
 export function ChangeTimesModal({ shipment, companyName, onClose, onSaved }: ChangeTimesModalProps) {
+  const formId = useId()
   const [pickupEarliest, setPickupEarliest] = useState(toDatetimeLocal(shipment.pickupWindowEarliest))
   const [pickupLatest, setPickupLatest] = useState(toDatetimeLocal(shipment.pickupWindowLatest))
   const [deliveryEarliest, setDeliveryEarliest] = useState(toDatetimeLocal(shipment.deliveryWindowEarliest))
@@ -46,8 +47,22 @@ export function ChangeTimesModal({ shipment, companyName, onClose, onSaved }: Ch
   }
 
   return (
-    <Modal title="Change times" onClose={onClose} wide>
-      <form className="times-form" onSubmit={handleSubmit}>
+    <Modal
+      title="Change times"
+      size="medium"
+      onClose={onClose}
+      footer={
+        <>
+          <button type="button" className="btn" onClick={onClose} disabled={isSaving}>
+            Cancel
+          </button>
+          <button type="submit" form={formId} className="btn btn--primary" disabled={isSaving}>
+            {isSaving ? 'Saving…' : 'Save new times'}
+          </button>
+        </>
+      }
+    >
+      <form id={formId} className="times-form" onSubmit={handleSubmit}>
         <TimesStop
           id="change-pickup"
           label="Pickup"
@@ -78,15 +93,6 @@ export function ChangeTimesModal({ shipment, companyName, onClose, onSaved }: Ch
             {error}
           </p>
         )}
-
-        <div className="modal-actions">
-          <button type="button" className="btn" onClick={onClose} disabled={isSaving}>
-            Cancel
-          </button>
-          <button type="submit" className="btn btn--primary" disabled={isSaving}>
-            {isSaving ? 'Saving…' : 'Save new times'}
-          </button>
-        </div>
       </form>
     </Modal>
   )
@@ -102,32 +108,24 @@ interface TimesStopProps {
   onLatestChange: (value: string) => void
 }
 
-/** One stop, laid out like the shipment card: label | name over area, its From / To window below. */
+/** One stop: label · name and area on top, its From and To below side by side, each a date and a time. */
 function TimesStop({ id, label, placeName, earliest, latest, onEarliestChange, onLatestChange }: TimesStopProps) {
   const { name, area } = splitPlaceName(placeName)
   return (
     <div className="times-stop" role="group" aria-labelledby={`${id}-label`}>
-      <span id={`${id}-label`} className="times-stop__label">{label}</span>
-      <div className="times-stop__body">
+      <div id={`${id}-label`} className="times-stop__head">
+        <span className="times-stop__label">{label}</span>
         <span className="times-stop__name">{name}</span>
         {area && <span className="times-stop__area">{area}</span>}
-        <div className="times-stop__window">
+      </div>
+      <div className="times-stop__window">
+        <div className="field">
           <label htmlFor={`${id}-earliest`}>From</label>
-          <input
-            id={`${id}-earliest`}
-            type="datetime-local"
-            value={earliest}
-            onChange={(event) => onEarliestChange(event.target.value)}
-            required
-          />
+          <DateTimeFields id={`${id}-earliest`} label={`${label} from`} value={earliest} onChange={onEarliestChange} required />
+        </div>
+        <div className="field">
           <label htmlFor={`${id}-latest`}>To</label>
-          <input
-            id={`${id}-latest`}
-            type="datetime-local"
-            value={latest}
-            onChange={(event) => onLatestChange(event.target.value)}
-            required
-          />
+          <DateTimeFields id={`${id}-latest`} label={`${label} to`} value={latest} onChange={onLatestChange} required />
         </div>
       </div>
     </div>

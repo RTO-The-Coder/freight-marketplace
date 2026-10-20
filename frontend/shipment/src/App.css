@@ -256,11 +256,18 @@ p[role='alert'] {
   gap: var(--space-4);
 }
 
-/* Like the shipment card: label | name over area, the From / To window below the name. */
+/* A stop: label · name · area on one line, its From / To below side by side. */
 .times-stop {
-  display: grid;
-  grid-template-columns: 5.5rem minmax(0, 1fr);
-  column-gap: var(--space-3);
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+}
+
+.times-stop__head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 0 var(--space-2);
 }
 
 .times-stop__label {
@@ -269,13 +276,6 @@ p[role='alert'] {
   color: var(--c-text-muted);
   text-transform: uppercase;
   letter-spacing: 0.04em;
-  padding-top: 2px;
-}
-
-.times-stop__body {
-  display: flex;
-  flex-direction: column;
-  min-width: 0;
 }
 
 .times-stop__name {
@@ -289,19 +289,8 @@ p[role='alert'] {
 
 .times-stop__window {
   display: grid;
-  grid-template-columns: max-content minmax(0, 1fr) max-content minmax(0, 1fr);
-  align-items: center;
-  gap: var(--space-2);
-  margin-top: var(--space-2);
-}
-
-.times-stop__window label {
-  font-size: var(--text-sm);
-  color: var(--c-text-muted);
-}
-
-.times-stop__window input {
-  min-width: 0;
+  grid-template-columns: repeat(auto-fit, minmax(14rem, 1fr));
+  gap: var(--space-3);
 }
 
 .times-form__notice {
