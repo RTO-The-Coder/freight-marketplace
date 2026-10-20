@@ -1,7 +1,9 @@
 import { useEffect, useRef, useState } from 'react'
 import { advanceSummary, amountToTicks, useSimClock, type AdvanceUnit } from '@freight/fleetmanagement-core'
 import { fmtSimDateTime, isoToDatetimeLocal } from '@freight/fleetmanagement-core'
+import { DateTimeFields } from './DateTimeFields'
 import { Modal } from './Modal'
+import { Toast } from './Toast'
 
 /** What the clock popup shows: work in progress, the result for a few seconds, or an error until closed. */
 type ClockNotice =
@@ -16,7 +18,7 @@ const RESULT_VISIBLE_MS = 3000
 
 /**
  * The simulation clock, with Advance and Set time - in the header of both web apps. The bar never
- * changes size: progress, the result and errors show in a popup over the page.
+ * changes size: progress, the result and errors show in a message at the top of the page.
  */
 export function SimClockBar() {
   const { currentTime, busy, lastAdvance, error, advance, setTime } = useSimClock()
@@ -29,7 +31,6 @@ export function SimClockBar() {
 
   const [notice, setNotice] = useState<ClockNotice | null>(null)
   const action = useRef<ClockAction | null>(null)
-  const closeTimer = useRef<number | undefined>(undefined)
 
   // When a request finishes (busy goes false), show its result or its error. An error with no
   // request of ours (reading the clock failed) shows too.
@@ -37,7 +38,6 @@ export function SimClockBar() {
     if (busy) return
     const finished = action.current
     action.current = null
-    window.clearTimeout(closeTimer.current)
 
     if (error) {
       setNotice({ kind: 'error', text: error })
@@ -54,12 +54,9 @@ export function SimClockBar() {
           }
         : { kind: 'done', title: `Clock set to ${fmtSimDateTime(currentTime)}`, detail: null },
     )
-    closeTimer.current = window.setTimeout(() => setNotice(null), RESULT_VISIBLE_MS)
     // Only the end of a request decides what to show; the values are read as they are then.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [busy, error])
-
-  useEffect(() => () => window.clearTimeout(closeTimer.current), [])
 
   const ticks = amountToTicks(amount, unit)
 
@@ -68,7 +65,6 @@ export function SimClockBar() {
     const n = Number(amount)
     const label = `${n} ${unit === 'hours' ? (n === 1 ? 'hour' : 'hours') : n === 1 ? 'tick' : 'ticks'}`
     action.current = { kind: 'advance', label }
-    window.clearTimeout(closeTimer.current)
     setNotice({ kind: 'progress', text: `Advancing the clock by ${label}…` })
     void advance(ticks)
   }
@@ -82,7 +78,6 @@ export function SimClockBar() {
     if (!setValue) return
     setShowSet(false)
     action.current = { kind: 'set' }
-    window.clearTimeout(closeTimer.current)
     setNotice({ kind: 'progress', text: 'Setting the clock…' })
     void setTime(setValue)
   }
@@ -126,63 +121,42 @@ export function SimClockBar() {
         </button>
       </span>
 
-      {notice && (
-        <div
-          className={`simclock-popup simclock-popup--${notice.kind}`}
-          role={notice.kind === 'error' ? 'alert' : 'status'}
-        >
-          {notice.kind === 'progress' && <span className="simclock-popup__spinner" aria-hidden="true" />}
-          {notice.kind === 'done' && (
-            <span className="simclock-popup__icon" aria-hidden="true">
-              ✓
-            </span>
-          )}
-          {notice.kind === 'error' && (
-            <span className="simclock-popup__icon" aria-hidden="true">
-              ⚠
-            </span>
-          )}
-          <span className="simclock-popup__text">
-            {notice.kind === 'done' ? (
-              <>
-                <strong>{notice.title}</strong>
-                {notice.detail && <span>{notice.detail}</span>}
-              </>
-            ) : (
-              notice.text
-            )}
-          </span>
-          {notice.kind === 'error' && (
-            <button type="button" className="simclock-popup__close" onClick={() => setNotice(null)} aria-label="Close">
-              ×
-            </button>
-          )}
-        </div>
+      {notice?.kind === 'progress' && <Toast kind="progress" placement="top" title={notice.text} />}
+      {notice?.kind === 'done' && (
+        <Toast
+          kind="done"
+          placement="top"
+          title={notice.title}
+          detail={notice.detail}
+          autoCloseMs={RESULT_VISIBLE_MS}
+          onClose={() => setNotice(null)}
+        />
+      )}
+      {notice?.kind === 'error' && (
+        <Toast kind="error" placement="top" title={notice.text} onClose={() => setNotice(null)} />
       )}
 
       {showSet && (
-        <Modal title="Set simulation time" onClose={() => setShowSet(false)}>
+        <Modal
+          title="Set simulation time"
+          onClose={() => setShowSet(false)}
+          footer={
+            <>
+              <button type="button" className="btn" onClick={() => setShowSet(false)}>
+                Cancel
+              </button>
+              <button type="button" className="btn btn--primary" onClick={applySet} disabled={busy || !setValue}>
+                Set time
+              </button>
+            </>
+          }
+        >
           <div className="stack">
-            <label className="field">
+            <div className="field">
               <span>Simulation time</span>
-              <input type="datetime-local" value={setValue} onChange={(e) => setSetValue(e.target.value)} />
-            </label>
-            <p style={{ fontSize: 'var(--text-sm)', color: 'var(--c-text-subtle)', margin: 0 }}>
-              Jumps the clock without simulating movement. Reset in-flight trips afterward.
-            </p>
-          </div>
-          <div className="modal-actions">
-            <button type="button" className="btn" onClick={() => setShowSet(false)}>
-              Cancel
-            </button>
-            <button
-              type="button"
-              className="btn btn--primary"
-              onClick={applySet}
-              disabled={busy || !setValue}
-            >
-              Set time
-            </button>
+              <DateTimeFields label="Simulation time" value={setValue} onChange={setSetValue} />
+            </div>
+            <p className="hint">Jumps the clock without simulating movement. Reset in-flight trips afterward.</p>
           </div>
         </Modal>
       )}

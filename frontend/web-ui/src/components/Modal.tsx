@@ -1,30 +1,17 @@
-import type { ReactNode } from 'react'
+import { PopupFrame, type PopupContentProps } from './popupParts'
 
-interface ModalProps {
-  title: string
-  onClose: () => void
-  children: ReactNode
-  /** A wider popup for denser content (the driver's tracking). */
+interface ModalProps extends PopupContentProps {
+  /** small ~440 px (default) or medium ~580 px. */
+  size?: 'small' | 'medium'
+  /** @deprecated Use `size="medium"`; kept until every popup has moved. */
   wide?: boolean
 }
 
-export function Modal({ title, onClose, children, wide = false }: ModalProps) {
-  return (
-    <div className="modal-overlay" onClick={onClose}>
-      <div
-        className={wide ? 'modal modal--wide' : 'modal'}
-        role="dialog"
-        aria-label={title}
-        onClick={(event) => event.stopPropagation()}
-      >
-        <div className="modal-header">
-          <h3>{title}</h3>
-          <button type="button" className="modal-close" onClick={onClose} aria-label="Close">
-            ×
-          </button>
-        </div>
-        <div className="modal-body">{children}</div>
-      </div>
-    </div>
-  )
+/**
+ * A centred box for small forms (Add truck, Change trip start, ...) over the dimmed page.
+ * Esc, a click outside or × closes it. Bigger work opens in an {@link OverlayPanel}.
+ */
+export function Modal({ size, wide = false, ...content }: ModalProps) {
+  const width = size ?? (wide ? 'medium' : 'small')
+  return <PopupFrame {...content} as="div" scrimClassName="popup-scrim" className={`popup modal modal--${width}`} />
 }
