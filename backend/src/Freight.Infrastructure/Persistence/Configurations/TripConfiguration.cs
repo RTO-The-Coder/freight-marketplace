@@ -28,6 +28,11 @@ public sealed class TripConfiguration : IEntityTypeConfiguration<Trip>
 
         builder.Property(trip => trip.TimeElapsedSoFar).IsRequired();
 
+        builder.Property(trip => trip.RestTimeSoFar).IsRequired().HasDefaultValue(0);
+
+        // The Tracking history reads a company's trips by completion time.
+        builder.HasIndex(trip => new { trip.TruckingCompanyId, trip.CompletedAt });
+
         // IsOpen, NextStop, IsAtOffice, CurrentLoad, TotalPlannedDistanceKm,
         // TotalPlannedTimeTick are all derived from Stops/CompletedAt, never stored.
         builder.Ignore(trip => trip.IsOpen);
@@ -99,6 +104,27 @@ public sealed class TripConfiguration : IEntityTypeConfiguration<Trip>
 
         builder.Metadata
             .FindNavigation(nameof(Trip.Stops))!
+            .SetPropertyAccessMode(PropertyAccessMode.Field);
+
+        // The trip's drivers, each with their name at the time - owned like Stops, one
+        // row per driver per trip.
+        builder.OwnsMany(trip => trip.Drivers, driver =>
+        {
+            driver.ToTable("TripDrivers");
+
+            driver.WithOwner().HasForeignKey("TripId");
+
+            driver.HasKey("TripId", nameof(TripDriver.DriverId));
+
+            driver.Property(d => d.DriverId).ValueGeneratedNever();
+
+            driver.Property(d => d.FirstName).IsRequired();
+
+            driver.Property(d => d.LastName).IsRequired();
+        });
+
+        builder.Metadata
+            .FindNavigation(nameof(Trip.Drivers))!
             .SetPropertyAccessMode(PropertyAccessMode.Field);
     }
 }

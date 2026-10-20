@@ -196,6 +196,11 @@ namespace Freight.Infrastructure.Persistence.Migrations
                     b.Property<double>("DistanceTravelledSoFar")
                         .HasColumnType("double precision");
 
+                    b.Property<int>("RestTimeSoFar")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("integer")
+                        .HasDefaultValue(0);
+
                     b.Property<DateTime>("StartedAt")
                         .HasColumnType("timestamp with time zone");
 
@@ -211,6 +216,8 @@ namespace Freight.Infrastructure.Persistence.Migrations
                     b.HasKey("Id");
 
                     b.HasIndex("TruckId");
+
+                    b.HasIndex("TruckingCompanyId", "CompletedAt");
 
                     b.ToTable("Trips", (string)null);
                 });
@@ -729,6 +736,32 @@ namespace Freight.Infrastructure.Persistence.Migrations
 
                             b1.Navigation("ShipmentLoad");
                         });
+
+                    b.OwnsMany("Freight.Domain.Fleet.TripDriver", "Drivers", b1 =>
+                        {
+                            b1.Property<Guid>("TripId")
+                                .HasColumnType("uuid");
+
+                            b1.Property<Guid>("DriverId")
+                                .HasColumnType("uuid");
+
+                            b1.Property<string>("FirstName")
+                                .IsRequired()
+                                .HasColumnType("text");
+
+                            b1.Property<string>("LastName")
+                                .IsRequired()
+                                .HasColumnType("text");
+
+                            b1.HasKey("TripId", "DriverId");
+
+                            b1.ToTable("TripDrivers", (string)null);
+
+                            b1.WithOwner()
+                                .HasForeignKey("TripId");
+                        });
+
+                    b.Navigation("Drivers");
 
                     b.Navigation("Stops");
                 });

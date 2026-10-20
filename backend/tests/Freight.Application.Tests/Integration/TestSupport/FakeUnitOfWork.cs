@@ -93,6 +93,17 @@ internal sealed class FakeTripRepository : FakeRepository<Trip>, ITripRepository
 
     public Task<IReadOnlyList<Trip>> GetOpenTripsAsync(CancellationToken cancellationToken = default) =>
         Task.FromResult<IReadOnlyList<Trip>>([.. Items.Values.Where(t => t.IsOpen)]);
+
+    public Task<IReadOnlyList<Trip>> GetOpenTripsByCompanyAsync(Guid truckingCompanyId, CancellationToken cancellationToken = default) =>
+        Task.FromResult<IReadOnlyList<Trip>>([.. Items.Values.Where(t => t.TruckingCompanyId == truckingCompanyId && t.IsOpen)]);
+
+    public Task<IReadOnlyList<Trip>> GetCompletedByCompanyAsync(
+        Guid truckingCompanyId, DateTime from, DateTime to, Guid? truckId, CancellationToken cancellationToken = default) =>
+        Task.FromResult<IReadOnlyList<Trip>>([.. Items.Values
+            .Where(t => t.TruckingCompanyId == truckingCompanyId
+                && t.CompletedAt >= from && t.CompletedAt < to
+                && (truckId == null || t.TruckId == truckId))
+            .OrderByDescending(t => t.CompletedAt)]);
 }
 
 internal sealed class FakeDriverRepository : FakeRepository<Driver>, IDriverRepository

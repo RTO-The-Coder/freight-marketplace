@@ -17,4 +17,14 @@ public interface ITripRepository : IRepository<Trip>
     /// simulated time jumps.
     /// </summary>
     Task<IReadOnlyList<Trip>> GetOpenTripsAsync(CancellationToken cancellationToken = default);
+
+    /// <summary>Every open trip of one trucking company - the running trips its Tracking page shows.</summary>
+    Task<IReadOnlyList<Trip>> GetOpenTripsByCompanyAsync(Guid truckingCompanyId, CancellationToken cancellationToken = default);
+
+    /// <summary>
+    /// The company's trips that completed in [<paramref name="from"/>, <paramref name="to"/>),
+    /// optionally for one truck only, newest completion first.
+    /// </summary>
+    Task<IReadOnlyList<Trip>> GetCompletedByCompanyAsync(
+        Guid truckingCompanyId, DateTime from, DateTime to, Guid? truckId, CancellationToken cancellationToken = default);
 }
