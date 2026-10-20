@@ -21,4 +21,18 @@ public sealed class OsrmOptions
     /// than ~1 request/second; a small margin over 1s keeps well inside that.
     /// </summary>
     public int MinRequestIntervalMilliseconds { get; set; } = 1100;
+
+    /// <summary>
+    /// How many more times <see cref="OsrmRoutingService"/> tries a leg after a temporary
+    /// server error (502/503/504, timeout, connection error). The public demo server is
+    /// intermittently overloaded; a second or third attempt usually succeeds.
+    /// </summary>
+    public int RetryCount { get; set; } = 2;
+
+    /// <summary>
+    /// Wait before the first retry; it doubles for each further retry (1 s, then 2 s).
+    /// Never shorter than <see cref="MinRequestIntervalMilliseconds"/>, so retries keep the
+    /// throttle's spacing.
+    /// </summary>
+    public int RetryDelayMilliseconds { get; set; } = 1000;
 }

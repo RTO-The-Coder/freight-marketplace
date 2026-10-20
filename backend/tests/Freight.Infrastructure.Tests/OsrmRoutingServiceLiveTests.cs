@@ -1,5 +1,6 @@
 using Freight.Domain.ValueObjects;
 using Freight.Infrastructure.Routing;
+using Microsoft.Extensions.Options;
 
 namespace Freight.Infrastructure.Tests;
 
@@ -19,7 +20,7 @@ public sealed class OsrmRoutingServiceLiveTests
             BaseAddress = new Uri("https://router.project-osrm.org/"),
             Timeout = TimeSpan.FromSeconds(15),
         };
-        return new OsrmRoutingService(httpClient);
+        return new OsrmRoutingService(httpClient, Options.Create(new OsrmOptions()));
     }
 
     [Fact]

@@ -32,7 +32,7 @@ public static class FixtureBuilder
             new ProductInfoHeaderValue("freight-marketplace-seeder", "1.0"));
 
         var osrmOptions = Options.Create(new OsrmOptions { MinRequestIntervalMilliseconds = 1100 });
-        var routingService = new ThrottlingRoutingService(new OsrmRoutingService(httpClient), osrmOptions);
+        var routingService = new ThrottlingRoutingService(new OsrmRoutingService(httpClient, osrmOptions), osrmOptions);
 
         // Pairs already in the fixture with unchanged coordinates keep their measured
         // distance/time, so adding pairs only calls OSRM for the new ones.

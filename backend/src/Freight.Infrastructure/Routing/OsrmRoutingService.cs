@@ -1,9 +1,11 @@
 using System.Globalization;
+using System.Net;
 using System.Net.Http.Json;
 using System.Text.Json;
 using System.Text.Json.Serialization;
 using Freight.Domain.Routing.Abstractions;
 using Freight.Domain.ValueObjects;
+using Microsoft.Extensions.Options;
 
 namespace Freight.Infrastructure.Routing;
 
@@ -18,17 +20,26 @@ namespace Freight.Infrastructure.Routing;
 /// non-success status, or an OSRM response that isn't a usable route becomes
 /// <see cref="RoutingUnavailableException"/> - Phase 1 has no fallback distance source
 /// (ADR 0011).
+///
+/// A temporary server error (502/503/504, a timeout or a connection error) is retried
+/// <see cref="OsrmOptions.RetryCount"/> more times before giving up, waiting
+/// <see cref="OsrmOptions.RetryDelayMilliseconds"/> and doubling it each time. Retries run
+/// inside the <see cref="ThrottlingRoutingService"/> gate, so each wait is at least
+/// <see cref="OsrmOptions.MinRequestIntervalMilliseconds"/> to keep the throttle's spacing.
 /// </summary>
 public sealed class OsrmRoutingService : IRoutingService
 {
     private const int SecondsPerTick = 300;
 
     private readonly HttpClient _httpClient;
+    private readonly OsrmOptions _options;
 
-    public OsrmRoutingService(HttpClient httpClient)
+    public OsrmRoutingService(HttpClient httpClient, IOptions<OsrmOptions> options)
     {
         ArgumentNullException.ThrowIfNull(httpClient);
+        ArgumentNullException.ThrowIfNull(options);
         _httpClient = httpClient;
+        _options = options.Value;
 
         // The public OSRM demo server rejects requests with no User-Agent (403), which is
         // what HttpClient sends by default. Set one unless the caller already configured it.
@@ -78,22 +89,25 @@ public sealed class OsrmRoutingService : IRoutingService
         var legLabel = $"({Coord(from.Latitude)},{Coord(from.Longitude)}) -> ({Coord(to.Latitude)},{Coord(to.Longitude)})";
 
         OsrmRouteResponse? payload;
-        try
+        for (var attempt = 0; ; attempt++)
         {
-            using var response = await _httpClient.GetAsync(path, cancellationToken);
-
-            if (!response.IsSuccessStatusCode)
+            try
             {
-                throw new RoutingUnavailableException(
-                    $"OSRM returned {(int)response.StatusCode} {response.ReasonPhrase} for leg {legLabel}.");
+                payload = await SendOnceAsync(path, legLabel, cancellationToken);
+                break;
             }
-
-            payload = await response.Content.ReadFromJsonAsync<OsrmRouteResponse>(cancellationToken);
-        }
-        catch (Exception ex) when (ex is HttpRequestException or TaskCanceledException or JsonException)
-        {
-            throw new RoutingUnavailableException(
-                $"OSRM was unreachable for leg {legLabel}: {ex.Message}", ex);
+            catch (TransientOsrmException) when (attempt < _options.RetryCount)
+            {
+                await Task.Delay(RetryDelay(attempt), cancellationToken);
+            }
+            catch (TransientOsrmException ex)
+            {
+                var attempts = attempt + 1;
+                var message = $"{ex.Message} ({attempts} attempt{(attempts == 1 ? "" : "s")})";
+                throw ex.InnerException is { } inner
+                    ? new RoutingUnavailableException(message, inner)
+                    : new RoutingUnavailableException(message);
+            }
         }
 
         if (payload is null || !string.Equals(payload.Code, "Ok", StringComparison.Ordinal)
@@ -105,6 +119,51 @@ public sealed class OsrmRoutingService : IRoutingService
 
         return payload.Routes[0];
     }
+
+    /// <summary>
+    /// One HTTP attempt. Temporary failures throw <see cref="TransientOsrmException"/> (the
+    /// caller retries them); anything else throws <see cref="RoutingUnavailableException"/>.
+    /// </summary>
+    private async Task<OsrmRouteResponse?> SendOnceAsync(string path, string legLabel, CancellationToken cancellationToken)
+    {
+        try
+        {
+            using var response = await _httpClient.GetAsync(path, cancellationToken);
+
+            if (!response.IsSuccessStatusCode)
+            {
+                var message = $"OSRM returned {(int)response.StatusCode} {response.ReasonPhrase} for leg {legLabel}.";
+                if (response.StatusCode is HttpStatusCode.BadGateway or HttpStatusCode.ServiceUnavailable
+                    or HttpStatusCode.GatewayTimeout)
+                {
+                    throw new TransientOsrmException(message);
+                }
+
+                throw new RoutingUnavailableException(message);
+            }
+
+            return await response.Content.ReadFromJsonAsync<OsrmRouteResponse>(cancellationToken);
+        }
+        catch (Exception ex) when (ex is HttpRequestException
+            || (ex is TaskCanceledException && !cancellationToken.IsCancellationRequested))
+        {
+            // Connection error, or HttpClient's own timeout (not the caller cancelling).
+            throw new TransientOsrmException($"OSRM was unreachable for leg {legLabel}: {ex.Message}", ex);
+        }
+        catch (Exception ex) when (ex is TaskCanceledException or JsonException)
+        {
+            throw new RoutingUnavailableException(
+                $"OSRM was unreachable for leg {legLabel}: {ex.Message}", ex);
+        }
+    }
+
+    private TimeSpan RetryDelay(int attempt)
+    {
+        var backoff = _options.RetryDelayMilliseconds * Math.Pow(2, attempt);
+        return TimeSpan.FromMilliseconds(Math.Max(backoff, _options.MinRequestIntervalMilliseconds));
+    }
+
+    private sealed class TransientOsrmException(string message, Exception? inner = null) : Exception(message, inner);
 
     private sealed record OsrmRouteResponse(
         [property: JsonPropertyName("code")] string? Code,
