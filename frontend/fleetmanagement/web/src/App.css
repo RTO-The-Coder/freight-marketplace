@@ -184,30 +184,10 @@
   color: var(--c-text-muted);
 }
 
-/* --- Truck page: the trip (map above, stops below, half each) ----------- */
+/* --- Truck page: the trip (map above, the trip card below, half each) ---- */
 .truck-trip__stops {
   flex: 1 1 0;
   min-height: 0;
-}
-
-.trip-stops__grid {
-  border-top: none;
-  padding-top: 0;
-}
-
-.trip-stops__cell--reached {
-  opacity: 0.55;
-}
-
-/* Where the truck is: a full-width line before the stop it is driving to. */
-.trip-stops__on-the-way {
-  grid-column: 1 / -1;
-  padding: var(--space-1) var(--space-2);
-  border-radius: var(--radius-sm);
-  background: var(--c-accent-bg);
-  color: var(--c-accent);
-  font-size: var(--text-sm);
-  font-weight: 600;
 }
 
 .trip-stops__totals {
@@ -1192,4 +1172,606 @@ p[role='alert'] {
 .assign-index__preview--new {
   color: var(--c-accent);
   font-weight: 600;
+}
+
+/* --- Tracking page ------------------------------------------------------ */
+/* Every running trip as an always-open card in a grid (2-3 per row on a wide screen),
+   under a summary strip. The page body scrolls; the heading stays. */
+.page-head__link {
+  flex-shrink: 0;
+  align-self: center;
+}
+
+.tracking-page__body {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-4);
+  padding-bottom: var(--space-5);
+}
+
+.tracking-toolbar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-2) var(--space-4);
+}
+
+.tracking-toolbar__title {
+  font-size: var(--text-md);
+}
+
+.tracking-toolbar__filters {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-2);
+}
+
+.tracking-toolbar__field select {
+  font-size: var(--text-sm);
+  padding: 5px var(--space-2);
+  border-radius: var(--radius-sm);
+  border: 1px solid var(--c-border-strong);
+  background: var(--c-surface);
+  color: var(--c-text);
+}
+
+/* Summary strip */
+.tracking-summary {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(170px, 1fr));
+  background: var(--c-surface);
+  border: 1px solid var(--c-border);
+  border-radius: var(--radius-md);
+  box-shadow: var(--shadow-sm);
+}
+
+.tracking-summary > div {
+  padding: var(--space-3) var(--space-4);
+  border-left: 1px solid var(--c-border);
+  min-width: 0;
+}
+
+.tracking-summary > div:first-child {
+  border-left: 0;
+}
+
+.tracking-summary__label {
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--c-text-muted);
+}
+
+.tracking-summary__value {
+  font-size: var(--text-lg);
+  font-weight: 700;
+  margin-top: 2px;
+  font-variant-numeric: tabular-nums;
+}
+
+.tracking-summary__value--offer {
+  color: var(--c-accent);
+}
+
+.tracking-summary__sub {
+  font-size: var(--text-xs);
+  color: var(--c-text-muted);
+  font-variant-numeric: tabular-nums;
+}
+
+.tracking-dot {
+  display: inline-block;
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  margin-right: 4px;
+  vertical-align: 1px;
+}
+
+.tracking-dot--delivered {
+  background: var(--c-status-office);
+}
+
+.tracking-dot--board {
+  background: var(--c-status-running);
+}
+
+.tracking-dot--pick {
+  background: var(--c-status-idle);
+}
+
+/* Cards */
+.tracking-cards {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(min(100%, 440px), 1fr));
+  gap: var(--space-3);
+  align-items: start;
+}
+
+.tracking-card {
+  background: var(--c-surface);
+  border: 1px solid var(--c-border);
+  border-radius: var(--radius-md);
+  box-shadow: var(--shadow-sm);
+  min-width: 0;
+  overflow: hidden;
+}
+
+.tracking-card--selected {
+  border-color: var(--c-accent);
+  box-shadow: 0 0 0 2px var(--c-accent-border);
+}
+
+.tracking-card__head {
+  display: grid;
+  gap: 6px;
+  padding: 10px 14px 8px;
+  border-top: 4px solid var(--trip-color);
+  cursor: pointer;
+}
+
+.tracking-card__title {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: space-between;
+  align-items: baseline;
+  gap: var(--space-2);
+}
+
+.tracking-card__title h3 {
+  font-size: var(--text-md);
+}
+
+.tracking-card__truck {
+  border: 0;
+  background: none;
+  padding: 0;
+  font: inherit;
+  font-weight: 600;
+  color: var(--c-text);
+  cursor: pointer;
+}
+
+.tracking-card__truck:hover {
+  text-decoration: underline;
+}
+
+.tracking-card__type {
+  margin-left: var(--space-1);
+  font-size: var(--text-xs);
+  font-weight: 400;
+  color: var(--c-text-muted);
+}
+
+.tracking-card__drivers {
+  font-size: var(--text-sm);
+  color: var(--c-text-muted);
+}
+
+.tracking-card__facts {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px 14px;
+  font-size: var(--text-xs);
+  color: var(--c-text-muted);
+  font-variant-numeric: tabular-nums;
+}
+
+.tracking-card__facts b {
+  color: var(--c-text);
+  font-weight: 600;
+}
+
+.tracking-card__now {
+  font-size: var(--text-sm);
+  background: var(--c-surface-sunken);
+  border-radius: var(--radius-sm);
+  padding: 6px 10px;
+}
+
+.tracking-card__now b {
+  font-weight: 600;
+}
+
+.tracking-card__error {
+  margin: 0 14px 10px;
+}
+
+/* Stop progress line */
+.tracking-progress__label {
+  display: flex;
+  justify-content: space-between;
+  font-size: 11px;
+  color: var(--c-text-subtle);
+  font-variant-numeric: tabular-nums;
+}
+
+.tracking-progress {
+  position: relative;
+  height: 22px;
+  margin: 2px 6px 0;
+}
+
+.tracking-progress__line,
+.tracking-progress__done {
+  position: absolute;
+  top: 10px;
+  left: 0;
+  height: 2px;
+}
+
+.tracking-progress__line {
+  right: 0;
+  background: var(--c-border-strong);
+}
+
+.tracking-progress__done {
+  background: var(--trip-color);
+}
+
+.tracking-progress__stop {
+  position: absolute;
+  top: 6px;
+  width: 10px;
+  height: 10px;
+  margin-left: -5px;
+  border-radius: 50%;
+  background: var(--c-surface);
+  border: 2px solid var(--c-border-strong);
+  box-sizing: border-box;
+}
+
+.tracking-progress__stop--done {
+  background: var(--trip-color);
+  border-color: var(--trip-color);
+}
+
+.tracking-progress__stop--office {
+  border-radius: 2px;
+}
+
+.tracking-progress__truck {
+  position: absolute;
+  top: 0;
+  margin-left: -11px;
+  font-size: 15px;
+  line-height: 1;
+}
+
+/* Earnings bar */
+.tracking-earn {
+  display: grid;
+  gap: 4px;
+}
+
+.tracking-earn__bar {
+  display: flex;
+  height: 8px;
+  border-radius: 4px;
+  overflow: hidden;
+  background: var(--c-surface-sunken);
+}
+
+.tracking-earn__bar span {
+  display: block;
+  height: 100%;
+}
+
+.tracking-earn__earned {
+  background: var(--c-status-office);
+}
+
+.tracking-earn__todo {
+  background: var(--c-status-running);
+  opacity: 0.55;
+}
+
+.tracking-earn__offers {
+  background: repeating-linear-gradient(135deg, var(--c-accent-border) 0 3px, transparent 3px 6px);
+}
+
+.tracking-earn__labels {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 2px 12px;
+  font-size: var(--text-xs);
+  color: var(--c-text-muted);
+  font-variant-numeric: tabular-nums;
+}
+
+.tracking-earn__labels b {
+  color: var(--c-text);
+}
+
+.tracking-earn__labels .tracking-earn__offer-amount {
+  color: var(--c-accent);
+}
+
+.tracking-icon {
+  display: grid;
+  place-items: center;
+  flex-shrink: 0;
+  width: 16px;
+  height: 16px;
+  border-radius: 50%;
+  box-sizing: border-box;
+  font-size: 10px;
+  font-weight: 700;
+}
+
+.tracking-icon--Delivered {
+  background: var(--c-status-office-bg);
+  color: var(--c-status-office);
+}
+
+.tracking-icon--OnBoard {
+  background: var(--c-status-running-bg);
+  color: var(--c-status-running);
+}
+
+.tracking-icon--ToPick {
+  border: 1.5px solid var(--c-status-idle);
+  color: var(--c-status-idle);
+}
+
+.tracking-icon--Accepted {
+  background: var(--c-accent);
+  color: var(--c-accent-text);
+}
+
+.tracking-icon--Pending {
+  border: 1.5px dashed var(--c-accent);
+  color: var(--c-accent);
+}
+
+.tracking-detail__ok {
+  color: var(--c-status-office);
+}
+
+.tracking-detail__late {
+  color: var(--c-danger);
+}
+
+/* Tracking: map (on demand) and the Ready to start popup */
+.tracking-map {
+  flex-shrink: 0;
+}
+
+.tracking-toolbar__ready {
+  border-color: var(--c-accent-border);
+  background: var(--c-accent-bg);
+  color: var(--c-accent);
+  font-weight: 600;
+}
+
+.ready-start__intro {
+  font-size: var(--text-sm);
+  color: var(--c-text-muted);
+}
+
+.ready-start__truck {
+  display: grid;
+  gap: var(--space-2);
+  padding: 10px var(--space-3);
+  border: 1px solid var(--c-border);
+  border-radius: var(--radius-md);
+}
+
+.ready-start__meta {
+  font-size: var(--text-xs);
+  color: var(--c-text-muted);
+}
+
+.ready-start__offer {
+  display: grid;
+  grid-template-columns: 18px minmax(0, 1fr) auto auto auto;
+  align-items: center;
+  gap: var(--space-2);
+  font-size: var(--text-sm);
+}
+
+.ready-start__route {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.ready-start__route small {
+  font-size: var(--text-xs);
+  color: var(--c-text-muted);
+}
+
+.ready-start__when {
+  font-size: var(--text-xs);
+  color: var(--c-text-muted);
+  white-space: nowrap;
+}
+
+.ready-start__price {
+  color: var(--c-accent);
+}
+
+/* Tracking: tabs and the History period buttons */
+.tracking-tabs,
+.tracking-seg {
+  display: inline-flex;
+}
+
+.tracking-tabs {
+  padding: 3px;
+  border: 1px solid var(--c-border);
+  border-radius: var(--radius-md);
+  background: var(--c-surface-sunken);
+}
+
+.tracking-tabs button {
+  border: 0;
+  background: transparent;
+  color: var(--c-text-muted);
+  padding: 6px var(--space-4);
+  border-radius: var(--radius-sm);
+  font-size: var(--text-sm);
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.tracking-tabs button[aria-selected='true'] {
+  background: var(--c-surface);
+  color: var(--c-text);
+  box-shadow: var(--shadow-sm);
+}
+
+.tracking-history {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-4);
+}
+
+.tracking-seg {
+  border: 1px solid var(--c-border-strong);
+  border-radius: var(--radius-sm);
+  overflow: hidden;
+}
+
+.tracking-seg button {
+  border: 0;
+  border-left: 1px solid var(--c-border);
+  background: var(--c-surface);
+  color: var(--c-text-muted);
+  padding: 5px 11px;
+  font-size: var(--text-sm);
+  cursor: pointer;
+}
+
+.tracking-seg button:first-child {
+  border-left: 0;
+}
+
+.tracking-seg button[aria-pressed='true'] {
+  background: var(--c-accent-bg);
+  color: var(--c-accent);
+  font-weight: 600;
+}
+
+.tracking-toolbar__field {
+  font-size: var(--text-sm);
+  color: var(--c-text-muted);
+}
+
+.tracking-toolbar__field input[type='date'] {
+  font-size: var(--text-sm);
+  padding: 4px var(--space-2);
+  border-radius: var(--radius-sm);
+  border: 1px solid var(--c-border-strong);
+  background: var(--c-surface);
+  color: var(--c-text);
+}
+
+/* History: a completed trip's heading does not select anything */
+.tracking-card__head--static {
+  cursor: default;
+}
+
+/* Tracking: a trip's shipments and offers, one line each, opening to the shipper web app's card */
+.trip-lines {
+  display: grid;
+  gap: var(--space-2);
+  padding: 6px 8px 10px;
+  border-top: 1px solid var(--c-border);
+}
+
+.trip-lines__label {
+  margin: 4px 6px 0;
+  font-size: 11px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: var(--c-text-muted);
+}
+
+.trip-lines__list {
+  display: grid;
+  gap: 2px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.trip-line__row {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+}
+
+.trip-line__toggle {
+  flex: 1;
+  min-width: 0;
+  display: grid;
+  grid-template-columns: 14px minmax(0, 1fr) auto auto auto;
+  align-items: center;
+  gap: var(--space-2);
+  padding: 5px 6px;
+  border: 0;
+  border-radius: var(--radius-sm);
+  background: none;
+  font: inherit;
+  font-size: var(--text-sm);
+  color: var(--c-text);
+  text-align: left;
+  cursor: pointer;
+  font-variant-numeric: tabular-nums;
+}
+
+.trip-line__toggle:hover,
+.trip-line__toggle[aria-expanded='true'] {
+  background: var(--c-surface-sunken);
+}
+
+.trip-line__arrow {
+  color: var(--c-text-muted);
+  font-size: 18px;
+  line-height: 1;
+}
+
+.trip-line__arrow--head {
+  margin-left: var(--space-2);
+}
+
+.trip-line__route {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.trip-line__when {
+  font-size: var(--text-xs);
+  color: var(--c-text-muted);
+  white-space: nowrap;
+}
+
+.trip-line__status {
+  font-size: var(--text-xs);
+  white-space: nowrap;
+}
+
+.trip-line__price {
+  white-space: nowrap;
+}
+
+.trip-line__action {
+  flex-shrink: 0;
+  padding: 2px 8px;
+  font-size: var(--text-xs);
+}
+
+.trip-line__card {
+  margin: 4px 0 6px 20px;
+  padding: 0;
+  list-style: none;
 }

@@ -28,6 +28,8 @@ interface TruckingCompanyDetailScreenProps {
   /** Bumped when the simulation clock advances — triggers a fleet refetch. */
   simVersion: number
   onCompanyLoaded: (name: string) => void
+  /** Opens the company's Tracking page. */
+  onOpenTracking: () => void
   onSelectTruck: (truckId: string, truckName: string) => void
 }
 
@@ -38,6 +40,7 @@ export function TruckingCompanyDetailScreen({
   companyId,
   simVersion,
   onCompanyLoaded,
+  onOpenTracking,
   onSelectTruck,
 }: TruckingCompanyDetailScreenProps) {
   const [company, setCompany] = useState<TruckingCompanySummaryDto | null>(null)
@@ -218,6 +221,10 @@ export function TruckingCompanyDetailScreen({
             )}
           </div>
         </div>
+        <button type="button" className="btn btn--sm page-head__link" onClick={onOpenTracking}>
+          Tracking
+          <Chevron />
+        </button>
       </div>
 
       <div className="columns">

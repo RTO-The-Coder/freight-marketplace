@@ -20,8 +20,19 @@ function StopRow({ label, placeName, earliest, latest }: { label: string; placeN
   )
 }
 
+/** What ShipmentStops reads: the two place names and windows (a shipment, or a shipment on a trip). */
+export type ShipmentStopsData = Pick<
+  ShipmentSummaryDto,
+  | 'pickupPlaceName'
+  | 'deliveryPlaceName'
+  | 'pickupWindowEarliest'
+  | 'pickupWindowLatest'
+  | 'deliveryWindowEarliest'
+  | 'deliveryWindowLatest'
+>
+
 /** A shipment's pickup and delivery, as on the shipper app's card. Spans only, so it fits inside a button or label. */
-export function ShipmentStops({ shipment: s }: { shipment: ShipmentSummaryDto }) {
+export function ShipmentStops({ shipment: s }: { shipment: ShipmentStopsData }) {
   return (
     <span className="ship-row__stops">
       <StopRow label="Pickup" placeName={s.pickupPlaceName} earliest={s.pickupWindowEarliest} latest={s.pickupWindowLatest} />

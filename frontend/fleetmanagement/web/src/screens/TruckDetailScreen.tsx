@@ -2,8 +2,8 @@ import {
   ApiError,
   CAPACITY_BY_SIZE,
   type ShipmentSummaryDto,
+  type TrackingTripDto,
   type TruckDetailDto,
-  type TruckEtasDto,
   type TruckingCompanySummaryDto,
   type TruckPositionDto,
   type TruckSummaryDto,
@@ -13,14 +13,15 @@ import { ActivationToggle } from '../components/ActivationToggle'
 import { AddDriverModal } from '../components/AddDriverModal'
 import { AssignDriversModal } from '../components/AssignDriversModal'
 import { AssignShipmentModal } from '../components/AssignShipmentModal'
+import { Chevron } from '../components/Chevron'
 import { DriverDetailModal } from '../components/DriverDetailModal'
 import { OpenShipmentsPanel } from '../components/OpenShipmentsPanel'
 import { RescheduleTripModal } from '../components/RescheduleTripModal'
 import { StatusPill } from '../components/StatusPill'
 import { TripMap } from '../components/TripMap'
-import { TripStops } from '../components/TripStops'
+import { TripCard } from '../components/tracking/TripCard'
 import { TruckDriversPanel } from '../components/TruckDriversPanel'
-import { fleetApi, isTripNotMovedYet, truckingCompaniesApi } from '@freight/fleetmanagement-core'
+import { ROUTE_COLORS, fleetApi, isTripNotMovedYet, trackingApi, truckingCompaniesApi } from '@freight/fleetmanagement-core'
 import { SidePanel } from '@freight/web-ui'
 
 interface TruckDetailScreenProps {
@@ -28,6 +29,8 @@ interface TruckDetailScreenProps {
   /** Bumped when the simulation clock advances — triggers a refetch. */
   simVersion: number
   onTruckLoaded: (name: string) => void
+  /** Opens the company's Tracking page filtered to this truck. */
+  onOpenTracking: () => void
 }
 
 /** How long the "Driver added" message stays up. */
@@ -38,11 +41,15 @@ const DRIVER_ADDED_MESSAGE_MS = 5000
  * its drivers on the left, the whole trip (map and stops) in the middle, and the shipments
  * of its type on the right.
  */
-export function TruckDetailScreen({ truckId, simVersion, onTruckLoaded }: TruckDetailScreenProps) {
+export function TruckDetailScreen({ truckId, simVersion, onTruckLoaded, onOpenTracking }: TruckDetailScreenProps) {
   const [truck, setTruck] = useState<TruckDetailDto | null>(null)
   const [position, setPosition] = useState<TruckPositionDto | null>(null)
-  const [etas, setEtas] = useState<TruckEtasDto | null>(null)
   const [company, setCompany] = useState<TruckingCompanySummaryDto | null>(null)
+  /** This truck's running trip as the Tracking page shows it; null without a trip (or while loading). */
+  const [trackedTrip, setTrackedTrip] = useState<TrackingTripDto | null>(null)
+  const [tripLoaded, setTripLoaded] = useState(false)
+  /** Bumped on every reload of the truck, so its trip card reloads with it (e.g. after an assign). */
+  const [tripReloadKey, setTripReloadKey] = useState(0)
   const [error, setError] = useState<string | null>(null)
   const [modal, setModal] = useState<'addDriver' | 'assignDrivers' | 'rescheduleTrip' | 'assignShipment' | null>(null)
   const [driverMessage, setDriverMessage] = useState<string | null>(null)
@@ -58,6 +65,7 @@ export function TruckDetailScreen({ truckId, simVersion, onTruckLoaded }: TruckD
   const [shipmentsReloadKey, setShipmentsReloadKey] = useState(0)
 
   const load = useCallback(() => {
+    setTripReloadKey((k) => k + 1)
     fleetApi
       .getTruckDetail(truckId)
       .then((t) => {
@@ -65,15 +73,11 @@ export function TruckDetailScreen({ truckId, simVersion, onTruckLoaded }: TruckD
         onTruckLoaded(t.truckName)
       })
       .catch((err) => setError(err instanceof Error ? err.message : 'Failed to load truck.'))
-    // Position and forecast are best-effort — the trip still shows without them.
+    // Position is best-effort — the trip still shows without it.
     fleetApi
       .getTruckPosition(truckId)
       .then(setPosition)
       .catch(() => setPosition(null))
-    fleetApi
-      .getTruckEtas(truckId)
-      .then(setEtas)
-      .catch(() => setEtas(null))
   }, [truckId, onTruckLoaded])
 
   // Reload on mount and whenever the simulation clock advances (position,
@@ -98,6 +102,21 @@ export function TruckDetailScreen({ truckId, simVersion, onTruckLoaded }: TruckD
       .then(setCompany)
       .catch(() => setCompany(null))
   }, [companyId])
+
+  // The Trip panel shows this truck's trip as the Tracking page's card - from the company's
+  // tracking, reloaded with the truck (load bumps tripReloadKey), so after an assign or a clock advance.
+  const loadTrip = useCallback(() => {
+    if (!companyId) return
+    trackingApi
+      .getTracking(companyId)
+      .then((response) => setTrackedTrip(response.trips.find((t) => t.truckId === truckId) ?? null))
+      .catch(() => setTrackedTrip(null))
+      .finally(() => setTripLoaded(true))
+  }, [companyId, truckId])
+
+  useEffect(() => {
+    loadTrip()
+  }, [loadTrip, tripReloadKey])
 
   // The assign form picks from the company's trucks: load them when it opens.
   const openAssign = (shipment: ShipmentSummaryDto) => {
@@ -160,6 +179,10 @@ export function TruckDetailScreen({ truckId, simVersion, onTruckLoaded }: TruckD
         </div>
         {truck && (
           <div className="truck-head__status">
+            <button type="button" className="btn btn--sm page-head__link" onClick={onOpenTracking}>
+              Tracking
+              <Chevron />
+            </button>
             <StatusPill status={truck.status} />
             <ActivationToggle
               truckId={truck.truckId}
@@ -182,13 +205,28 @@ export function TruckDetailScreen({ truckId, simVersion, onTruckLoaded }: TruckD
           )}
           <div className="truck-trip__stops">
             <SidePanel title="Trip" count={hasOpenTrip ? (truck?.stops.length ?? null) : null}>
-              {truck ? (
-                <TripStops
-                  stops={truck.stops}
-                  position={position}
-                  etas={etas}
-                  onChangeStart={canChangeStart ? () => setModal('rescheduleTrip') : null}
-                />
+              {truck && tripLoaded ? (
+                <>
+                  {trackedTrip ? (
+                    <TripCard
+                      trip={trackedTrip}
+                      color={ROUTE_COLORS[0]}
+                      selected={false}
+                      onSelect={() => {}}
+                      onOpenTruck={() => {}}
+                      onChanged={load}
+                    />
+                  ) : (
+                    <p className="notice">No trip — the truck is at the office.</p>
+                  )}
+                  {canChangeStart && (
+                    <p className="trip-stops__totals">
+                      <button type="button" className="link" onClick={() => setModal('rescheduleTrip')}>
+                        Change trip start
+                      </button>
+                    </p>
+                  )}
+                </>
               ) : (
                 <ul className="row-list">
                   {Array.from({ length: 3 }).map((_, i) => (
