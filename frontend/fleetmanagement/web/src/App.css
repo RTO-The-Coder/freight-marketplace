@@ -1136,21 +1136,52 @@ p[role='alert'] {
   cursor: default;
 }
 
-/* The assign modal carries more than the default 460px of content. */
-.modal:has(.assign-step) {
-  max-width: 560px;
+/* A truck to choose: a card with its radio, name and facts, and the fit result once chosen. */
+.assign-truck {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  gap: var(--space-2) var(--space-3);
+  align-items: center;
+  padding: var(--space-2) var(--space-3);
+  border: 1px solid var(--c-border-strong);
+  border-radius: var(--radius-md);
+  background: var(--c-surface);
+  font-size: var(--text-sm);
+  cursor: pointer;
+  transition: border-color var(--transition), background var(--transition);
 }
 
-.assign-index {
+.assign-truck:hover {
+  border-color: var(--c-accent-border);
+}
+
+.assign-truck--chosen {
+  border-color: var(--c-accent);
+  background: var(--c-accent-bg);
+  box-shadow: 0 0 0 1px var(--c-accent);
+}
+
+.assign-truck input {
+  accent-color: var(--c-accent);
+}
+
+.assign-truck__text {
   display: flex;
   flex-direction: column;
-  gap: var(--space-3);
+  gap: 2px;
+  min-width: 0;
+}
+
+.assign-truck__meta {
+  font-size: var(--text-xs);
+  color: var(--c-text-muted);
 }
 
 .assign-index__controls {
   display: flex;
   gap: var(--space-3);
   flex-wrap: wrap;
+  margin-bottom: var(--space-3);
 }
 
 .assign-index__controls .field {
@@ -1182,6 +1213,40 @@ p[role='alert'] {
 .assign-index__preview--new {
   color: var(--c-accent);
   font-weight: 600;
+}
+
+/* The route as the check says it would look: n · kind · place · ETA, the new stops tinted. */
+.route-stops {
+  list-style: none;
+  margin: 0 0 var(--space-3);
+  padding: 0;
+  font-size: var(--text-sm);
+}
+
+.route-stops__stop {
+  display: grid;
+  grid-template-columns: 1.5rem 4.5rem minmax(0, 1fr) auto;
+  gap: var(--space-2);
+  align-items: center;
+  padding: var(--space-2) var(--space-1);
+  border-bottom: 1px solid var(--c-border);
+}
+
+.route-stops__stop--new {
+  border-radius: var(--radius-sm);
+  background: var(--c-accent-bg);
+  font-weight: 600;
+}
+
+.route-stops__n,
+.route-stops__kind {
+  color: var(--c-text-muted);
+  font-size: var(--text-xs);
+}
+
+.route-stops__eta {
+  white-space: nowrap;
+  font-variant-numeric: tabular-nums;
 }
 
 /* --- Tracking page ------------------------------------------------------ */

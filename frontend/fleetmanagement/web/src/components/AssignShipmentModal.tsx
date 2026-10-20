@@ -1,6 +1,7 @@
 import {
   ApiError,
   CAPACITY_BY_SIZE,
+  type ProposedStopDto,
   type ShipmentSummaryDto,
   type TruckDetailDto,
   type TruckSummaryDto,
@@ -8,11 +9,16 @@ import {
 import { useEffect, useMemo, useState } from 'react'
 import {
   fleetApi,
+  fmtSimShort,
+  fullName,
   insertionPreviewOrder,
   offersApi,
   pendingRouteStops,
+  placeTown,
   shipmentsFittingTruck,
+  splitPlaceName,
   TRUCK_STATUS_LABELS,
+  TRUCK_TYPE_LABELS,
   trucksReadyForAssignment,
 } from '@freight/fleetmanagement-core'
 import { useSimClock } from '@freight/fleetmanagement-core'
@@ -20,7 +26,7 @@ import { datetimeLocalToIso, isoToDatetimeLocal } from '@freight/fleetmanagement
 import { resolveInsertionIndices } from '@freight/fleetmanagement-core'
 import { ShipmentRouteMap } from './ShipmentRouteMap'
 import { ShipmentStops } from './shipments/ShipmentStops'
-import { Modal } from '@freight/web-ui'
+import { DateTimeFields, OverlayPanel } from '@freight/web-ui'
 
 interface AssignShipmentModalProps {
   /** Only shipments booked directly to this company can be assigned here - open ones go through offers. */
@@ -38,12 +44,32 @@ interface AssignShipmentModalProps {
   onAssigned: () => void
 }
 
+/** The route as the check says it would look: its stops with forecast arrivals, and the km added. */
+interface ProposedRoute {
+  stops: ProposedStopDto[]
+  addedDistanceKm: number
+}
+
 type FeasibilityState =
   | { kind: 'idle' }
   | { kind: 'checking' }
-  | { kind: 'ok' }
-  | { kind: 'infeasible'; reason: string }
+  | { kind: 'ok'; route: ProposedRoute }
+  | { kind: 'infeasible'; reason: string; route: ProposedRoute }
   | { kind: 'error'; message: string }
+
+const kgM3 = (weightKg: number, volumeCubicMeters: number) => `${weightKg.toLocaleString()} kg · ${volumeCubicMeters} m³`
+
+/** "Distribution centre, 53225 Beuel, Bonn" - a place name on one line. */
+const placeLine = (placeName: string) => {
+  const { name, area } = splitPlaceName(placeName)
+  return area ? `${name}, ${area}` : name
+}
+
+/** The drivers of a truck: "Lena Brandt, Jonas Weber". */
+function driversLine(detail: TruckDetailDto | undefined): string | null {
+  const drivers = [detail?.primaryDriver, detail?.secondaryDriver].filter((d) => d != null)
+  return drivers.length > 0 ? drivers.map(fullName).join(', ') : null
+}
 
 /** Screen 5 — pick a truck (and, without a shipment given, one that fits it), place on route. */
 export function AssignShipmentModal({
@@ -66,6 +92,8 @@ export function AssignShipmentModal({
   const [startInput, setStartInput] = useState('')
 
   const [feasibility, setFeasibility] = useState<FeasibilityState>({ kind: 'idle' })
+  /** The last route the check returned - kept on screen while the next check runs. */
+  const [lastRoute, setLastRoute] = useState<ProposedRoute | null>(null)
   const [assigning, setAssigning] = useState(false)
 
   useEffect(() => {
@@ -114,6 +142,7 @@ export function AssignShipmentModal({
   useEffect(() => {
     setPickupRaw(null)
     setDeliveryRaw(null)
+    setLastRoute(null)
   }, [truckId])
 
   // Resolve + clamp every render, so a stale pair can never be sent.
@@ -149,8 +178,12 @@ export function AssignShipmentModal({
           tripStartIso,
         )
         if (cancelled) return
+        const route = { stops: res.stops ?? [], addedDistanceKm: res.addedDistanceKm ?? 0 }
+        setLastRoute(route)
         setFeasibility(
-          res.isFeasible ? { kind: 'ok' } : { kind: 'infeasible', reason: res.reason ?? 'Route not viable.' },
+          res.isFeasible
+            ? { kind: 'ok', route }
+            : { kind: 'infeasible', reason: res.reason ?? 'Route not viable.', route },
         )
       } catch (err) {
         if (cancelled) return
@@ -183,18 +216,59 @@ export function AssignShipmentModal({
 
   const canAssign = feasibility.kind === 'ok' && !assigning
 
+  /** The fit result on the chosen truck's card. */
+  const fitPill =
+    feasibility.kind === 'ok' ? (
+      <span className="pill pill--atoffice">fits</span>
+    ) : feasibility.kind === 'infeasible' ? (
+      <span className="pill pill--danger">doesn't fit</span>
+    ) : feasibility.kind === 'checking' ? (
+      <span className="pill pill--plain">checking…</span>
+    ) : null
+
+  const status =
+    truck && shipment ? (
+      <>
+        {feasibility.kind === 'checking' && <p className="notice">Checking route, windows and capacity…</p>}
+        {feasibility.kind === 'ok' && (
+          <p className="notice notice--ok">
+            This shipment fits — ready to assign. +{Math.round(feasibility.route.addedDistanceKm).toLocaleString('en')} km
+          </p>
+        )}
+        {feasibility.kind === 'infeasible' && <p className="alert">Cannot assign: {feasibility.reason}</p>}
+        {feasibility.kind === 'error' && <p className="alert">{feasibility.message}</p>}
+      </>
+    ) : null
+
   return (
-    <Modal title="Assign a shipment" onClose={onClose}>
+    <OverlayPanel
+      title="Assign a shipment"
+      context={
+        given
+          ? `${TRUCK_TYPE_LABELS[given.requiredTruckType]} · ${kgM3(given.loadWeightKg, given.loadVolumeCubicMeters)}`
+          : undefined
+      }
+      onClose={onClose}
+      status={status}
+      footer={
+        <>
+          <button type="button" className="btn" onClick={onClose}>
+            Cancel
+          </button>
+          <button type="button" className="btn btn--primary" onClick={handleAssign} disabled={!canAssign}>
+            {assigning ? 'Assigning…' : truck ? `Assign to ${truck.truckName}` : 'Assign shipment'}
+          </button>
+        </>
+      }
+    >
       <div className="stack">
         {loadError && <p className="alert">{loadError}</p>}
 
         {given && (
           <div className="ship-row assign-shipment-summary">
             <span className="ship-row__head">
-              <span className="ship-row__type">{given.requiredTruckType}</span>
-              <span className="ship-row__load">
-                {given.loadWeightKg.toLocaleString()} kg · {given.loadVolumeCubicMeters} m³
-              </span>
+              <span className="ship-row__type">{TRUCK_TYPE_LABELS[given.requiredTruckType]}</span>
+              <span className="ship-row__load">{kgM3(given.loadWeightKg, given.loadVolumeCubicMeters)}</span>
             </span>
             <ShipmentStops shipment={given} />
           </div>
@@ -206,32 +280,38 @@ export function AssignShipmentModal({
           {eligibleTrucks.length === 0 ? (
             <p className="notice">
               {given
-                ? `No ${given.requiredTruckType} truck in this fleet is ready and big enough. A truck must be active and have a driver assigned.`
+                ? `No ${TRUCK_TYPE_LABELS[given.requiredTruckType]} truck in this fleet is ready and big enough. A truck must be active and have a driver assigned.`
                 : 'No truck in this fleet is ready. A truck must be active and have a driver assigned.'}
             </p>
           ) : (
             <ul className="assign-truck-list">
               {eligibleTrucks.map((t) => {
                 const cap = CAPACITY_BY_SIZE[t.truckSize]
+                const drivers = driversLine(truckDetails.get(t.truckId))
+                const chosen = truckId === t.truckId
                 return (
                   <li key={t.truckId}>
-                    <label className="assign-radio">
+                    <label className={`assign-truck${chosen ? ' assign-truck--chosen' : ''}`}>
                       <input
                         type="radio"
                         name="assign-truck"
-                        checked={truckId === t.truckId}
+                        checked={chosen}
                         onChange={() => {
                           setTruckId(t.truckId)
                           if (!given) setShipmentId(null)
                         }}
                       />
-                      <span>
-                        <strong>{t.truckName}</strong> · {t.truckType} · {t.truckSize} · {TRUCK_STATUS_LABELS[t.status]}
-                        <span className="muted">
-                          {' '}
-                          · {cap.weightKg.toLocaleString()} kg / {cap.volumeCubicMeters} m³
+                      <span className="assign-truck__text">
+                        <span>
+                          <strong>{t.truckName}</strong> · {TRUCK_TYPE_LABELS[t.truckType]} · {t.truckSize} ·{' '}
+                          {TRUCK_STATUS_LABELS[t.status]}
+                        </span>
+                        <span className="assign-truck__meta">
+                          {kgM3(cap.weightKg, cap.volumeCubicMeters)}
+                          {drivers && ` · ${drivers}`}
                         </span>
                       </span>
+                      {chosen && shipment && fitPill}
                     </label>
                   </li>
                 )
@@ -244,9 +324,10 @@ export function AssignShipmentModal({
         {truck && !given && (
           <div className="assign-step">
             <h4>Step 2 — Relevant shipments for {truck.truckName}</h4>
-            <p className="muted" style={{ fontSize: 'var(--text-sm)', margin: 0 }}>
-              Filtered: type = {truck.truckType} · fits {CAPACITY_BY_SIZE[truck.truckSize].weightKg.toLocaleString()}{' '}
-              kg / {CAPACITY_BY_SIZE[truck.truckSize].volumeCubicMeters} m³ · pending
+            <p className="hint">
+              Filtered: type = {TRUCK_TYPE_LABELS[truck.truckType]} · fits{' '}
+              {kgM3(CAPACITY_BY_SIZE[truck.truckSize].weightKg, CAPACITY_BY_SIZE[truck.truckSize].volumeCubicMeters)} ·
+              pending
             </p>
 
             {!shipments ? (
@@ -265,9 +346,7 @@ export function AssignShipmentModal({
                         onChange={() => setShipmentId(s.shipmentId)}
                       />
                       <span className="assign-radio__shipment">
-                        <span className="ship-row__load">
-                          {s.loadWeightKg.toLocaleString()} kg · {s.loadVolumeCubicMeters} m³
-                        </span>
+                        <span className="ship-row__load">{kgM3(s.loadWeightKg, s.loadVolumeCubicMeters)}</span>
                         <ShipmentStops shipment={s} />
                       </span>
                     </label>
@@ -275,11 +354,7 @@ export function AssignShipmentModal({
                 ))}
               </ul>
             )}
-            {relevant.length > 20 && (
-              <p className="muted" style={{ fontSize: 'var(--text-sm)', margin: 0 }}>
-                Showing the first 20 of {relevant.length} matches.
-              </p>
-            )}
+            {relevant.length > 20 && <p className="hint">Showing the first 20 of {relevant.length} matches.</p>}
           </div>
         )}
 
@@ -287,108 +362,91 @@ export function AssignShipmentModal({
         {truck && shipment && (
           <div className="assign-step">
             <h4>{given ? 'Step 2' : 'Step 3'} — Where in the route</h4>
-            <ShipmentRouteMap
-              pickup={{ latitude: shipment.pickupLatitude, longitude: shipment.pickupLongitude }}
-              delivery={{ latitude: shipment.deliveryLatitude, longitude: shipment.deliveryLongitude }}
-            />
             {isNewTrip ? (
-              <p className="muted" style={{ fontSize: 'var(--text-sm)' }}>
-                This starts a new trip: pickup then delivery.
-              </p>
+              <p className="hint">This starts a new trip: pickup then delivery.</p>
             ) : (
-              <div className="assign-index">
-                <div className="assign-index__controls">
-                  <label className="field">
-                    <span>Insert pickup</span>
-                    <select
-                      value={pickupIndex}
-                      onChange={(e) => setPickupRaw(Number(e.target.value))}
-                    >
-                      {pendingStops.map((s, i) => (
+              <div className="assign-index__controls">
+                <label className="field">
+                  <span>Insert pickup</span>
+                  <select value={pickupIndex} onChange={(e) => setPickupRaw(Number(e.target.value))}>
+                    {pendingStops.map((s, i) => (
+                      <option key={s.stopId} value={i}>
+                        before stop {i + 1} ({s.kind} · {placeTown(s.placeName)})
+                      </option>
+                    ))}
+                    <option value={pendingStopCount}>after all stops</option>
+                  </select>
+                </label>
+                <label className="field">
+                  <span>Insert delivery</span>
+                  <select value={deliveryIndex} onChange={(e) => setDeliveryRaw(Number(e.target.value))}>
+                    {pendingStops.map((s, i) =>
+                      i < pickupIndex ? null : (
                         <option key={s.stopId} value={i}>
-                          before stop {i + 1} ({s.kind})
+                          before stop {i + 1} ({s.kind} · {placeTown(s.placeName)})
                         </option>
-                      ))}
-                      <option value={pendingStopCount}>after all stops</option>
-                    </select>
-                  </label>
-                  <label className="field">
-                    <span>Insert delivery</span>
-                    <select
-                      value={deliveryIndex}
-                      onChange={(e) => setDeliveryRaw(Number(e.target.value))}
-                    >
-                      {pendingStops.map((s, i) =>
-                        i < pickupIndex ? null : (
-                          <option key={s.stopId} value={i}>
-                            before stop {i + 1} ({s.kind})
-                          </option>
-                        ),
-                      )}
-                      <option value={pendingStopCount}>after all stops</option>
-                    </select>
-                  </label>
-                </div>
+                      ),
+                    )}
+                    <option value={pendingStopCount}>after all stops</option>
+                  </select>
+                </label>
+              </div>
+            )}
+
+            {lastRoute && lastRoute.stops.length > 0 ? (
+              <ol className="route-stops">
+                {lastRoute.stops.map((s, i) => (
+                  <li key={i} className={s.isNew ? 'route-stops__stop route-stops__stop--new' : 'route-stops__stop'}>
+                    <span className="route-stops__n">{i + 1}</span>
+                    <span className="route-stops__kind">{s.kind}</span>
+                    <span className="route-stops__place">{placeLine(s.placeName)}</span>
+                    <span className="route-stops__eta">
+                      {s.projectedArrival ? `ETA ${fmtSimShort(s.projectedArrival)}` : '—'}
+                    </span>
+                  </li>
+                ))}
+              </ol>
+            ) : (
+              !isNewTrip && (
                 <ol className="assign-index__preview">
                   {previewOrder.map((label, i) => (
-                    <li
-                      key={i}
-                      className={label.endsWith('▸') ? 'assign-index__preview--new' : undefined}
-                    >
+                    <li key={i} className={label.endsWith('▸') ? 'assign-index__preview--new' : undefined}>
                       {label.replace(' ▸', '')}
                     </li>
                   ))}
                 </ol>
-              </div>
+              )
             )}
 
+            <ShipmentRouteMap
+              pickup={{ latitude: shipment.pickupLatitude, longitude: shipment.pickupLongitude }}
+              delivery={{ latitude: shipment.deliveryLatitude, longitude: shipment.deliveryLongitude }}
+            />
+
             {isNewTrip && (
-              <label className="field" style={{ maxWidth: '260px' }}>
+              <div className="field">
                 <span>Trip start (simulation time)</span>
-                <input
-                  type="datetime-local"
+                <DateTimeFields
+                  label="Trip start"
                   value={startInput || isoToDatetimeLocal(currentTime)}
-                  onChange={(e) => setStartInput(e.target.value)}
+                  onChange={setStartInput}
                 />
-                <span className="muted" style={{ fontSize: 'var(--text-xs)' }}>
+                <p className="hint">
                   When the truck departs. Push it later to line up with the pickup window.
                   {startInput && (
                     <>
                       {' '}
-                      <button
-                        type="button"
-                        className="link"
-                        onClick={() => setStartInput('')}
-                        style={{ font: 'inherit' }}
-                      >
+                      <button type="button" className="link-button" onClick={() => setStartInput('')}>
                         reset to now
                       </button>
                     </>
                   )}
-                </span>
-              </label>
+                </p>
+              </div>
             )}
-
-            {feasibility.kind === 'checking' && <p className="notice">Checking route, windows and capacity…</p>}
-            {feasibility.kind === 'ok' && (
-              <p className="notice notice--ok">This shipment fits — ready to assign.</p>
-            )}
-            {feasibility.kind === 'infeasible' && (
-              <p className="alert">Cannot assign: {feasibility.reason}</p>
-            )}
-            {feasibility.kind === 'error' && <p className="alert">{feasibility.message}</p>}
           </div>
         )}
       </div>
-
-      <div className="modal-actions">
-        <button type="button" className="btn" onClick={onClose}>
-          Cancel
-        </button>
-        <button type="button" className="btn btn--primary" onClick={handleAssign} disabled={!canAssign}>
-          {assigning ? 'Assigning…' : 'Assign shipment'}
-        </button>
-      </div>
-    </Modal>
+    </OverlayPanel>
   )
 }

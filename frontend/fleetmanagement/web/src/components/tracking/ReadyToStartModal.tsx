@@ -1,7 +1,7 @@
 import type { ReadyTruckDto } from '@freight/api-client'
 import { useState } from 'react'
-import { fmtEur, fmtSimWindow, offersApi, placeTown, tripDriversLabel } from '@freight/fleetmanagement-core'
-import { Modal } from '@freight/web-ui'
+import { fmtEur, fmtSimWindow, offersApi, placeTown, TRUCK_TYPE_LABELS, tripDriversLabel } from '@freight/fleetmanagement-core'
+import { OverlayPanel } from '@freight/web-ui'
 
 const errorText = (err: unknown, fallback: string) => (err instanceof Error ? err.message : fallback)
 
@@ -35,7 +35,15 @@ export function ReadyToStartModal({ trucks, officePlaceName, onClose, onStarted 
   }
 
   return (
-    <Modal title="Trucks ready to start" onClose={onClose}>
+    <OverlayPanel
+      title="Trucks ready to start"
+      onClose={onClose}
+      footer={
+        <button type="button" className="btn" onClick={onClose}>
+          Close
+        </button>
+      }
+    >
       <div className="stack">
         <p className="ready-start__intro">Idle trucks with an offer the shipper accepted. Add to trip starts the truck's trip.</p>
 
@@ -46,7 +54,7 @@ export function ReadyToStartModal({ trucks, officePlaceName, onClose, onStarted 
             <div>
               <b>{truck.truckName}</b>{' '}
               <span className="ready-start__meta">
-                {truck.truckSize} {truck.truckType} · {tripDriversLabel(truck.drivers)} · at {officePlaceName}
+                {truck.truckSize} {TRUCK_TYPE_LABELS[truck.truckType]} · {tripDriversLabel(truck.drivers)} · at {officePlaceName}
               </span>
             </div>
             {truck.acceptedOffers.map((offer) => (
@@ -79,13 +87,7 @@ export function ReadyToStartModal({ trucks, officePlaceName, onClose, onStarted 
             {error}
           </p>
         )}
-
-        <div className="modal-actions">
-          <button type="button" className="btn" onClick={onClose}>
-            Close
-          </button>
-        </div>
       </div>
-    </Modal>
+    </OverlayPanel>
   )
 }
