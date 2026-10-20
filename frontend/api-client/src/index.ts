@@ -29,6 +29,7 @@ export type {
   GetTruckForDriverResponse,
   GetTrucksResponse,
   IneligibilityReason,
+  ProposedStopDto,
   ShipmentFeasibilityResponse,
   StopKind,
   TruckDetailDriverDto,

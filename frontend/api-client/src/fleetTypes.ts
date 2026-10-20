@@ -180,6 +180,20 @@ export interface ShipmentFeasibilityResponse {
   isFeasible: boolean
   violatingStopId: string | null
   reason: string | null
+  /** The remaining stops after the insertion, in route order, Office last. */
+  stops: ProposedStopDto[]
+  /** How much longer the trip gets; the whole route for a new trip. */
+  addedDistanceKm: number
+}
+
+/** One stop of the route as it would look after an insertion. */
+export interface ProposedStopDto {
+  kind: StopKind
+  placeName: string
+  /** Forecast arrival; null when the capacity check rejected the insertion before any forecast ran. */
+  projectedArrival: string | null
+  /** One of the two stops this insertion adds. */
+  isNew: boolean
 }
 
 /**
