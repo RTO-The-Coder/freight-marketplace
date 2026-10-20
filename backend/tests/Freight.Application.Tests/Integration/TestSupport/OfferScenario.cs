@@ -2,6 +2,8 @@ using Freight.Application.Client;
 using Freight.Application.Evaluation;
 using Freight.Application.Fleet;
 using Freight.Application.Offers;
+using Freight.Application.Simulation;
+using Freight.Application.Tracking;
 using Freight.Domain.Fleet;
 using Freight.Domain.Fleet.Enums;
 using Freight.Domain.Fleet.Services;
@@ -82,6 +84,15 @@ internal sealed class OfferScenario
     public GetShipmentOffersHandler ShipmentOffers() => new(UnitOfWork, TimeProvider);
 
     public AssignShipmentToTruckHandler AssignHandler() => new(UnitOfWork, Planner());
+
+    public GetCompanyTrackingHandler Tracking() => new(UnitOfWork, new RouteEtaCalculator(new DriverRuleEngine()), TimeProvider);
+
+    public GetTrackingHistoryHandler History() => new(UnitOfWork);
+
+    /// <summary>Moves the simulation (trucks and clock) forward, as the sim clock's Advance does.</summary>
+    public Task<AdvanceSimulationResponse> AdvanceSimulationAsync(int ticks) =>
+        new SimulationAdvanceHandler(UnitOfWork, new DriverRuleEngine(), TimeProvider)
+            .AdvanceSimulationAsync(new AdvanceSimulationRequest(ticks));
 
     private ShipmentEvaluationEngine EvaluationEngine() =>
         new(UnitOfWork, Planner(), new RouteEtaCalculator(new DriverRuleEngine()), TimeProvider);

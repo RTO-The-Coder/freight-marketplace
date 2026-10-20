@@ -147,8 +147,9 @@ public sealed class GetTruckEtasHandlerTests
         var handler = new GetTruckEtasHandler(unitOfWork.Object, _calculator);
         await handler.GetTruckEtasAsync(new GetTruckEtasRequest(truck.Id));
 
-        // 2 pending shipment stops (pickup + delivery) - the Office stop is skipped.
-        Assert.Equal(2, callCount);
+        // One load for the shipment behind the 2 pending stops (pickup + delivery) - the
+        // Office stop needs none.
+        Assert.Equal(1, callCount);
     }
 
     [Fact]

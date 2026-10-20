@@ -1,6 +1,7 @@
 using Freight.Application.Evaluation;
 using Freight.Application.Fleet;
 using Freight.Application.Offers;
+using Freight.Application.Tracking;
 using Microsoft.AspNetCore.Mvc;
 
 namespace Freight.Api.Controllers;
@@ -15,7 +16,9 @@ public sealed class TruckingCompaniesController(
     RegisterDeviceTokenHandler registerDeviceTokenHandler,
     UnregisterDeviceTokenHandler unregisterDeviceTokenHandler,
     GetCompanyShipmentBoardHandler getCompanyShipmentBoardHandler,
-    SendOffersHandler sendOffersHandler) : ControllerBase
+    SendOffersHandler sendOffersHandler,
+    GetCompanyTrackingHandler getCompanyTrackingHandler,
+    GetTrackingHistoryHandler getTrackingHistoryHandler) : ControllerBase
 {
     [HttpGet]
     public async Task<ActionResult<GetTruckingCompaniesResponse>> GetTruckingCompanies(CancellationToken cancellationToken)
@@ -56,6 +59,34 @@ public sealed class TruckingCompaniesController(
             new GetCompanyShipmentBoardRequest(companyId), cancellationToken);
         return Ok(response);
     }
+
+    [HttpGet("{companyId:guid}/tracking")]
+    public async Task<ActionResult<CompanyTrackingResponse>> GetTracking(
+        Guid companyId, CancellationToken cancellationToken)
+    {
+        var response = await getCompanyTrackingHandler.GetTrackingAsync(
+            new GetCompanyTrackingRequest(companyId), cancellationToken);
+        return Ok(response);
+    }
+
+    [HttpGet("{companyId:guid}/tracking/history")]
+    public async Task<ActionResult<TrackingHistoryResponse>> GetTrackingHistory(
+        Guid companyId, [FromQuery] DateTime from, [FromQuery] DateTime to, [FromQuery] Guid? truckId,
+        CancellationToken cancellationToken)
+    {
+        var response = await getTrackingHistoryHandler.GetHistoryAsync(
+            new GetTrackingHistoryRequest(companyId, AsUtc(from), AsUtc(to), truckId), cancellationToken);
+        return Ok(response);
+    }
+
+    // Query-string times bind as Local (when they carry an offset) or Unspecified; the sim
+    // clock and the database are UTC.
+    private static DateTime AsUtc(DateTime value) => value.Kind switch
+    {
+        DateTimeKind.Utc => value,
+        DateTimeKind.Local => value.ToUniversalTime(),
+        _ => DateTime.SpecifyKind(value, DateTimeKind.Utc),
+    };
 
     public sealed record OfferItemBody(Guid TruckId, decimal PriceEur, DateTime? LimitAt);
 
