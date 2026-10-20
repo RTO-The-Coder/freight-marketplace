@@ -226,6 +226,13 @@ public sealed class Truck
     }
 
     /// <summary>
+    /// Forgets the leg progress left over from the truck's previous trip - called when a
+    /// fresh trip opens, before <see cref="SyncProgressToNextStop"/>. Without it the finished
+    /// return-to-office leg would be banked into the new trip's distance/time totals.
+    /// </summary>
+    public void ClearRouteProgress() => CurrentProgress = null;
+
+    /// <summary>
     /// Sets which assigned driver is at the wheel - validated (must be a driver of this
     /// truck's assignment) by <see cref="Fleet.DriverAssignment"/>.
     /// </summary>

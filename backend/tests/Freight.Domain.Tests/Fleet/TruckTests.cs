@@ -613,4 +613,24 @@ public class TruckTests
 
         Assert.Throws<InvalidOperationException>(() => truck.SyncProgressToNextStop(trip, null));
     }
+
+    // --- ClearRouteProgress ---
+
+    [Fact]
+    public void ClearRouteProgress_BeforeANewTrip_LeavesTheOldLegOutOfTheNewTripsTotals()
+    {
+        var truck = SomeTruck();
+        truck.AssignDrivers(SomeDriver());
+        var (firstTrip, _) = OpenTripWithOneShipment(truckId: truck.Id);
+        truck.SyncProgressToNextStop(firstTrip, previousNextStopId: null);
+        truck.CurrentProgress!.AdvanceByTicks(firstTrip.Stops.First(s => s.Kind == StopKind.Pickup).IncomingLegTimeTick);
+
+        truck.ClearRouteProgress();
+        var (secondTrip, _) = OpenTripWithOneShipment(truckId: truck.Id);
+        truck.SyncProgressToNextStop(secondTrip, previousNextStopId: null);
+
+        Assert.Equal(0, secondTrip.DistanceTravelledSoFar);
+        Assert.Equal(0, secondTrip.TimeElapsedSoFar);
+        Assert.Equal(0, truck.CurrentProgress!.CurrentDrivingTimeTick);
+    }
 }

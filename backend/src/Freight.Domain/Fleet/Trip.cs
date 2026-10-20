@@ -14,6 +14,7 @@ namespace Freight.Domain.Fleet;
 public sealed class Trip
 {
     private readonly List<Stop> _stops = [];
+    private readonly List<TripDriver> _drivers = [];
 
     public Guid Id { get; private set; }
 
@@ -41,6 +42,16 @@ public sealed class Trip
 
     /// <summary>Same as <see cref="DistanceTravelledSoFar"/>, for time (5-minute ticks).</summary>
     public int TimeElapsedSoFar { get; private set; }
+
+    /// <summary>
+    /// Time (5-minute ticks) the truck stood still for driver breaks, daily rests and weekly
+    /// rests - one tick per simulation tick it could not drive (<see cref="AccrueRestTick"/>).
+    /// Waiting for a pickup/delivery window is not rest; it is on <see cref="Stop.WaitTimeTickElapsed"/>.
+    /// </summary>
+    public int RestTimeSoFar { get; private set; }
+
+    /// <summary>Every driver who drove on this trip, in the order they were recorded. Never has entries removed.</summary>
+    public IReadOnlyList<TripDriver> Drivers => _drivers.AsReadOnly();
 
     /// <summary>Ordered by <see cref="Stop.Sequence"/>, not by insertion order. Never has entries removed.</summary>
     public IReadOnlyList<Stop> Stops => [.. _stops.OrderBy(stop => stop.Sequence)];
@@ -174,6 +185,7 @@ public sealed class Trip
             CompletedAt = CompletedAt,
             DistanceTravelledSoFar = DistanceTravelledSoFar,
             TimeElapsedSoFar = TimeElapsedSoFar,
+            RestTimeSoFar = RestTimeSoFar,
         };
 
         foreach (var stop in _stops)
@@ -181,8 +193,36 @@ public sealed class Trip
             clone._stops.Add(stop.Clone());
         }
 
+        foreach (var driver in _drivers)
+        {
+            clone._drivers.Add(new TripDriver(driver.DriverId, driver.FirstName, driver.LastName));
+        }
+
         return clone;
     }
+
+    /// <summary>
+    /// Records <paramref name="driver"/> as a driver of this trip, with their name as it is
+    /// now. Called when the trip opens and when a driver is assigned while it is open; a
+    /// driver already recorded is not added again.
+    /// </summary>
+    public void RecordDriver(Driver driver)
+    {
+        ArgumentNullException.ThrowIfNull(driver);
+
+        if (_drivers.Any(recorded => recorded.DriverId == driver.Id))
+        {
+            return;
+        }
+
+        _drivers.Add(new TripDriver(driver.Id, driver.FirstName, driver.LastName));
+    }
+
+    /// <summary>
+    /// Counts one simulation tick the truck could not drive because its driver(s) were on a
+    /// break or a daily/weekly rest.
+    /// </summary>
+    public void AccrueRestTick() => RestTimeSoFar++;
 
     /// <summary>
     /// Banks distance/time covered on a leg being abandoned (a stop inserted ahead of the

@@ -3,6 +3,7 @@ using Freight.Domain.Fleet.Enums;
 using Freight.Domain.Fleet.ValueObjects;
 using Freight.Domain.Tests.Fleet.TestSupport;
 using Freight.Domain.ValueObjects;
+using Freight.Domain.ValueObjects.RuleVariants;
 using static Freight.Domain.Tests.Fleet.TestSupport.TripTestBuilder;
 
 namespace Freight.Domain.Tests.Fleet;
@@ -612,5 +613,57 @@ public class TripTests
 
         Assert.Equal(expectedDistance, trip.TotalPlannedDistanceKm);
         Assert.Equal(expectedTime, trip.TotalPlannedTimeTick);
+    }
+
+    // --- Drivers and rest ---
+
+    private static Driver SomeDriver(string firstName = "Jane", string lastName = "Doe") =>
+        Driver.Create(firstName, lastName,
+            DrivingRules.Create(DrivingBreakRule.FullBreak, DailyRestRule.FullRest, WeeklyRestRule.FullWeeklyRest, extendDailyDrivingWhenEligible: false),
+            Guid.NewGuid());
+
+    [Fact]
+    public void RecordDriver_KeepsTheNameAtTheTime_AndAddsEachDriverOnce()
+    {
+        var trip = OpenTrip();
+        var lena = SomeDriver("Lena", "Brandt");
+        var jonas = SomeDriver("Jonas", "Weber");
+
+        trip.RecordDriver(lena);
+        trip.RecordDriver(jonas);
+        trip.RecordDriver(lena);
+
+        Assert.Collection(trip.Drivers,
+            driver => Assert.Equal((lena.Id, "Lena", "Brandt"), (driver.DriverId, driver.FirstName, driver.LastName)),
+            driver => Assert.Equal((jonas.Id, "Jonas", "Weber"), (driver.DriverId, driver.FirstName, driver.LastName)));
+    }
+
+    [Fact]
+    public void AccrueRestTick_CountsOneTickEachCall()
+    {
+        var trip = OpenTrip();
+
+        trip.AccrueRestTick();
+        trip.AccrueRestTick();
+
+        Assert.Equal(2, trip.RestTimeSoFar);
+        Assert.Equal(0, trip.TimeElapsedSoFar);
+    }
+
+    [Fact]
+    public void Clone_CopiesDriversAndRestTime_Independently()
+    {
+        var trip = OpenTrip();
+        trip.RecordDriver(SomeDriver());
+        trip.AccrueRestTick();
+
+        var clone = trip.Clone();
+        clone.RecordDriver(SomeDriver());
+        clone.AccrueRestTick();
+
+        Assert.Single(trip.Drivers);
+        Assert.Equal(1, trip.RestTimeSoFar);
+        Assert.Equal(2, clone.Drivers.Count);
+        Assert.Equal(2, clone.RestTimeSoFar);
     }
 }
