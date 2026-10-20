@@ -59,6 +59,24 @@ export { createRoutingApi } from './routingApi'
 export type { RouteGeometryResponse, RouteLegResponse, RoutePointDto, RoutingApi } from './routingApi'
 export { createTripsApi } from './tripsApi'
 export type { RescheduleTripResponse, TripsApi } from './tripsApi'
+export { createTrackingApi } from './trackingApi'
+export type {
+  CompanyTrackingResponse,
+  HistorySummaryDto,
+  HistoryTripDto,
+  ReadyTruckDto,
+  TrackedShipmentDto,
+  TrackedShipmentState,
+  TrackingApi,
+  TrackingDriverDto,
+  TrackingHistoryQuery,
+  TrackingHistoryResponse,
+  TrackingNowDto,
+  TrackingNowKind,
+  TrackingOfferDto,
+  TrackingStopDto,
+  TrackingTripDto,
+} from './trackingApi'
 export { createGeocodingApi } from './geocodingApi'
 export type { AreaMatchDto, GeocodingApi, SearchAreasResponse } from './geocodingApi'
 export { createShipmentsApi } from './shipmentsApi'
