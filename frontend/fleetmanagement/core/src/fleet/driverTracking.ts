@@ -39,6 +39,60 @@ export const WEEKLY_REST_RULE_LABELS: Record<WeeklyRestRule, string> = {
   ReducedWeeklyRest: 'Reduced',
 }
 
+// Every rule option in plain words (freight-driving-rules.md §2-3) - shown under the option
+// when a driver is added, and as the driver's rules in the driver panel.
+export const BREAK_RULE_DESCRIPTIONS: Record<DrivingBreakRule, string> = {
+  FullBreak: '45 min after 4 h 30 of driving',
+  SplitBreak: '15 min after 2 h, then 30 min at 4 h 30 of driving',
+}
+export const DAILY_REST_RULE_DESCRIPTIONS: Record<DailyRestRule, string> = {
+  FullRest: '11 h every day',
+  ReducedRest: '9 h, at most 3 times between weekly rests',
+  SplitRest: '3 h during the day, then 9 h',
+}
+export const WEEKLY_REST_RULE_DESCRIPTIONS: Record<WeeklyRestRule, string> = {
+  FullWeeklyRest: '45 h each week',
+  ReducedWeeklyRest: '24 h and 45 h in turn; the 21 h short is added to the next one',
+}
+
+/** The 10-hour-day setting in plain words. */
+export function extendedDaysDescription(extendDailyDrivingWhenEligible: boolean): string {
+  return extendDailyDrivingWhenEligible ? '10 h of driving on up to 2 days a week' : 'Not used'
+}
+
+/** The four rule settings a driver is added with; fixed afterwards. */
+export interface DriverRules {
+  breakRule: DrivingBreakRule
+  dailyRestRule: DailyRestRule
+  weeklyRestRule: WeeklyRestRule
+  extendDailyDrivingWhenEligible: boolean
+}
+
+/** The standard EU rules the quick Add driver uses: full break, full daily and weekly rest, no 10-hour days. */
+export const STANDARD_DRIVER_RULES: Readonly<DriverRules> = {
+  breakRule: 'FullBreak',
+  dailyRestRule: 'FullRest',
+  weeklyRestRule: 'FullWeeklyRest',
+  extendDailyDrivingWhenEligible: false,
+}
+
+/** The standard rules in plain words, one line each, for the quick Add driver. */
+export const STANDARD_DRIVER_RULE_LINES: readonly string[] = [
+  '45 min break after 4 h 30 of driving',
+  '11 h rest every day, 9 h at most of driving',
+  '45 h weekly rest, at most 6 days in a row',
+]
+
+/** A driver's rules as label / plain-words lines, in the order the driver panel lists them. */
+export function driverRuleLines(rules: DriverRules): { label: string; value: string }[] {
+  return [
+    { label: 'Break', value: BREAK_RULE_DESCRIPTIONS[rules.breakRule] },
+    { label: 'Daily rest', value: DAILY_REST_RULE_DESCRIPTIONS[rules.dailyRestRule] },
+    { label: 'Weekly rest', value: WEEKLY_REST_RULE_DESCRIPTIONS[rules.weeklyRestRule] },
+    { label: '10 h days', value: extendedDaysDescription(rules.extendDailyDrivingWhenEligible) },
+  ]
+}
+
 /** "3 h 10 min", "45 min", "9 h", "0 min". */
 export function fmtMinutes(minutes: number): string {
   const total = Math.max(0, Math.round(minutes))

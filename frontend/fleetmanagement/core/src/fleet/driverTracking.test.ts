@@ -1,7 +1,18 @@
 import type { DriverComplianceStateDto, DriverDetailDto } from '@freight/api-client'
 import { describe, expect, it } from 'vitest'
 import { fmtSimDateTime } from '../time/simTime'
-import { driverTrackingSections, fmtMinutes, type TrackingSection } from './driverTracking'
+import {
+  BREAK_RULE_DESCRIPTIONS,
+  DAILY_REST_RULE_DESCRIPTIONS,
+  driverRuleLines,
+  driverTrackingSections,
+  extendedDaysDescription,
+  fmtMinutes,
+  STANDARD_DRIVER_RULE_LINES,
+  STANDARD_DRIVER_RULES,
+  WEEKLY_REST_RULE_DESCRIPTIONS,
+  type TrackingSection,
+} from './driverTracking'
 
 const LIMITS: DriverDetailDto['limits'] = {
   maxContinuousDrivingMinutesBeforeBreak: 270,
@@ -139,5 +150,57 @@ describe('driverTrackingSections', () => {
     expect(value).toBe(
       `${fmtSimDateTime('2026-07-27T18:00:00Z')} · next due by ${fmtSimDateTime('2026-08-02T18:00:00.000Z')}`,
     )
+  })
+})
+
+describe('rules in plain words', () => {
+  it('describes every option without code names', () => {
+    const all = [
+      ...Object.values(BREAK_RULE_DESCRIPTIONS),
+      ...Object.values(DAILY_REST_RULE_DESCRIPTIONS),
+      ...Object.values(WEEKLY_REST_RULE_DESCRIPTIONS),
+      extendedDaysDescription(true),
+      extendedDaysDescription(false),
+    ]
+    expect(Object.keys(BREAK_RULE_DESCRIPTIONS)).toEqual(['FullBreak', 'SplitBreak'])
+    expect(Object.keys(DAILY_REST_RULE_DESCRIPTIONS)).toEqual(['FullRest', 'ReducedRest', 'SplitRest'])
+    expect(Object.keys(WEEKLY_REST_RULE_DESCRIPTIONS)).toEqual(['FullWeeklyRest', 'ReducedWeeklyRest'])
+    for (const text of all) expect(text).not.toMatch(/[a-z][A-Z]/)
+  })
+
+  it('the standard preset is full break, full daily and weekly rest, no 10-hour days', () => {
+    expect(STANDARD_DRIVER_RULES).toEqual({
+      breakRule: 'FullBreak',
+      dailyRestRule: 'FullRest',
+      weeklyRestRule: 'FullWeeklyRest',
+      extendDailyDrivingWhenEligible: false,
+    })
+    expect(STANDARD_DRIVER_RULE_LINES).toEqual([
+      '45 min break after 4 h 30 of driving',
+      '11 h rest every day, 9 h at most of driving',
+      '45 h weekly rest, at most 6 days in a row',
+    ])
+  })
+
+  it("lists a driver's rules in the panel's order", () => {
+    expect(driverRuleLines(STANDARD_DRIVER_RULES)).toEqual([
+      { label: 'Break', value: '45 min after 4 h 30 of driving' },
+      { label: 'Daily rest', value: '11 h every day' },
+      { label: 'Weekly rest', value: '45 h each week' },
+      { label: '10 h days', value: 'Not used' },
+    ])
+    expect(
+      driverRuleLines({
+        breakRule: 'SplitBreak',
+        dailyRestRule: 'ReducedRest',
+        weeklyRestRule: 'ReducedWeeklyRest',
+        extendDailyDrivingWhenEligible: true,
+      }).map((l) => l.value),
+    ).toEqual([
+      '15 min after 2 h, then 30 min at 4 h 30 of driving',
+      '9 h, at most 3 times between weekly rests',
+      '24 h and 45 h in turn; the 21 h short is added to the next one',
+      '10 h of driving on up to 2 days a week',
+    ])
   })
 })

@@ -1,6 +1,15 @@
 import { describe, expect, it } from 'vitest'
 import { position, stop, truckDetail, truckSummary } from '../testData'
-import { isTripNotMovedYet, trucksReadyForAssignment } from './trucks'
+import {
+  isTripNotMovedYet,
+  TRUCK_SIZES,
+  TRUCK_TYPE_DESCRIPTIONS,
+  TRUCK_TYPE_LABELS,
+  TRUCK_TYPES,
+  truckSizeCapacity,
+  truckSummaryLine,
+  trucksReadyForAssignment,
+} from './trucks'
 
 describe('isTripNotMovedYet', () => {
   it('is false without an open trip', () => {
@@ -34,5 +43,24 @@ describe('trucksReadyForAssignment', () => {
       truckSummary({ truckId: 'noCompany', truckingCompanyId: null }),
     ]
     expect(trucksReadyForAssignment(trucks)).toEqual([ready])
+  })
+})
+
+describe('truck labels', () => {
+  it('names every type in plain words, with what it carries', () => {
+    expect(TRUCK_TYPES.map((t) => `${TRUCK_TYPE_LABELS[t]} · ${TRUCK_TYPE_DESCRIPTIONS[t]}`)).toEqual([
+      'Box van · closed, dry goods',
+      'Flatbed · open, steel and timber',
+      'Refrigerated · chilled and frozen',
+      'Tanker · liquids',
+    ])
+  })
+
+  it('gives every size its capacity', () => {
+    expect(TRUCK_SIZES.map(truckSizeCapacity)).toEqual(['2,800 kg · 20 m³', '9,000 kg · 45 m³', '24,000 kg · 90 m³'])
+  })
+
+  it('puts a truck in one line without code names', () => {
+    expect(truckSummaryLine({ truckName: 'FL-14', truckType: 'BoxVan', truckSize: 'Large' })).toBe('FL-14 · Box van · Large')
   })
 })
