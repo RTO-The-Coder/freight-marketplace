@@ -206,6 +206,11 @@ public sealed class SimulationAdvanceHandler(
                     }
                 }
             }
+            else
+            {
+                // The driver rules stopped the truck: a break or a daily/weekly rest.
+                trip.AccrueRestTick();
+            }
         }
 
         mover.PersistActiveDriver();

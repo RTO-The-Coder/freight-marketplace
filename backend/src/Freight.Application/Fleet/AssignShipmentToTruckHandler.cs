@@ -65,6 +65,17 @@ public sealed class AssignShipmentToTruckHandler(IUnitOfWork unitOfWork, Shipmen
             // the trip's planned departure. Adding to an EXISTING trip must not reset
             // ledgers - the drivers' accumulated hours carry through the trip.
             truck.BeginTripCompliance(trip.StartedAt);
+
+            trip.RecordDriver(truck.DriverAssignment!.PrimaryDriver);
+            if (truck.DriverAssignment.SecondaryDriver is { } secondary)
+            {
+                trip.RecordDriver(secondary);
+            }
+
+            // The truck's progress still describes the previous trip's finished
+            // return-to-office leg - drop it so SyncProgressToNextStop starts a fresh leg
+            // instead of banking that old leg into this trip's totals.
+            truck.ClearRouteProgress();
         }
 
         var previousNextStopId = trip.NextStop?.Id;

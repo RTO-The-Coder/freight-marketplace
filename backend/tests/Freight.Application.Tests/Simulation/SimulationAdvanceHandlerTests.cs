@@ -232,6 +232,49 @@ public sealed class SimulationAdvanceHandlerTests
         Assert.Equal(StartedAt.AddMinutes(90), ledger.LastEvaluatedSimulatedTime);
     }
 
+    // --- Rest total ---
+
+    [Fact]
+    public async Task AdvanceSimulationAsync_DriverRulesStopTheTruck_EveryStandingTickCountsAsRest()
+    {
+        // A long leg: 70 ticks (5h50) of driving time is more than the 4.5h before a break,
+        // so the truck stands for part of them. Every tick is either driving or rest.
+        var fixture = SingleDriverFixture(pickupIncomingTicks: 200);
+        var harness = new Harness(
+            [fixture.Trip],
+            new Dictionary<Guid, Truck> { [fixture.Truck.Id] = fixture.Truck },
+            new Dictionary<Guid, Shipment> { [fixture.Shipment.Id] = fixture.Shipment },
+            StartedAt);
+
+        await harness.NewHandler().AdvanceSimulationAsync(new AdvanceSimulationRequest(70));
+
+        var drivenTicks = fixture.Truck.CurrentProgress!.CurrentDrivingTimeTick;
+        Assert.True(fixture.Trip.RestTimeSoFar > 0);
+        Assert.Equal(70, drivenTicks + fixture.Trip.RestTimeSoFar);
+    }
+
+    [Fact]
+    public async Task AdvanceSimulationAsync_WaitingForAWindow_IsNotRest()
+    {
+        var fixture = SingleDriverFixture(pickupIncomingTicks: 2);
+        fixture.Trip.SetPlannedWaits(new Dictionary<StopRef, int>
+        {
+            [StopRef.For(fixture.PickupStop)] = 3,
+        });
+        var harness = new Harness(
+            [fixture.Trip],
+            new Dictionary<Guid, Truck> { [fixture.Truck.Id] = fixture.Truck },
+            new Dictionary<Guid, Shipment> { [fixture.Shipment.Id] = fixture.Shipment },
+            StartedAt);
+
+        // 2 ticks of driving + 3 ticks of waiting, which reaches the pickup.
+        await harness.NewHandler().AdvanceSimulationAsync(new AdvanceSimulationRequest(5));
+
+        Assert.Equal(StopStatus.Reached, fixture.PickupStop.Status);
+        Assert.Equal(3, fixture.PickupStop.WaitTimeTickElapsed);
+        Assert.Equal(0, fixture.Trip.RestTimeSoFar);
+    }
+
     // --- Capacity violation at pickup ---
 
     [Fact]

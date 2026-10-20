@@ -21,6 +21,17 @@ public sealed class AssignDriversHandler(IUnitOfWork unitOfWork)
 
         truck.AssignDrivers(primaryDriver, secondaryDriver);
 
+        // Drivers swapped in while a trip runs drove part of it - add them to the trip's record.
+        var openTrip = await unitOfWork.Trips.GetOpenTripByTruckIdAsync(truck.Id, cancellationToken);
+        if (openTrip is not null)
+        {
+            openTrip.RecordDriver(primaryDriver);
+            if (secondaryDriver is not null)
+            {
+                openTrip.RecordDriver(secondaryDriver);
+            }
+        }
+
         await unitOfWork.SaveChangesAsync(cancellationToken);
     }
 }

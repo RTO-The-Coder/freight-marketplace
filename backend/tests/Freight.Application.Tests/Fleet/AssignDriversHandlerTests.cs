@@ -26,7 +26,7 @@ public sealed class AssignDriversHandlerTests
         return truck;
     }
 
-    private static Mock<IUnitOfWork> SetUp(Truck? truck, Dictionary<Guid, Driver> driversById)
+    private static Mock<IUnitOfWork> SetUp(Truck? truck, Dictionary<Guid, Driver> driversById, Trip? openTrip = null)
     {
         var trucks = new Mock<ITruckRepository>();
         trucks.Setup(t => t.GetByIdAsync(It.IsAny<Guid>(), It.IsAny<CancellationToken>())).ReturnsAsync(truck);
@@ -37,7 +37,28 @@ public sealed class AssignDriversHandlerTests
         var unitOfWork = new Mock<IUnitOfWork>();
         unitOfWork.SetupGet(u => u.Trucks).Returns(trucks.Object);
         unitOfWork.SetupGet(u => u.Drivers).Returns(drivers.Object);
+        var trips = new Mock<ITripRepository>();
+        trips.Setup(t => t.GetOpenTripByTruckIdAsync(It.IsAny<Guid>(), It.IsAny<CancellationToken>())).ReturnsAsync(openTrip);
+        unitOfWork.SetupGet(u => u.Trips).Returns(trips.Object);
         return unitOfWork;
+    }
+
+    [Fact]
+    public async Task AssignDriversAsync_TruckOnAnOpenTrip_RecordsTheNewDriversOnTheTrip()
+    {
+        var truck = SomeTruck(TruckSize.Large);
+        var first = SomeDriver();
+        truck.AssignDrivers(first);
+        var trip = Trip.Open(truck.Id, CompanyId, new DateTime(2026, 8, 1, 5, 0, 0, DateTimeKind.Utc));
+        trip.RecordDriver(first);
+
+        var primary = SomeDriver();
+        var secondary = SomeDriver();
+        var unitOfWork = SetUp(truck, new Dictionary<Guid, Driver> { [primary.Id] = primary, [secondary.Id] = secondary }, trip);
+
+        await new AssignDriversHandler(unitOfWork.Object).AssignDriversAsync(new AssignDriversRequest(truck.Id, primary.Id, secondary.Id));
+
+        Assert.Equal([first.Id, primary.Id, secondary.Id], trip.Drivers.Select(driver => driver.DriverId));
     }
 
     [Fact]
