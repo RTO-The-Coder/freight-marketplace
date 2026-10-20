@@ -22,7 +22,7 @@ import { TripMap } from '../components/TripMap'
 import { TripCard } from '../components/tracking/TripCard'
 import { TruckDriversPanel } from '../components/TruckDriversPanel'
 import { ROUTE_COLORS, fleetApi, isTripNotMovedYet, trackingApi, truckingCompaniesApi } from '@freight/fleetmanagement-core'
-import { SidePanel } from '@freight/web-ui'
+import { SidePanel, Toast } from '@freight/web-ui'
 
 interface TruckDetailScreenProps {
   truckId: string
@@ -33,8 +33,8 @@ interface TruckDetailScreenProps {
   onOpenTracking: () => void
 }
 
-/** How long the "Driver added" message stays up. */
-const DRIVER_ADDED_MESSAGE_MS = 5000
+/** How long the "✓ Driver added" confirmation stays up. */
+const ADDED_VISIBLE_MS = 3000
 
 /**
  * One truck's page, laid out like the company page: the truck on top, then three columns -
@@ -52,7 +52,8 @@ export function TruckDetailScreen({ truckId, simVersion, onTruckLoaded, onOpenTr
   const [tripReloadKey, setTripReloadKey] = useState(0)
   const [error, setError] = useState<string | null>(null)
   const [modal, setModal] = useState<'addDriver' | 'assignDrivers' | 'rescheduleTrip' | 'assignShipment' | null>(null)
-  const [driverMessage, setDriverMessage] = useState<string | null>(null)
+  /** The new driver's name for the centred "✓ Driver added" confirmation. */
+  const [addedDriver, setAddedDriver] = useState<string | null>(null)
   /** The driver whose details popup is open, if any. */
   const [viewingDriver, setViewingDriver] = useState<{ driverId: string; name: string } | null>(null)
   const [removingDrivers, setRemovingDrivers] = useState(false)
@@ -85,13 +86,6 @@ export function TruckDetailScreen({ truckId, simVersion, onTruckLoaded, onOpenTr
   useEffect(() => {
     load()
   }, [load, simVersion])
-
-  // The "Driver added" message clears itself.
-  useEffect(() => {
-    if (!driverMessage) return
-    const timer = window.setTimeout(() => setDriverMessage(null), DRIVER_ADDED_MESSAGE_MS)
-    return () => window.clearTimeout(timer)
-  }, [driverMessage])
 
   // The company: its name for the shipment notes, its office for the heading and the office marker.
   const companyId = truck?.truckingCompanyId ?? null
@@ -246,7 +240,6 @@ export function TruckDetailScreen({ truckId, simVersion, onTruckLoaded, onOpenTr
                 drivers={drivers}
                 hasOpenTrip={hasOpenTrip}
                 removing={removingDrivers}
-                message={driverMessage}
                 onAddDriver={companyId ? () => setModal('addDriver') : null}
                 onAssign={() => setModal('assignDrivers')}
                 onRemove={() => void handleRemoveDrivers()}
@@ -280,22 +273,26 @@ export function TruckDetailScreen({ truckId, simVersion, onTruckLoaded, onOpenTr
         <DriverDetailModal
           driverId={viewingDriver.driverId}
           driverName={viewingDriver.name}
+          companyName={company?.name ?? ''}
           onClose={() => setViewingDriver(null)}
+          onSelectDriver={(driverId, name) => setViewingDriver({ driverId, name })}
         />
       )}
       {modal === 'addDriver' && companyId && (
         <AddDriverModal
           companyId={companyId}
+          companyName={company?.name ?? ''}
           onClose={() => setModal(null)}
-          onAdded={() => {
+          onAdded={(_driverId, name) => {
             setModal(null)
-            setDriverMessage('Driver added — put them on this truck with Assign / Reassign.')
+            setAddedDriver(name)
           }}
         />
       )}
       {modal === 'assignDrivers' && truck && (
         <AssignDriversModal
           truckId={truckId}
+          truckName={truck.truckName}
           truckSize={truck.truckSize}
           onClose={() => setModal(null)}
           onAssigned={() => {
@@ -329,6 +326,16 @@ export function TruckDetailScreen({ truckId, simVersion, onTruckLoaded, onOpenTr
             setModal(null)
             load()
           }}
+        />
+      )}
+      {addedDriver && (
+        <Toast
+          kind="done"
+          placement="center"
+          title="Driver added"
+          detail={`${addedDriver} · put them on this truck with Assign`}
+          autoCloseMs={ADDED_VISIBLE_MS}
+          onClose={() => setAddedDriver(null)}
         />
       )}
     </div>

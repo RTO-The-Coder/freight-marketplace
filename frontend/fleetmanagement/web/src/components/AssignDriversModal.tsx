@@ -6,12 +6,14 @@ import { Modal } from '@freight/web-ui'
 
 interface AssignDriversModalProps {
   truckId: string
+  /** Named in the title: "Drivers of Flatbed 1". */
+  truckName: string
   truckSize: TruckSize
   onClose: () => void
   onAssigned: () => void
 }
 
-export function AssignDriversModal({ truckId, truckSize, onClose, onAssigned }: AssignDriversModalProps) {
+export function AssignDriversModal({ truckId, truckName, truckSize, onClose, onAssigned }: AssignDriversModalProps) {
   const isLarge = truckSize === 'Large'
 
   // The truck company's unassigned pool plus this truck's own current drivers — so a
@@ -72,7 +74,21 @@ export function AssignDriversModal({ truckId, truckSize, onClose, onAssigned }: 
   }
 
   return (
-    <Modal title="Assign Drivers" onClose={onClose}>
+    <Modal
+      title={`Drivers of ${truckName}`}
+      context={`${truckSize} truck`}
+      onClose={onClose}
+      footer={
+        <>
+          <button type="button" className="btn" onClick={onClose}>
+            Cancel
+          </button>
+          <button type="button" className="btn btn--primary" onClick={handleSave} disabled={!canSave || isSubmitting}>
+            {isSubmitting ? 'Saving…' : 'Save drivers'}
+          </button>
+        </>
+      }
+    >
       <div className="stack">
         {!drivers && !error && <p className="notice">Loading drivers…</p>}
         {error && <p className="alert">{error}</p>}
@@ -110,15 +126,6 @@ export function AssignDriversModal({ truckId, truckSize, onClose, onAssigned }: 
             )}
           </>
         )}
-      </div>
-
-      <div className="modal-actions">
-        <button type="button" className="btn" onClick={onClose}>
-          Cancel
-        </button>
-        <button type="button" className="btn btn--primary" onClick={handleSave} disabled={!canSave || isSubmitting}>
-          {isSubmitting ? 'Saving…' : 'Save drivers'}
-        </button>
       </div>
     </Modal>
   )

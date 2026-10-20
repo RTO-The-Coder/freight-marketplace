@@ -3,7 +3,7 @@ import { useState } from 'react'
 import { tripsApi } from '@freight/fleetmanagement-core'
 import { useSimClock } from '@freight/fleetmanagement-core'
 import { datetimeLocalToIso, isoToDatetimeLocal } from '@freight/fleetmanagement-core'
-import { Modal } from '@freight/web-ui'
+import { DateTimeFields, Modal } from '@freight/web-ui'
 
 interface RescheduleTripModalProps {
   tripId: string
@@ -39,25 +39,27 @@ export function RescheduleTripModal({ tripId, currentStart, onClose, onReschedul
   }
 
   return (
-    <Modal title="Change trip start" onClose={onClose}>
+    <Modal
+      title="Change trip start"
+      onClose={onClose}
+      footer={
+        <>
+          <button type="button" className="btn" onClick={onClose}>
+            Cancel
+          </button>
+          <button type="button" className="btn btn--primary" onClick={save} disabled={busy || !value}>
+            {busy ? 'Saving…' : 'Change start'}
+          </button>
+        </>
+      }
+    >
       <div className="stack">
-        <label className="field">
+        <div className="field">
           <span>Trip start (simulation time)</span>
-          <input type="datetime-local" value={value} onChange={(e) => setValue(e.target.value)} />
-        </label>
-        <p style={{ fontSize: 'var(--text-sm)', color: 'var(--c-text-subtle)', margin: 0 }}>
-          Only possible while the truck is still at the office and has not reached any stop.
-        </p>
+          <DateTimeFields label="Trip start" value={value} onChange={setValue} />
+        </div>
+        <p className="hint">Only possible while the truck is still at the office and has not reached any stop.</p>
         {error && <p className="alert">{error}</p>}
-      </div>
-
-      <div className="modal-actions">
-        <button type="button" className="btn" onClick={onClose}>
-          Cancel
-        </button>
-        <button type="button" className="btn btn--primary" onClick={save} disabled={busy || !value}>
-          {busy ? 'Saving…' : 'Change start'}
-        </button>
       </div>
     </Modal>
   )

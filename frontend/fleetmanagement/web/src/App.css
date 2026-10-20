@@ -121,11 +121,6 @@
 }
 
 /* --- Company page: Drivers list ------------------------------ */
-.drivers-panel__message {
-  margin: 0 0 var(--space-3);
-  padding: var(--space-2) var(--space-3);
-  font-size: var(--text-sm);
-}
 
 .driver-row {
   width: 100%;
@@ -144,6 +139,28 @@
 .driver-row--highlighted {
   background: var(--c-accent-bg);
   border-color: var(--c-accent-border);
+}
+
+/* The truck or driver just added with a quick add: tinted, fading out over ~3 s. */
+.row--just-added {
+  animation: row-just-added 3s ease-out;
+}
+
+@keyframes row-just-added {
+  0%,
+  60% {
+    background: var(--c-accent-bg);
+    border-color: var(--c-accent);
+    box-shadow: 0 0 0 1px var(--c-accent);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .row--just-added {
+    animation: none;
+    background: var(--c-accent-bg);
+    border-color: var(--c-accent);
+  }
 }
 
 /* --- Truck page: status and switch in the heading row --------------- */
@@ -471,12 +488,6 @@
   margin-left: var(--space-2);
 }
 
-/* The assign-drivers modal is short; let its dropdowns float past the card
-   edge (over the footer, transiently) instead of clipping. */
-.modal:has(.assign-slot) {
-  overflow: visible;
-}
-
 /* --- Searchable driver select ------------------------------- */
 .driver-select {
   position: relative;
@@ -486,12 +497,11 @@
   width: 100%;
 }
 
+/* Drawn at the page's top level under its input (see DriverSearchSelect), so a popup's
+   scrolling body never cuts it off; above the popups (1100), below the messages (1200). */
 .driver-select__menu {
-  position: absolute;
-  left: 0;
-  right: 0;
-  top: calc(100% + 4px);
-  z-index: 20;
+  position: fixed;
+  z-index: 1150;
   margin: 0;
   padding: var(--space-1);
   list-style: none;

@@ -5,8 +5,8 @@ import { Chevron } from './Chevron'
 interface DriversPanelProps {
   /** The company's drivers, already in display order; null while loading. */
   drivers: FleetCompanyDriverDto[] | null
-  /** Shown briefly after a driver is added ("Driver added"). */
-  message: string | null
+  /** The driver just added: their row is highlighted for a moment. */
+  justAddedDriverId: string | null
   /** The truck hovered in the Fleet list: its drivers' rows are tinted. */
   highlightedTruckId: string | null
   onAddDriver: () => void
@@ -14,7 +14,7 @@ interface DriversPanelProps {
 }
 
 /** The body of the company page's Drivers column: every driver of the company, assigned or not. */
-export function DriversPanel({ drivers, message, highlightedTruckId, onAddDriver, onSelectDriver }: DriversPanelProps) {
+export function DriversPanel({ drivers, justAddedDriverId, highlightedTruckId, onAddDriver, onSelectDriver }: DriversPanelProps) {
   return (
     <div className="drivers-panel">
       <div className="side-panel__actions">
@@ -22,12 +22,6 @@ export function DriversPanel({ drivers, message, highlightedTruckId, onAddDriver
           + Add driver
         </button>
       </div>
-
-      {message && (
-        <p className="notice notice--ok drivers-panel__message" role="status">
-          {message}
-        </p>
-      )}
 
       {!drivers && (
         <ul className="row-list">
@@ -48,7 +42,8 @@ export function DriversPanel({ drivers, message, highlightedTruckId, onAddDriver
               <li key={driver.driverId}>
                 <button
                   type="button"
-                  className={`fleet-row fleet-row--interactive driver-row${highlighted ? ' driver-row--highlighted' : ''}`}
+                  className={`fleet-row fleet-row--interactive driver-row${highlighted ? ' driver-row--highlighted' : ''}${driver.driverId === justAddedDriverId ? ' row--just-added' : ''}`}
+                  data-row-id={driver.driverId}
                   onClick={() => onSelectDriver(driver.driverId, name)}
                 >
                   <span className="driver-row__main">

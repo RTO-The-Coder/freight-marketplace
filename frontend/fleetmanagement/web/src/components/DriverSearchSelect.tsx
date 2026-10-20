@@ -1,5 +1,6 @@
 import type { DriverSummaryDto } from '@freight/api-client'
-import { useMemo, useRef, useState } from 'react'
+import { useLayoutEffect, useMemo, useRef, useState, type CSSProperties } from 'react'
+import { createPortal } from 'react-dom'
 import { fullName, searchDrivers } from '@freight/fleetmanagement-core'
 
 interface DriverSearchSelectProps {
@@ -17,7 +18,8 @@ interface DriverSearchSelectProps {
  * Searchable single-select for picking a driver from a large pool. Type a name
  * (first or last), pick from the dropdown; the selection collapses to a chip
  * with a Change action. The dropdown always opens downward and floats over the
- * content below, so opening it never shifts the modal's layout.
+ * content below, so opening it never shifts the modal's layout. It is drawn at the page's top
+ * level, lined up under the input, so the popup's scrolling body never cuts it off.
  */
 export function DriverSearchSelect({
   label,
@@ -30,6 +32,24 @@ export function DriverSearchSelect({
   const [query, setQuery] = useState('')
   const [open, setOpen] = useState(false)
   const blurTimer = useRef<number | undefined>(undefined)
+  const inputRef = useRef<HTMLInputElement>(null)
+  const [menuPlace, setMenuPlace] = useState<CSSProperties | null>(null)
+
+  // Keep the menu under the input while it is open, also when the popup scrolls or resizes.
+  useLayoutEffect(() => {
+    if (!open) return
+    const place = () => {
+      const rect = inputRef.current?.getBoundingClientRect()
+      if (rect) setMenuPlace({ top: rect.bottom + 4, left: rect.left, width: rect.width })
+    }
+    place()
+    window.addEventListener('scroll', place, true)
+    window.addEventListener('resize', place)
+    return () => {
+      window.removeEventListener('scroll', place, true)
+      window.removeEventListener('resize', place)
+    }
+  }, [open])
 
   const selected = value ? drivers.find((d) => d.driverId === value) ?? null : null
 
@@ -62,6 +82,7 @@ export function DriverSearchSelect({
       <span>{label}</span>
       <div className="driver-select">
         <input
+          ref={inputRef}
           type="text"
           placeholder="Search by name…"
           value={query}
@@ -78,35 +99,36 @@ export function DriverSearchSelect({
           }}
         />
 
-        {open && (
-          <ul className="driver-select__menu">
-            {results.list.length === 0 ? (
-              <li className="driver-select__empty">
-                {query.trim() ? 'No drivers match' : 'No unassigned drivers'}
-              </li>
-            ) : (
-              results.list.map((d) => (
-                <li key={d.driverId}>
-                  <button
-                    type="button"
-                    className="driver-select__option"
-                    onMouseDown={(e) => {
-                      e.preventDefault()
-                      window.clearTimeout(blurTimer.current)
-                      onChange(d.driverId)
-                      setOpen(false)
-                    }}
-                  >
-                    {fullName(d)}
-                  </button>
-                </li>
-              ))
-            )}
-            {results.total > results.list.length && (
-              <li className="driver-select__more">+{results.total - results.list.length} more — keep typing</li>
-            )}
-          </ul>
-        )}
+        {open &&
+          menuPlace &&
+          createPortal(
+            <ul className="driver-select__menu" style={menuPlace}>
+              {results.list.length === 0 ? (
+                <li className="driver-select__empty">{query.trim() ? 'No drivers match' : 'No unassigned drivers'}</li>
+              ) : (
+                results.list.map((d) => (
+                  <li key={d.driverId}>
+                    <button
+                      type="button"
+                      className="driver-select__option"
+                      onMouseDown={(e) => {
+                        e.preventDefault()
+                        window.clearTimeout(blurTimer.current)
+                        onChange(d.driverId)
+                        setOpen(false)
+                      }}
+                    >
+                      {fullName(d)}
+                    </button>
+                  </li>
+                ))
+              )}
+              {results.total > results.list.length && (
+                <li className="driver-select__more">+{results.total - results.list.length} more — keep typing</li>
+              )}
+            </ul>,
+            document.body,
+          )}
       </div>
     </div>
   )

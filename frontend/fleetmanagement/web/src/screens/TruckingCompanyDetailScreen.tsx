@@ -21,7 +21,7 @@ import { OpenShipmentsPanel } from '../components/OpenShipmentsPanel'
 import { StatusPill } from '../components/StatusPill'
 import { TruckSelector } from '../components/TruckSelector'
 import { ROUTE_COLORS, fleetApi, truckingCompaniesApi } from '@freight/fleetmanagement-core'
-import { Logo, SidePanel } from '@freight/web-ui'
+import { Logo, SidePanel, Toast } from '@freight/web-ui'
 
 interface TruckingCompanyDetailScreenProps {
   companyId: string
@@ -33,8 +33,8 @@ interface TruckingCompanyDetailScreenProps {
   onSelectTruck: (truckId: string, truckName: string) => void
 }
 
-/** How long the "Driver added" message stays up. */
-const DRIVER_ADDED_MESSAGE_MS = 3000
+/** How long the "✓ Truck added / Driver added" confirmation and the new row's highlight stay up. */
+const ADDED_VISIBLE_MS = 3000
 
 export function TruckingCompanyDetailScreen({
   companyId,
@@ -46,7 +46,10 @@ export function TruckingCompanyDetailScreen({
   const [company, setCompany] = useState<TruckingCompanySummaryDto | null>(null)
   const [trucks, setTrucks] = useState<TruckSummaryDto[] | null>(null)
   const [companyDrivers, setCompanyDrivers] = useState<FleetCompanyDriverDto[] | null>(null)
-  const [driverMessage, setDriverMessage] = useState<string | null>(null)
+  /** The centred "✓ Truck added — FL-14 · Flatbed · Large" after a quick add. */
+  const [added, setAdded] = useState<{ title: string; detail: string } | null>(null)
+  /** The truck or driver just added: its row is highlighted for a moment. */
+  const [justAddedId, setJustAddedId] = useState<string | null>(null)
   const [truckDetails, setTruckDetails] = useState<Map<string, TruckDetailDto> | null>(null)
   const [positions, setPositions] = useState<Map<string, TruckPositionDto>>(new Map())
   const [error, setError] = useState<string | null>(null)
@@ -104,12 +107,16 @@ export function TruckingCompanyDetailScreen({
       .catch((err) => setError(err instanceof Error ? err.message : 'Failed to load drivers.'))
   }, [companyId])
 
-  // The "Driver added" message clears itself.
+  // The new row's highlight fades; the row is scrolled into view once the lists have it.
   useEffect(() => {
-    if (!driverMessage) return
-    const timer = window.setTimeout(() => setDriverMessage(null), DRIVER_ADDED_MESSAGE_MS)
+    if (!justAddedId) return
+    const timer = window.setTimeout(() => setJustAddedId(null), ADDED_VISIBLE_MS)
     return () => window.clearTimeout(timer)
-  }, [driverMessage])
+  }, [justAddedId])
+
+  useEffect(() => {
+    if (justAddedId) document.querySelector(`[data-row-id="${justAddedId}"]`)?.scrollIntoView({ block: 'nearest' })
+  }, [justAddedId, trucks, companyDrivers])
 
   const orderedDrivers = useMemo(
     () => (companyDrivers ? orderCompanyDrivers(companyDrivers, (trucks ?? []).map((t) => t.truckId)) : null),
@@ -296,7 +303,10 @@ export function TruckingCompanyDetailScreen({
                         onMouseEnter={() => setHoveredTruckId(truck.truckId)}
                         onMouseLeave={() => setHoveredTruckId((current) => (current === truck.truckId ? null : current))}
                       >
-                        <div className="fleet-row fleet-row--interactive">
+                        <div
+                          className={`fleet-row fleet-row--interactive${truck.truckId === justAddedId ? ' row--just-added' : ''}`}
+                          data-row-id={truck.truckId}
+                        >
                           <button
                             type="button"
                             className="fleet-row__main"
@@ -350,7 +360,7 @@ export function TruckingCompanyDetailScreen({
             <SidePanel title="Drivers" count={orderedDrivers?.length ?? null}>
               <DriversPanel
                 drivers={orderedDrivers}
-                message={driverMessage}
+                justAddedDriverId={justAddedId}
                 highlightedTruckId={hoveredTruckId}
                 onAddDriver={() => setModal('addDriver')}
                 onSelectDriver={(driverId, name) => setViewingDriver({ driverId, name })}
@@ -382,7 +392,9 @@ export function TruckingCompanyDetailScreen({
         <DriverDetailModal
           driverId={viewingDriver.driverId}
           driverName={viewingDriver.name}
+          companyName={company?.name ?? ''}
           onClose={() => setViewingDriver(null)}
+          onSelectDriver={(driverId, name) => setViewingDriver({ driverId, name })}
           onSelectTruck={(truckId, truckName) => {
             setViewingDriver(null)
             onSelectTruck(truckId, truckName)
@@ -411,9 +423,12 @@ export function TruckingCompanyDetailScreen({
       {modal === 'addTruck' && (
         <AddTruckModal
           companyId={companyId}
+          companyName={company?.name ?? ''}
           onClose={() => setModal(null)}
-          onAdded={() => {
+          onAdded={(truckId, summary) => {
             setModal(null)
+            setAdded({ title: 'Truck added', detail: summary })
+            setJustAddedId(truckId)
             loadFleet()
           }}
         />
@@ -421,10 +436,12 @@ export function TruckingCompanyDetailScreen({
       {modal === 'addDriver' && (
         <AddDriverModal
           companyId={companyId}
+          companyName={company?.name ?? ''}
           onClose={() => setModal(null)}
-          onAdded={() => {
+          onAdded={(driverId, name) => {
             setModal(null)
-            setDriverMessage('Driver added')
+            setAdded({ title: 'Driver added', detail: name })
+            setJustAddedId(driverId)
             loadFleet()
           }}
         />
@@ -432,12 +449,23 @@ export function TruckingCompanyDetailScreen({
       {assigningTruck && (
         <AssignDriversModal
           truckId={assigningTruck.truckId}
+          truckName={assigningTruck.truckName}
           truckSize={assigningTruck.truckSize}
           onClose={() => setAssigningTruck(null)}
           onAssigned={() => {
             setAssigningTruck(null)
             loadFleet()
           }}
+        />
+      )}
+      {added && (
+        <Toast
+          kind="done"
+          placement="center"
+          title={added.title}
+          detail={added.detail}
+          autoCloseMs={ADDED_VISIBLE_MS}
+          onClose={() => setAdded(null)}
         />
       )}
     </div>

@@ -8,8 +8,6 @@ interface TruckDriversPanelProps {
   /** Drivers can't be removed while the truck has an open trip. */
   hasOpenTrip: boolean
   removing: boolean
-  /** Shown briefly after a driver is added ("Driver added …"). */
-  message: string | null
   /** Add a new driver to the company; null when the truck has no company. */
   onAddDriver: (() => void) | null
   onAssign: () => void
@@ -18,7 +16,7 @@ interface TruckDriversPanelProps {
 }
 
 /** The activity pill's colour: driving like a running truck, resting amber, riding plain. */
-const ACTIVITY_PILL: Record<DriverActivity, string> = {
+export const ACTIVITY_PILL: Record<DriverActivity, string> = {
   Driving: 'pill pill--running',
   Passenger: 'pill pill--plain',
   OnBreak: 'pill pill--idle',
@@ -31,7 +29,6 @@ export function TruckDriversPanel({
   drivers,
   hasOpenTrip,
   removing,
-  message,
   onAddDriver,
   onAssign,
   onRemove,
@@ -60,12 +57,6 @@ export function TruckDriversPanel({
           </button>
         )}
       </div>
-
-      {message && (
-        <p className="notice notice--ok drivers-panel__message" role="status">
-          {message}
-        </p>
-      )}
 
       {drivers.length === 0 && <p className="notice">No driver — assign one to activate this truck.</p>}
 
