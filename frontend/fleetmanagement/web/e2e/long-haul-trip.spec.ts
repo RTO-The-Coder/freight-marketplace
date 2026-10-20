@@ -2,6 +2,7 @@ import { bookDirectCopy, firstCompanyId, openDirectAssignModal, pendingShipments
 import { expect, test } from './fixtures'
 import { driversPanel, fleetRow } from './companyPage'
 import { REACHED_DOT, tripLineGroup, tripPanel, tripStopDots, tripStopKinds } from './truckPage'
+import { assignButton, pickFullRules, pickOption, TRUCK_TYPE_LABEL } from './popups'
 
 const API_BASE_URL = 'http://localhost:5017'
 
@@ -56,7 +57,7 @@ async function advanceAndCheckForError(
   await clock.getByRole('button', { name: 'Advance' }).click()
   await expect(clock.getByRole('button', { name: 'Advance' })).toBeEnabled({ timeout: 180_000 })
 
-  const errorEl = clock.locator('.simclock-popup--error .simclock-popup__text')
+  const errorEl = clock.locator('.toast--error .toast__text')
   if (await errorEl.count()) {
     const message = await errorEl.innerText()
     if (/one-directionally/.test(message)) {
@@ -99,8 +100,8 @@ test('a 10-14 day team-driver shipment runs the sim clock to full trip completio
   await test.step('build a Large truck of the matching type with a two-driver team', async () => {
     await page.getByRole('button', { name: '+ Add truck' }).click()
     await page.getByPlaceholder('e.g. FL-14').fill('LongHaul-Truck')
-    await page.locator('.picker__item', { hasText: shipment.requiredTruckType }).click()
-    await page.locator('.picker__item', { hasText: 'Large' }).click()
+    await pickOption(page, 'Type', TRUCK_TYPE_LABEL[shipment.requiredTruckType])
+    await pickOption(page, 'Size', 'Large')
     await page.getByRole('button', { name: 'Add truck', exact: true }).click()
     await expect(fleetRow(page, 'LongHaul-Truck')).toBeVisible()
 
@@ -108,9 +109,7 @@ test('a 10-14 day team-driver shipment runs the sim clock to full trip completio
     await page.getByRole('button', { name: '+ Add driver' }).click()
     await page.locator('label:has-text("First name") input').fill('Jonas')
     await page.locator('label:has-text("Last name") input').fill('Weber')
-    await page.locator('.picker__item', { hasText: 'FullBreak' }).click()
-    await page.locator('.picker__item', { hasText: 'FullRest' }).click()
-    await page.locator('.picker__item', { hasText: 'FullWeeklyRest' }).click()
+    await pickFullRules(page)
     await page.getByRole('button', { name: 'Add driver', exact: true }).click()
 
     // Secondary driver — a Large truck may run a two-driver relay team, which
@@ -119,9 +118,7 @@ test('a 10-14 day team-driver shipment runs the sim clock to full trip completio
     await page.getByRole('button', { name: '+ Add driver' }).click()
     await page.locator('label:has-text("First name") input').fill('Mikael')
     await page.locator('label:has-text("Last name") input').fill('Nyqvist')
-    await page.locator('.picker__item', { hasText: 'FullBreak' }).click()
-    await page.locator('.picker__item', { hasText: 'FullRest' }).click()
-    await page.locator('.picker__item', { hasText: 'FullWeeklyRest' }).click()
+    await pickFullRules(page)
     await page.getByRole('button', { name: 'Add driver', exact: true }).click()
 
     const truckRow = fleetRow(page, 'LongHaul-Truck')
@@ -131,11 +128,11 @@ test('a 10-14 day team-driver shipment runs the sim clock to full trip completio
 
     const primarySlot = page.locator('.assign-slot', { hasText: 'Primary driver' })
     await primarySlot.getByPlaceholder('Search by name…').fill('Jonas')
-    await primarySlot.locator('.driver-select__option', { hasText: 'Jonas Weber' }).click()
+    await page.locator('.driver-select__option', { hasText: 'Jonas Weber' }).click()
 
     const secondarySlot = page.locator('.assign-slot', { hasText: 'Secondary driver' })
     await secondarySlot.getByPlaceholder('Search by name…').fill('Mikael')
-    await secondarySlot.locator('.driver-select__option', { hasText: 'Mikael Nyqvist' }).click()
+    await page.locator('.driver-select__option', { hasText: 'Mikael Nyqvist' }).click()
 
     await page.getByRole('button', { name: 'Save drivers' }).click()
     // The truck page's Drivers column shows both drivers.
@@ -156,10 +153,10 @@ test('a 10-14 day team-driver shipment runs the sim clock to full trip completio
     await bookDirectCopy(shipment, companyId)
     await openDirectAssignModal(page, weightLabel(shipment))
 
-    await page.locator('.assign-radio', { hasText: 'LongHaul-Truck' }).click()
+    await page.locator('.assign-truck', { hasText: 'LongHaul-Truck' }).click()
 
     await expect(page.getByText('This shipment fits — ready to assign.')).toBeVisible({ timeout: 30_000 })
-    await page.getByRole('button', { name: 'Assign shipment' }).click()
+    await assignButton(page).click()
     await expect(page.getByRole('heading', { name: 'Assign a shipment' })).not.toBeVisible()
   })
 

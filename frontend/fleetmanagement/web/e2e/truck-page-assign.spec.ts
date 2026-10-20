@@ -2,6 +2,7 @@ import { bookDirectCopy, firstCompanyId, pendingShipments } from './directShipme
 import { expect, test } from './fixtures'
 import { fleetRow } from './companyPage'
 import { tripStopDots, tripStopKinds, truckShipmentsPanel } from './truckPage'
+import { assignButton, pickFullRules, pickOption } from './popups'
 
 /**
  * Brief 3 - a direct shipment is assigned from the truck's own page: the truck page's
@@ -18,17 +19,15 @@ test('assigns a direct shipment from the truck page', async ({ page }) => {
     await page.getByRole('button', { name: '+ Add truck' }).click()
     await page.getByPlaceholder('e.g. FL-14').fill('Page-Truck')
     // Large BoxVan: the largest capacity, so a seeded BoxVan shipment fits.
-    await page.locator('.picker__item', { hasText: 'BoxVan' }).click()
-    await page.locator('.picker__item', { hasText: 'Large' }).click()
+    await pickOption(page, 'Type', 'Box van')
+    await pickOption(page, 'Size', 'Large')
     await page.getByRole('button', { name: 'Add truck', exact: true }).click()
     await expect(fleetRow(page, 'Page-Truck')).toBeVisible()
 
     await page.getByRole('button', { name: '+ Add driver' }).click()
     await page.locator('label:has-text("First name") input').fill('Ida')
     await page.locator('label:has-text("Last name") input').fill('Lang')
-    await page.locator('.picker__item', { hasText: 'FullBreak' }).click()
-    await page.locator('.picker__item', { hasText: 'FullRest' }).click()
-    await page.locator('.picker__item', { hasText: 'FullWeeklyRest' }).click()
+    await pickFullRules(page)
     await page.getByRole('button', { name: 'Add driver', exact: true }).click()
 
     await fleetRow(page, 'Page-Truck').getByText('+ Assign driver').click()
@@ -65,11 +64,11 @@ test('assigns a direct shipment from the truck page', async ({ page }) => {
     await expect(page.getByRole('heading', { name: 'Assign a shipment' })).toBeVisible()
 
     // Only this truck is offered, and it is already chosen.
-    await expect(page.locator('.assign-radio')).toHaveCount(1)
-    await expect(page.locator('.assign-radio', { hasText: 'Page-Truck' }).locator('input')).toBeChecked()
+    await expect(page.locator('.assign-truck')).toHaveCount(1)
+    await expect(page.locator('.assign-truck', { hasText: 'Page-Truck' }).locator('input')).toBeChecked()
 
     await expect(page.getByText('This shipment fits — ready to assign.')).toBeVisible({ timeout: 30_000 })
-    await page.getByRole('button', { name: 'Assign shipment' }).click()
+    await assignButton(page).click()
     await expect(page.getByRole('heading', { name: 'Assign a shipment' })).not.toBeVisible()
   })
 

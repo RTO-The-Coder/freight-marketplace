@@ -3,6 +3,7 @@ import { bookDirectCopy, firstCompanyId, openDirectAssignModal, pendingShipments
 import { expect, test } from './fixtures'
 import { fleetRow } from './companyPage'
 import { tripLineGroup } from './truckPage'
+import { assignButton, pickFullRules, pickOption } from './popups'
 
 /*
  * The company's Tracking page follows one shipment through its trip: To pick, then On board,
@@ -48,7 +49,7 @@ async function advance(page: Page, ticks: number): Promise<void> {
   await clock.getByLabel('Unit').selectOption('ticks')
   await clock.getByRole('button', { name: 'Advance' }).click()
   await expect(clock.getByRole('button', { name: 'Advance' })).toBeEnabled({ timeout: 120_000 })
-  await expect(clock.locator('.simclock-popup--error')).toHaveCount(0)
+  await expect(clock.locator('.toast--error')).toHaveCount(0)
 }
 
 /** The running trip's card for a truck on the Tracking page. */
@@ -66,17 +67,15 @@ test('Tracking follows a shipment from To pick to On board to Delivered, then in
   await test.step('build an active truck with a driver', async () => {
     await page.getByRole('button', { name: '+ Add truck' }).click()
     await page.getByPlaceholder('e.g. FL-14').fill('Track-Truck')
-    await page.locator('.picker__item', { hasText: 'BoxVan' }).click()
-    await page.locator('.picker__item', { hasText: 'Large' }).click()
+    await pickOption(page, 'Type', 'Box van')
+    await pickOption(page, 'Size', 'Large')
     await page.getByRole('button', { name: 'Add truck', exact: true }).click()
     await expect(fleetRow(page, 'Track-Truck')).toBeVisible()
 
     await page.getByRole('button', { name: '+ Add driver' }).click()
     await page.locator('label:has-text("First name") input').fill('Tara')
     await page.locator('label:has-text("Last name") input').fill('Lenz')
-    await page.locator('.picker__item', { hasText: 'FullBreak' }).click()
-    await page.locator('.picker__item', { hasText: 'FullRest' }).click()
-    await page.locator('.picker__item', { hasText: 'FullWeeklyRest' }).click()
+    await pickFullRules(page)
     await page.getByRole('button', { name: 'Add driver', exact: true }).click()
 
     await fleetRow(page, 'Track-Truck').getByText('+ Assign driver').click()
@@ -94,9 +93,9 @@ test('Tracking follows a shipment from To pick to On board to Delivered, then in
     expect(boxVan, 'No open BoxVan shipment is pending in the seed data — this test needs one.').toBeDefined()
     await bookDirectCopy(boxVan!, companyId)
     await openDirectAssignModal(page, `${Math.round(boxVan!.loadWeightKg).toLocaleString('en-US')} kg`)
-    await page.locator('.assign-radio', { hasText: 'Track-Truck' }).click()
+    await page.locator('.assign-truck', { hasText: 'Track-Truck' }).click()
     await expect(page.getByText('This shipment fits — ready to assign.')).toBeVisible({ timeout: 30_000 })
-    await page.getByRole('button', { name: 'Assign shipment' }).click()
+    await assignButton(page).click()
     await expect(page.getByRole('heading', { name: 'Assign a shipment' })).not.toBeVisible()
   })
 

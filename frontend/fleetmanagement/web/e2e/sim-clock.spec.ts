@@ -2,6 +2,7 @@ import { bookDirectCopy, firstCompanyId, openDirectAssignModal, pendingShipments
 import { expect, test } from './fixtures'
 import { fleetRow } from './companyPage'
 import { REACHED_DOT, tripLineGroup, tripPanel, tripStopDots } from './truckPage'
+import { assignButton, clockMessage, pickFullRules, pickOption } from './popups'
 
 const API_BASE_URL = 'http://localhost:5017'
 
@@ -71,13 +72,13 @@ test.describe('Sim clock mechanics', () => {
     // Seed anchor: 2026-08-01T05:00:00Z.
     await expect(timeText).toContainText('05:00')
 
-    // Advance by 1 tick (5 minutes) — the default amount/unit. The result shows in a popup
-    // over the page; the Advance button keeps its label (the bar never changes size).
+    // Advance by 1 tick (5 minutes) — the default amount/unit. The result shows in a message
+    // at the top of the page; the Advance button keeps its label (the bar never changes size).
     const advanceButton = clock.getByRole('button', { name: 'Advance' })
     const buttonWidth = (await advanceButton.boundingBox())?.width
     await advanceButton.click()
     await expect(timeText).toContainText('05:05')
-    const popup = page.locator('.simclock-popup')
+    const popup = clockMessage(page)
     await expect(popup).toHaveAttribute('role', 'status')
     await expect(popup).toContainText('Now ')
     await expect(popup).toContainText('05:05')
@@ -103,16 +104,17 @@ test.describe('Sim clock mechanics', () => {
     await clock.getByRole('button', { name: 'Set time' }).click()
     const modalHeading = page.getByRole('heading', { name: 'Set simulation time' })
     await expect(modalHeading).toBeVisible()
-    // Scoped to the modal — the bar's own trigger button has the identical
+    // Scoped to the popup — the bar's own trigger button has the identical
     // accessible name "Set time", so an unscoped lookup here is ambiguous.
-    const modal = page.locator('.modal', { has: modalHeading })
+    const modal = page.getByRole('dialog', { name: 'Set simulation time' })
 
-    const picker = modal.locator('input[type="datetime-local"]')
-    await picker.fill('2026-08-05T12:00')
+    // Date and time are two fields.
+    await modal.getByLabel('Simulation time date').fill('2026-08-05')
+    await modal.getByLabel('Simulation time time').fill('12:00')
     await modal.getByRole('button', { name: 'Set time', exact: true }).click()
 
     await expect(modalHeading).not.toBeVisible()
-    await expect(page.locator('.simclock-popup')).toContainText('Clock set to')
+    await expect(clockMessage(page)).toContainText('Clock set to')
     await expect(clock.locator('.simclock__time')).toContainText('Aug 5')
     await expect(clock.locator('.simclock__time')).toContainText('12:00')
   })
@@ -135,17 +137,15 @@ test('advancing the clock moves a truck along its route (a Pending stop becomes 
     // Large/BoxVan: the largest capacity tier, to match as many of the
     // seed's randomly-sized pending shipments as possible — this test only
     // needs SOME shipment assigned, not a specific one.
-    await page.locator('.picker__item', { hasText: 'BoxVan' }).click()
-    await page.locator('.picker__item', { hasText: 'Large' }).click()
+    await pickOption(page, 'Type', 'Box van')
+    await pickOption(page, 'Size', 'Large')
     await page.getByRole('button', { name: 'Add truck', exact: true }).click()
     await expect(fleetRow(page, 'Clock-Truck')).toBeVisible()
 
     await page.getByRole('button', { name: '+ Add driver' }).click()
     await page.locator('label:has-text("First name") input').fill('Otto')
     await page.locator('label:has-text("Last name") input').fill('Bauer')
-    await page.locator('.picker__item', { hasText: 'FullBreak' }).click()
-    await page.locator('.picker__item', { hasText: 'FullRest' }).click()
-    await page.locator('.picker__item', { hasText: 'FullWeeklyRest' }).click()
+    await pickFullRules(page)
     await page.getByRole('button', { name: 'Add driver', exact: true }).click()
 
     await fleetRow(page, 'Clock-Truck').getByText('+ Assign driver').click()
@@ -169,10 +169,10 @@ test('advancing the clock moves a truck along its route (a Pending stop becomes 
     await openDirectAssignModal(page, `${Math.round(boxVan!.loadWeightKg).toLocaleString('en-US')} kg`)
 
     // The form offers only trucks of the shipment's type that are big enough.
-    await page.locator('.assign-radio', { hasText: 'Clock-Truck' }).click()
+    await page.locator('.assign-truck', { hasText: 'Clock-Truck' }).click()
 
     await expect(page.getByText('This shipment fits — ready to assign.')).toBeVisible({ timeout: 30_000 })
-    await page.getByRole('button', { name: 'Assign shipment' }).click()
+    await assignButton(page).click()
     await expect(page.getByRole('heading', { name: 'Assign a shipment' })).not.toBeVisible()
   })
 

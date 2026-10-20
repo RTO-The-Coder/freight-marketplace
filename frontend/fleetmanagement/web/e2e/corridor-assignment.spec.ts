@@ -2,6 +2,7 @@ import { bookDirectCopy, firstCompanyId, openDirectAssignModal, pendingShipments
 import { expect, test } from './fixtures'
 import { fleetRow } from './companyPage'
 import { tripStopDots, tripStopKinds } from './truckPage'
+import { assignButton, pickFullRules, pickOption } from './popups'
 
 // Per-test reseeding (every test starting from a clean, known DB state) is
 // handled by the `page` fixture in ./fixtures — see its comment for why that's
@@ -77,17 +78,15 @@ function weightLabel(s: ShipmentSummary): string {
 async function buildActivatedFlatbedTruck(page: import('@playwright/test').Page, truckName: string) {
   await page.getByRole('button', { name: '+ Add truck' }).click()
   await page.getByPlaceholder('e.g. FL-14').fill(truckName)
-  await page.locator('.picker__item', { hasText: 'Flatbed' }).click()
-  await page.locator('.picker__item', { hasText: 'Large' }).click()
+  await pickOption(page, 'Type', 'Flatbed')
+  await pickOption(page, 'Size', 'Large')
   await page.getByRole('button', { name: 'Add truck', exact: true }).click()
   await expect(fleetRow(page, truckName)).toBeVisible()
 
   await page.getByRole('button', { name: '+ Add driver' }).click()
   await page.locator('label:has-text("First name") input').fill('Lena')
   await page.locator('label:has-text("Last name") input').fill('Fischer')
-  await page.locator('.picker__item', { hasText: 'FullBreak' }).click()
-  await page.locator('.picker__item', { hasText: 'FullRest' }).click()
-  await page.locator('.picker__item', { hasText: 'FullWeeklyRest' }).click()
+  await pickFullRules(page)
   await page.getByRole('button', { name: 'Add driver', exact: true }).click()
 
   await fleetRow(page, truckName).getByText('+ Assign driver').click()
@@ -110,7 +109,7 @@ async function assignShipment(
   insertIndex?: number,
 ) {
   await openAssignModal(page, weightLabel(shipment))
-  await page.locator('.assign-radio', { hasText: 'Corridor-Truck' }).click()
+  await page.locator('.assign-truck', { hasText: 'Corridor-Truck' }).click()
 
   if (insertIndex !== undefined) {
     const selects = page.locator('.assign-index__controls select')
@@ -119,7 +118,7 @@ async function assignShipment(
   }
 
   await expect(page.getByText('This shipment fits — ready to assign.')).toBeVisible({ timeout: 30_000 })
-  await page.getByRole('button', { name: 'Assign shipment' }).click()
+  await assignButton(page).click()
   await expect(page.getByRole('heading', { name: 'Assign a shipment' })).not.toBeVisible()
 }
 
@@ -147,10 +146,10 @@ test.skip('interleave 3 corridor shipments onto one Flatbed truck via the insert
 
   await test.step('assigns corridor-1 (Berlin -> Munich) as a fresh trip', async () => {
     await openAssignModal(page, weightLabel(corridor1))
-    await page.locator('.assign-radio', { hasText: 'Corridor-Truck' }).click()
+    await page.locator('.assign-truck', { hasText: 'Corridor-Truck' }).click()
     await expect(page.getByText('This starts a new trip: pickup then delivery.')).toBeVisible()
     await expect(page.getByText('This shipment fits — ready to assign.')).toBeVisible({ timeout: 30_000 })
-    await page.getByRole('button', { name: 'Assign shipment' }).click()
+    await assignButton(page).click()
     await expect(page.getByRole('heading', { name: 'Assign a shipment' })).not.toBeVisible()
   })
 
@@ -220,13 +219,13 @@ test.skip('regression: the corridor-3 insertion that used to hang (G15) now reso
 
   // This used to hang; it must now resolve to feasible within a normal timeout.
   await openAssignModal(page, weightLabel(corridor3))
-  await page.locator('.assign-radio', { hasText: 'Corridor-Truck' }).click()
+  await page.locator('.assign-truck', { hasText: 'Corridor-Truck' }).click()
   const selects = page.locator('.assign-index__controls select')
   await selects.first().selectOption('3')
   await selects.nth(1).selectOption('3')
 
   await expect(page.getByText('This shipment fits — ready to assign.')).toBeVisible({ timeout: 30_000 })
   await expect(page.getByText(/did not terminate/i)).toHaveCount(0)
-  await page.getByRole('button', { name: 'Assign shipment' }).click()
+  await assignButton(page).click()
   await expect(page.getByRole('heading', { name: 'Assign a shipment' })).not.toBeVisible()
 })
