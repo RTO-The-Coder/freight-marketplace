@@ -16,15 +16,17 @@ interface ToastProps {
    * in progress): it stays until the caller removes it.
    */
   onClose?: () => void
+  /** false: only its own timer closes it, never Esc or a click (the sim clock's result). */
+  dismissible?: boolean
 }
 
 const ICONS = { done: '✓', error: '⚠' } as const
 
 /** A message in the same card style as the popups, over everything including the maps. */
-export function Toast({ kind, placement, title, detail, autoCloseMs, onClose }: ToastProps) {
+export function Toast({ kind, placement, title, detail, autoCloseMs, onClose, dismissible = true }: ToastProps) {
   const close = useRef(onClose)
   close.current = onClose
-  useEscapeToClose(onClose)
+  useEscapeToClose(dismissible ? onClose : undefined)
 
   useEffect(() => {
     if (!autoCloseMs || !close.current) return
@@ -33,7 +35,7 @@ export function Toast({ kind, placement, title, detail, autoCloseMs, onClose }: 
   }, [autoCloseMs, title, detail])
 
   // A click anywhere closes a confirmation sooner (never an error - it has its ×).
-  const closesOnClick = onClose !== undefined && kind !== 'error'
+  const closesOnClick = dismissible && onClose !== undefined && kind !== 'error'
   useEffect(() => {
     if (!closesOnClick) return
     const onPointerDown = () => close.current?.()

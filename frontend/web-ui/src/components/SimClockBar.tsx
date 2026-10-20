@@ -130,6 +130,7 @@ export function SimClockBar() {
           detail={notice.detail}
           autoCloseMs={RESULT_VISIBLE_MS}
           onClose={() => setNotice(null)}
+          dismissible={false}
         />
       )}
       {notice?.kind === 'error' && (
