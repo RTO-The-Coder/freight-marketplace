@@ -1,4 +1,7 @@
+using Freight.Domain.Client;
 using Freight.Domain.Common;
+using Freight.Domain.Fleet;
+using Freight.Domain.Fleet.Enums;
 using Freight.Domain.Fleet.ValueObjects;
 
 namespace Freight.Application.Fleet;
@@ -12,11 +15,26 @@ public sealed record AssignShipmentToTruckRequest(
 
 public sealed record AssignShipmentToTruckResponse(int StopCount);
 
+/// <summary>
+/// The dry-run verdict, plus the route as it would look: <paramref name="Stops"/> are the
+/// remaining (Pending) stops after the insertion in route order, Office last, each with its
+/// forecast arrival (null when capacity rejected the insertion before any forecast ran);
+/// <paramref name="AddedDistanceKm"/> is how much longer the trip gets.
+/// </summary>
 public sealed record ShipmentFeasibilityResponse(
     bool IsFeasible,
     Guid? ViolatingStopId,
     string? Reason,
-    int TotalPlannedWaitTicks = 0);
+    int TotalPlannedWaitTicks = 0,
+    IReadOnlyList<ProposedStopDto>? Stops = null,
+    double AddedDistanceKm = 0);
+
+/// <param name="IsNew">One of the two stops this insertion adds.</param>
+public sealed record ProposedStopDto(
+    StopKind Kind,
+    string PlaceName,
+    DateTime? ProjectedArrival,
+    bool IsNew);
 
 /// <summary>
 /// Assigns a booked shipment to a truck's route at caller-specified insertion points, using
@@ -41,9 +59,51 @@ public sealed class AssignShipmentToTruckHandler(IUnitOfWork unitOfWork, Shipmen
         var prepared = await insertionPlanner.PlanAsync(request, cancellationToken);
         var feasibility = prepared.Feasibility;
         var totalWaitTicks = feasibility.PlannedWaitTicks?.Values.Sum() ?? 0;
+        var stops = await ProposedStopsAsync(prepared, cancellationToken);
+        var addedDistanceKm = prepared.Preview.TotalPlannedDistanceKm - prepared.Trip.TotalPlannedDistanceKm;
         return new ShipmentFeasibilityResponse(
-            feasibility.IsFeasible, feasibility.ViolatingStopId, feasibility.ViolationReason, totalWaitTicks);
+            feasibility.IsFeasible, feasibility.ViolatingStopId, feasibility.ViolationReason, totalWaitTicks,
+            stops, addedDistanceKm);
     }
+
+    /// <summary>The preview's Pending stops in route order with their place names and forecast arrivals.</summary>
+    private async Task<IReadOnlyList<ProposedStopDto>> ProposedStopsAsync(
+        PreparedInsertion prepared, CancellationToken cancellationToken)
+    {
+        var pending = prepared.Preview.Stops
+            .Where(stop => stop.Status == StopStatus.Pending)
+            .OrderBy(stop => stop.Sequence)
+            .ToList();
+
+        var otherShipmentIds = pending
+            .Where(stop => stop.ShipmentId is { } id && id != prepared.Shipment.Id)
+            .Select(stop => stop.ShipmentId!.Value)
+            .Distinct()
+            .ToList();
+        var shipments = (await unitOfWork.Shipments.GetByIdsAsync(otherShipmentIds, cancellationToken))
+            .ToDictionary(shipment => shipment.Id);
+        shipments[prepared.Shipment.Id] = prepared.Shipment;
+
+        var company = await unitOfWork.TruckingCompanies.GetByIdAsync(prepared.Trip.TruckingCompanyId, cancellationToken);
+        var arrivals = prepared.Feasibility.ProjectedArrivals;
+
+        return pending
+            .Select(stop => new ProposedStopDto(
+                stop.Kind,
+                PlaceName(stop, shipments, company) ?? string.Empty,
+                arrivals is not null && arrivals.TryGetValue(stop.Id, out var arrival) ? arrival : null,
+                stop.ShipmentId == prepared.Shipment.Id))
+            .ToList();
+    }
+
+    private static string? PlaceName(Stop stop, Dictionary<Guid, Shipment> shipments, TruckingCompany? company) =>
+        stop.Kind switch
+        {
+            StopKind.Pickup when stop.ShipmentId is { } id && shipments.TryGetValue(id, out var shipment) => shipment.PickupPlaceName,
+            StopKind.Delivery when stop.ShipmentId is { } id && shipments.TryGetValue(id, out var shipment) => shipment.DeliveryPlaceName,
+            StopKind.Office => company?.OfficePlaceName,
+            _ => null,
+        };
 
     public async Task<AssignShipmentToTruckResponse> AssignShipmentAsync(AssignShipmentToTruckRequest request, CancellationToken cancellationToken = default)
     {

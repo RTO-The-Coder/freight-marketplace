@@ -12,11 +12,18 @@ namespace Freight.Domain.Fleet.Abstractions;
 /// only non-zero waits appear. The caller persists it via <see cref="Trip.SetPlannedWaits"/>
 /// after committing. Empty when infeasible.
 /// </param>
+/// <param name="ProjectedArrivals">
+/// The forecast arrival at every Pending stop of the proposed route (Office included), keyed
+/// by the preview clone's stop ids - what the dispatcher sees before assigning. Set whenever
+/// the arrivals were projected (feasible, or rejected on a window); null when capacity
+/// rejected the insertion before any projection ran.
+/// </param>
 public sealed record InsertionFeasibility(
     bool IsFeasible,
     Guid? ViolatingStopId,
     string? ViolationReason,
-    IReadOnlyDictionary<StopRef, int>? PlannedWaitTicks = null);
+    IReadOnlyDictionary<StopRef, int>? PlannedWaitTicks = null,
+    IReadOnlyDictionary<Guid, DateTime>? ProjectedArrivals = null);
 
 /// <summary>
 /// Checks feasibility of ONE dispatcher-specified shipment insertion (it never searches or

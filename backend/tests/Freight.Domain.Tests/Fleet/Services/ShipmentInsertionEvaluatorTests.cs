@@ -254,6 +254,55 @@ public class ShipmentInsertionEvaluatorTests
 
     // ===================== Constructor / null argument =====================
 
+    // ===================== ProjectedArrivals: the forecast the dispatcher sees =====================
+
+    [Fact]
+    public void Evaluate_Feasible_ProjectsAnArrivalForEveryPendingStopIncludingTheOffice_InRouteOrder()
+    {
+        var (trip, _) = OpenTripWithOneShipment();
+        var context = ContextFor(trip, Capacity.ForTruckSize(TruckSize.Medium), WideOpenWindows(trip));
+
+        var result = _evaluator.Evaluate(context);
+
+        Assert.True(result.IsFeasible);
+        Assert.NotNull(result.ProjectedArrivals);
+        var pending = trip.Stops.Where(s => s.Status == StopStatus.Pending).OrderBy(s => s.Sequence).ToList();
+        Assert.Contains(pending, s => s.Kind == StopKind.Office);
+        var arrivals = pending.Select(s => result.ProjectedArrivals![s.Id]).ToList();
+        Assert.Equal(arrivals.OrderBy(t => t), arrivals);
+        Assert.All(arrivals, t => Assert.True(t >= StartFrom));
+    }
+
+    [Fact]
+    public void Evaluate_WindowViolation_StillCarriesTheProjectedArrivals()
+    {
+        var (trip, _) = OpenTripWithOneShipment();
+        var pickup = trip.Stops.First(s => s.Kind == StopKind.Pickup);
+        var windows = new Dictionary<Guid, TimeWindow>
+        {
+            [pickup.Id] = TimeWindow.Create(StartFrom, StartFrom.AddMinutes(1)),
+        };
+        var context = ContextFor(trip, Capacity.ForTruckSize(TruckSize.Medium), windows);
+
+        var result = _evaluator.Evaluate(context);
+
+        Assert.False(result.IsFeasible);
+        Assert.NotNull(result.ProjectedArrivals);
+        Assert.True(result.ProjectedArrivals!.ContainsKey(pickup.Id));
+    }
+
+    [Fact]
+    public void Evaluate_CapacityViolation_HasNoProjectedArrivals()
+    {
+        var (trip, _) = OpenTripWithOneShipment();
+        var context = ContextFor(trip, Capacity.Create(1, 1), WideOpenWindows(trip));
+
+        var result = _evaluator.Evaluate(context);
+
+        Assert.False(result.IsFeasible);
+        Assert.Null(result.ProjectedArrivals);
+    }
+
     [Fact]
     public void Constructor_NullRouteEtaCalculator_Throws()
     {

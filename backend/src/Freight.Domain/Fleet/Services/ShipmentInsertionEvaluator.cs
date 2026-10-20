@@ -40,7 +40,7 @@ public sealed class ShipmentInsertionEvaluator : IShipmentInsertionEvaluator
     /// <summary>
     /// Projects each Pending Pickup/Delivery stop's arrival and checks it against its
     /// window. Returns the first violation, or a feasible result carrying the per-stop
-    /// wait-for-window ticks.
+    /// wait-for-window ticks. Either way the result carries the projected arrivals.
     /// </summary>
     private InsertionFeasibility EvaluateWindows(Trip proposedTrip, WindowProjection windows)
     {
@@ -62,7 +62,7 @@ public sealed class ShipmentInsertionEvaluator : IShipmentInsertionEvaluator
             var windowFeasibility = CheckWindow(stop, projectedArrival, windows.ShipmentWindows);
             if (!windowFeasibility.IsFeasible)
             {
-                return windowFeasibility;
+                return windowFeasibility with { ProjectedArrivals = projection.Etas };
             }
         }
 
@@ -83,7 +83,7 @@ public sealed class ShipmentInsertionEvaluator : IShipmentInsertionEvaluator
             }
         }
 
-        return new InsertionFeasibility(true, null, null, plannedWaits);
+        return new InsertionFeasibility(true, null, null, plannedWaits, projection.Etas);
     }
 
     /// <summary>Runs the single- or team-driver forward route walk, per <paramref name="windows"/>.Drivers.</summary>

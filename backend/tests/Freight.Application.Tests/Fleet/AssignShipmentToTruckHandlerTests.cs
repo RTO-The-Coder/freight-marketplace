@@ -156,6 +156,72 @@ public sealed class AssignShipmentToTruckHandlerTests
         harness.UnitOfWork.Verify(u => u.SaveChangesAsync(It.IsAny<CancellationToken>()), Times.Never);
     }
 
+    [Fact]
+    public async Task CheckFeasibilityAsync_NewTrip_ReturnsTheProposedStopsWithPlaceNamesArrivalsAndAddedKm()
+    {
+        var (truck, company) = ReadyTruck();
+        var shipment = SomeShipment();
+        var harness = new Harness(truck, shipment, company, null);
+        var handler = harness.NewHandler();
+
+        var response = await handler.CheckFeasibilityAsync(new AssignShipmentToTruckRequest(truck.Id, shipment.Id, 0, 0));
+
+        Assert.True(response.IsFeasible);
+        Assert.NotNull(response.Stops);
+        Assert.Equal([StopKind.Pickup, StopKind.Delivery, StopKind.Office], response.Stops!.Select(s => s.Kind));
+        Assert.Equal(["Pickup place", "Delivery place", "Office place"], response.Stops.Select(s => s.PlaceName));
+        Assert.Equal([true, true, false], response.Stops.Select(s => s.IsNew));
+        Assert.All(response.Stops, s => Assert.NotNull(s.ProjectedArrival));
+        Assert.Equal(response.Stops.Select(s => s.ProjectedArrival), response.Stops.Select(s => s.ProjectedArrival).OrderBy(t => t));
+        // A new trip: the added distance is the whole route, office -> pickup -> delivery -> office.
+        Assert.True(response.AddedDistanceKm > 0);
+    }
+
+    [Fact]
+    public async Task CheckFeasibilityAsync_SecondShipmentOnOpenTrip_MarksOnlyItsStopsNewAndAddsOnlyItsKm()
+    {
+        var (truck, company) = ReadyTruck();
+        var firstShipment = SomeShipment();
+        var harness1 = new Harness(truck, firstShipment, company, null);
+        await harness1.NewHandler().AssignShipmentAsync(new AssignShipmentToTruckRequest(truck.Id, firstShipment.Id, 0, 0));
+        var openTrip = harness1.AddedTrip!;
+        var distanceBefore = openTrip.TotalPlannedDistanceKm;
+
+        var secondShipment = SomeShipment();
+        var harness2 = new Harness(truck, secondShipment, company, openTrip);
+        harness2.Shipments
+            .Setup(s => s.GetByIdsAsync(It.IsAny<IReadOnlyCollection<Guid>>(), It.IsAny<CancellationToken>()))
+            .ReturnsAsync([firstShipment]);
+
+        var response = await harness2.NewHandler()
+            .CheckFeasibilityAsync(new AssignShipmentToTruckRequest(truck.Id, secondShipment.Id, 2, 2));
+
+        Assert.Equal(5, response.Stops!.Count); // first pickup + delivery, second pickup + delivery, office
+        Assert.Equal([false, false, true, true, false], response.Stops.Select(s => s.IsNew));
+        Assert.Equal("Office place", response.Stops[^1].PlaceName);
+        Assert.Equal(openTrip.TotalPlannedDistanceKm, distanceBefore); // the dry run leaves the real trip alone
+        Assert.True(response.AddedDistanceKm > 0);
+    }
+
+    [Fact]
+    public async Task CheckFeasibilityAsync_TooHeavy_ReturnsTheStopsWithoutArrivals()
+    {
+        var (truck, company) = ReadyTruck(size: TruckSize.Small);
+        var heavy = Shipment.Book(
+            Guid.NewGuid(), Guid.NewGuid(), Pickup, "Pickup place", Delivery, "Delivery place",
+            Capacity.Create(1_000_000, 1), TruckType.Refrigerated,
+            TimeWindow.Create(StartedAt, StartedAt.AddDays(1)),
+            TimeWindow.Create(StartedAt, StartedAt.AddDays(2)),
+            StartedAt);
+        var harness = new Harness(truck, heavy, company, null);
+
+        var response = await harness.NewHandler().CheckFeasibilityAsync(new AssignShipmentToTruckRequest(truck.Id, heavy.Id, 0, 0));
+
+        Assert.False(response.IsFeasible);
+        Assert.NotNull(response.Stops);
+        Assert.All(response.Stops!, s => Assert.Null(s.ProjectedArrival));
+    }
+
     // --- Second shipment on already-open trip: compliance NOT reset ---
 
     [Fact]
