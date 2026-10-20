@@ -80,8 +80,9 @@ public sealed class AssignShipmentToTruckHandler(IUnitOfWork unitOfWork, Shipmen
             .Select(stop => stop.ShipmentId!.Value)
             .Distinct()
             .ToList();
-        var shipments = (await unitOfWork.Shipments.GetByIdsAsync(otherShipmentIds, cancellationToken))
-            .ToDictionary(shipment => shipment.Id);
+        var shipments = otherShipmentIds.Count == 0
+            ? []
+            : (await unitOfWork.Shipments.GetByIdsAsync(otherShipmentIds, cancellationToken)).ToDictionary(shipment => shipment.Id);
         shipments[prepared.Shipment.Id] = prepared.Shipment;
 
         var company = await unitOfWork.TruckingCompanies.GetByIdAsync(prepared.Trip.TruckingCompanyId, cancellationToken);
