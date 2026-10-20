@@ -1,7 +1,7 @@
 import { bookDirectCopy, firstCompanyId, pendingShipments } from './directShipments'
 import { expect, test } from './fixtures'
 import { fleetRow } from './companyPage'
-import { tripStopLabels, truckShipmentsPanel } from './truckPage'
+import { tripStopDots, tripStopKinds, truckShipmentsPanel } from './truckPage'
 
 /**
  * Brief 3 - a direct shipment is assigned from the truck's own page: the truck page's
@@ -74,8 +74,8 @@ test('assigns a direct shipment from the truck page', async ({ page }) => {
   })
 
   await test.step('the trip shows on the page and the shipment leaves the Direct tab', async () => {
-    await expect(tripStopLabels(page)).toHaveCount(3)
-    expect(await tripStopLabels(page).allTextContents()).toEqual(['Pickup', 'Delivery', 'Office'])
+    await expect(tripStopDots(page)).toHaveCount(3)
+    expect(await tripStopKinds(page)).toEqual(['Pickup', 'Delivery', 'Office'])
 
     const escaped = weightLabel.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
     await expect(

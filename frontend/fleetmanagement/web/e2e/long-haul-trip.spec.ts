@@ -1,7 +1,7 @@
 import { bookDirectCopy, firstCompanyId, openDirectAssignModal, pendingShipments, type PendingShipment } from './directShipments'
 import { expect, test } from './fixtures'
 import { driversPanel, fleetRow } from './companyPage'
-import { tripPanel, tripStopLabels, tripStopTimes } from './truckPage'
+import { REACHED_DOT, tripLineGroup, tripPanel, tripStopDots, tripStopKinds } from './truckPage'
 
 const API_BASE_URL = 'http://localhost:5017'
 
@@ -167,10 +167,12 @@ test('a 10-14 day team-driver shipment runs the sim clock to full trip completio
     await fleetRow(page, 'LongHaul-Truck').getByText('LongHaul-Truck', { exact: true }).click()
     await expect(page.getByRole('heading', { name: 'LongHaul-Truck' })).toBeVisible()
     // Every trip ends with an implicit Office return stop after the delivery.
-    await expect(tripStopLabels(page)).toHaveCount(3)
-    expect(await tripStopLabels(page).allTextContents()).toEqual(['Pickup', 'Delivery', 'Office'])
-    // Not reached yet: the first stop shows its forecast arrival (or the window it waits for).
-    await expect(tripStopTimes(page).first()).toHaveText(/^(ETA|Parked until) /)
+    await expect(tripStopDots(page)).toHaveCount(3)
+    expect(await tripStopKinds(page)).toEqual(['Pickup', 'Delivery', 'Office'])
+    // Not reached yet: the shipment is still to pick up, with its forecast pickup time.
+    await expect(tripStopDots(page).first()).not.toHaveClass(REACHED_DOT)
+    const toPick = tripLineGroup(tripPanel(page), 'To pick')
+    await expect(toPick.locator('.trip-line__when')).toHaveText(/\d{2}:\d{2}/)
   })
 
   await test.step('run the simulation clock forward in visible 12-hour steps until the trip completes', async () => {
@@ -213,6 +215,6 @@ test('a 10-14 day team-driver shipment runs the sim clock to full trip completio
     await expect(page.getByRole('heading', { name: 'LongHaul-Truck' })).toBeVisible()
 
     await expect(tripPanel(page).getByText('No trip — the truck is at the office.')).toBeVisible()
-    await expect(tripStopLabels(page)).toHaveCount(0)
+    await expect(tripStopDots(page)).toHaveCount(0)
   })
 })

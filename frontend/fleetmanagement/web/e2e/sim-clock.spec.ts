@@ -1,7 +1,7 @@
 import { bookDirectCopy, firstCompanyId, openDirectAssignModal, pendingShipments } from './directShipments'
 import { expect, test } from './fixtures'
 import { fleetRow } from './companyPage'
-import { tripStopLabels, tripStopTimes } from './truckPage'
+import { REACHED_DOT, tripLineGroup, tripPanel, tripStopDots } from './truckPage'
 
 const API_BASE_URL = 'http://localhost:5017'
 
@@ -180,8 +180,10 @@ test('advancing the clock moves a truck along its route (a Pending stop becomes 
     await fleetRow(page, 'Clock-Truck').getByText('Clock-Truck', { exact: true }).click()
     await expect(page.getByRole('heading', { name: 'Clock-Truck' })).toBeVisible()
 
-    await expect(tripStopLabels(page).first()).not.toHaveClass(/trip-stops__cell--reached/)
-    await expect(tripStopTimes(page).first()).toHaveText(/^(ETA|Parked until) /)
+    // The first stop (the pickup) is not reached: the shipment is still to pick up, with its
+    // forecast pickup time.
+    await expect(tripStopDots(page).first()).not.toHaveClass(REACHED_DOT)
+    await expect(tripLineGroup(tripPanel(page), 'To pick').locator('.trip-line__when')).toHaveText(/\d{2}:\d{2}/)
   })
 
   await test.step('advance the clock past the real, compliance-aware projected arrival', async () => {
@@ -212,7 +214,9 @@ test('advancing the clock moves a truck along its route (a Pending stop becomes 
     await fleetRow(page, 'Clock-Truck').getByText('Clock-Truck', { exact: true }).click()
     await expect(page.getByRole('heading', { name: 'Clock-Truck' })).toBeVisible()
 
-    await expect(tripStopLabels(page).first()).toHaveClass(/trip-stops__cell--reached/)
-    await expect(tripStopTimes(page).first()).toContainText('Reached')
+    // The pickup is reached: its dot is filled and the shipment is now on board.
+    await expect(tripStopDots(page).first()).toHaveClass(REACHED_DOT)
+    await expect(tripLineGroup(tripPanel(page), 'On board')).toBeVisible()
+    await expect(tripLineGroup(tripPanel(page), 'To pick')).toHaveCount(0)
   })
 })
