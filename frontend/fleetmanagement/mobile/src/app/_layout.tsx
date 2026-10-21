@@ -4,6 +4,8 @@ import { PaperProvider } from 'react-native-paper'
 import { DarkTheme, DefaultTheme, Stack, ThemeProvider } from 'expo-router'
 import { configureApi, SimClockProvider } from '@freight/fleetmanagement-core'
 import { getMessaging, setBackgroundMessageHandler } from '@react-native-firebase/messaging'
+import { BusyProvider } from '../components/Busy'
+import { ToastProvider } from '../components/Toast'
 import { DeviceCompanyGate } from '../device/DeviceCompany'
 import { darkTheme, lightTheme } from '../theme'
 
@@ -35,11 +37,16 @@ export default function RootLayout() {
     <PaperProvider theme={paperTheme}>
       <ThemeProvider value={navTheme}>
         <SimClockProvider>
-          <StatusBar style={dark ? 'light' : 'dark'} />
-          {/* First launch asks which company this device belongs to; after that the app shows only it. */}
-          <DeviceCompanyGate>
-            <Stack screenOptions={{ headerShown: false }} />
-          </DeviceCompanyGate>
+          {/* The busy bar follows every request; the centred "✓ …" confirmation shows over any screen. */}
+          <BusyProvider>
+            <ToastProvider>
+              <StatusBar style={dark ? 'light' : 'dark'} />
+              {/* First launch asks which company this device belongs to; after that the app shows only it. */}
+              <DeviceCompanyGate>
+                <Stack screenOptions={{ headerShown: false }} />
+              </DeviceCompanyGate>
+            </ToastProvider>
+          </BusyProvider>
         </SimClockProvider>
       </ThemeProvider>
     </PaperProvider>

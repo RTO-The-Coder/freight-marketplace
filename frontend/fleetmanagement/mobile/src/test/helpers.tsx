@@ -3,6 +3,7 @@ import type { ReactElement } from 'react'
 import { PaperProvider } from 'react-native-paper'
 import { configureApi, SimClockProvider } from '@freight/fleetmanagement-core'
 import { SimClockChip } from '../components/SimClockChip'
+import { ToastProvider } from '../components/Toast'
 import { lightTheme } from '../theme'
 
 export const BASE = 'http://api.test'
@@ -46,8 +47,10 @@ export function renderWithApp(ui: ReactElement) {
   return render(
     <PaperProvider theme={lightTheme}>
       <SimClockProvider>
-        <SimClockChip />
-        {ui}
+        <ToastProvider>
+          <SimClockChip />
+          {ui}
+        </ToastProvider>
       </SimClockProvider>
     </PaperProvider>,
   )
