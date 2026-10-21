@@ -9,9 +9,6 @@ How the domain behind them works is in [freight-domain-model.md](freight-domain-
 | Fleet management (Android) | Trucking company dispatcher, one company per phone | `frontend/fleetmanagement/mobile` |
 | Shipper (web) | Shipper | `frontend/shipment` |
 
-<!-- Screenshots: every "📷" line below marks where an image goes. The shot list and the
-     capture instructions are in §5 "Screenshot plan"; remove §5 once all images are in. -->
-
 ---
 
 ## 1. Fleet management — web
@@ -49,13 +46,13 @@ browser's Back and Forward move between pages. The truck and Tracking pages have
 (Companies / company / truck or Tracking); the company page has none. To switch company, open `/`.
 
 ### Companies
-📷 `docs/images/web-companies.png`
+![Companies list](docs/images/web-companies.png)
 
 - Every trucking company with its logo, truck count and office city.
 - Pick one to open it. Companies are set up by an administrator, not in the app.
 
 ### Company
-📷 `docs/images/web-fleet.png`
+![Company page: fleet, drivers, map and shipments](docs/images/web-fleet.png)
 
 The page fills the window. Under the company's logo and name ("N trucks · N active"), with **Tracking ›** on the right, are three columns, each scrolling on its own:
 
@@ -65,7 +62,7 @@ The page fills the window. Under the company's logo and name ("N trucks · N act
 - **Right, Shipments:** the company's four shipment lists (below).
 
 ### Truck
-📷 `docs/images/web-truck.png`
+![Truck page: drivers, trip and shipments](docs/images/web-truck.png)
 
 The page fills the window, laid out like the company page. Under the truck's name ("Flatbed · Large · 24,000 kg · 90 m³ · Office …"), with **Tracking ›** (Tracking for this truck), its status and the Activate/Deactivate switch, are three columns, each scrolling on its own:
 
@@ -74,7 +71,7 @@ The page fills the window, laid out like the company page. Under the truck's nam
 - **Right, Shipments (type):** the company's shipment lists (below) for this truck only — shipments of its type, in the tabs **Direct, Open, Offered, Approved**, with no type filter. **Direct:** **Assign →** opens the assign screen with this truck already chosen. **Open:** only this truck is checked; if it can take the shipment, a price, an optional limit and **Send offer**, otherwise why not. A one-line note says a shipment leaves Open once any truck of the company has offered on it, until the shipper changes its times. **Offered:** this truck's waiting offers. **Approved:** offers accepted for this truck, with **Add to trip**.
 
 ### Tracking
-📷 `docs/images/web-tracking.png`
+![Tracking: running trips](docs/images/web-tracking.png)
 
 The company's trips seen from the shipments' side: what its trucks carry, where each shipment
 is, what is still offered for them, what a trip earns, and what was done before. Under
@@ -110,6 +107,8 @@ shown. A line opens to the shipment as the shipper app shows it: a status pill a
 pickup and delivery with place name, area and window, the shipper, picked-up and delivered
 times or the forecast, on time or late, and the price.
 
+![Tracking: history](docs/images/web-tracking-history.png)
+
 **History** shows the trips that completed in a period: **This week, Last week, Month,
 Year, From – to** (sim time; a trip belongs to the period it completed in; weeks start on
 Monday) and a **Truck** filter. A summary: completed trips, shipments delivered, tonnes
@@ -121,7 +120,7 @@ app's card. A trip that completed before drivers were recorded shows "–" for i
 The page refreshes when the clock moves.
 
 ### Shipments (company page, right column)
-📷 `docs/images/web-shipments-offers.png`
+![Shipments column: an open shipment with a truck ticked for an offer](docs/images/web-shipments-offers.png)
 
 The company's shipments in four tabs with counts, each shipment in at most one. The truck page shows the same lists for one truck (above).
 
@@ -143,7 +142,7 @@ Each shipment is a card, as in the shipper app: type and load; pickup and delive
 Below the trucks that can take it, the other trucks of that type are listed with why not: inactive, no driver assigned, too small for the load, or doesn't fit its route, time windows or driving rules. With no truck of that type at all: "No <type> truck in this fleet."
 
 ### Assign shipment
-📷 `docs/images/web-assign-shipment.png`
+![Assign a shipment: the route as it would look, and it fits](docs/images/web-assign-shipment.png)
 
 A side panel. Under the title, the shipment's type, weight and volume.
 
@@ -154,7 +153,7 @@ A side panel. Under the title, the shipment's type, weight and volume.
 - **Feasibility is re-checked live** as you change the truck, the positions or the start. The result stays in sight above the footer: "This shipment fits — ready to assign. +410 km", or the reason it doesn't fit. **Assign to {truck}** assigns it.
 
 ### Driver panel
-📷 `docs/images/web-driver.png`
+![Driver panel](docs/images/web-driver.png)
 
 A side panel over the company or truck page, from a driver's name. Read-only, and refreshed as the clock moves. Under the name: the company and what the driver is doing now (Driving, On a break, …).
 
@@ -175,13 +174,13 @@ flowchart LR
 ```
 
 ### Book a shipment
-📷 `docs/images/shipper-new-shipment.png`
+![Book a shipment](docs/images/shipper-new-shipment.png)
 
 - Pickup and delivery chosen on a map, load, truck type, and pickup and delivery windows.
 - **Assign to company** (optional): leave it empty to let every company bid, or pick one company to book it directly.
 
 ### Shipper's shipments
-📷 `docs/images/shipper-shipments.png`
+![Shipper's shipments](docs/images/shipper-shipments.png)
 
 Each pending shipment shows where it stands:
 
@@ -191,7 +190,7 @@ Each pending shipment shows where it stands:
 - **Booked directly to …**.
 
 ### Offers
-📷 `docs/images/shipper-offers.png`
+![Offers panel with two offers](docs/images/shipper-offers.png)
 
 A side panel. Under the title: the route, the truck type and when offers close, with the time left.
 
@@ -206,18 +205,25 @@ A side panel. Under the title: the route, the truck type and when offers close, 
 flowchart LR
     P["Choose company<br/>(first launch only)"] --> F
     subgraph Tabs
-        F["Fleet"]
+        F["Fleet<br/>Trucks · Drivers · Map"]
         S["Shipments<br/>Open · Offered · Approved · Direct"]
+        K["Tracking<br/>Trips running now · History"]
     end
-    F --> M[["Full-screen map"]]
-    F --> T["Truck"]
-    T --> V["Driver"]
-    T -. "Assign shipment" .-> A[["Assign form"]]
+    F --> T["Truck<br/>Trip · Drivers · Shipments"]
+    K --> T
+    F -. "a driver" .-> V[["Driver sheet"]]
+    T -. "a driver" .-> V
+    S -. "Assign → / Send offer" .-> A[["Assign / offer sheets"]]
     N(["Push notification"]) --> D["Shipment details"]
 ```
 
-Built to Android conventions: bottom tabs, the sim clock as a chip in the top bar,
-floating action buttons, bottom sheets for short choices, full-screen forms, pull to refresh.
+The fleet web app on a phone: the same words, cards, colours and order of information, in one
+column. Three bottom tabs; the sim clock as a chip in the top bar (**▸ 1 h** advances it an hour);
+the web's popups and side panels as bottom sheets with their buttons fixed at the bottom; pull to
+refresh. While anything loads, a thin bar moves under the top bar; a screen opening shows grey
+placeholders, a list being reloaded stays in place with **Updating**, a pressed button shows its
+"…ing" text, and a slow route check says "Still working, the routing server is slow…". After an
+action a centred "✓ …" message closes by itself.
 
 ### Choose company
 📷 `docs/images/android-choose-company.png`
@@ -225,31 +231,43 @@ floating action buttons, bottom sheets for short choices, full-screen forms, pul
 - Shown once, on first launch. The phone then belongs to that company, and every screen shows only it.
 
 ### Fleet tab
-📷 `docs/images/android-fleet.png`
+<img src="docs/images/android-fleet.png" alt="Fleet tab: trucks" width="270"> <img src="docs/images/android-drivers.png" alt="Fleet tab: drivers" width="270"> <img src="docs/images/android-fleet-map.png" alt="Fleet tab: map" width="270">
 
-- A map preview of every running truck's route (each in its own colour) and the truck cards with an activation switch.
-- **Add** (floating button): add a truck or a driver; the driver joins this company. A truck's **Assign drivers** offers only this company's drivers.
+- **Trucks | Drivers | Map** at the top, under "N trucks · N active" and the office.
+- **Trucks:** each truck's type, size and status, its drivers, an Activate switch, and what it is doing (the next stop, "Waiting at … for its window", "Starts … from …", "No trip"). A truck opens the truck screen.
+- **Drivers:** every driver of the company with its truck, or not assigned. A driver opens the driver sheet.
+- **Map:** every running truck's route on real roads in its own colour; **Hide trucks at the office** and a chip per truck choose what it shows; the expand button opens it full screen; tap a truck to open it.
 
-### Full-screen map
-📷 `docs/images/android-fleet-map.png`
+<img src="docs/images/android-add.png" alt="Add sheet" width="270">
 
-- Pan and zoom; tap a stop for its name, tap a truck to open it.
-
-### Truck
-📷 `docs/images/android-truck.png`
-
-- The same as the web truck screen: trip map, stops, drivers, compliance, change trip start.
-- **Assign shipment** (floating button) opens the full-screen assign form, for direct shipments.
+- **＋ Add** opens a sheet: **Add a truck** (name, type and size, each explained) or **Add a driver** (name and driving rules); the driver joins this company.
 
 ### Shipments tab
-📷 `docs/images/android-shipments.png`
+<img src="docs/images/android-shipments.png" alt="Shipments tab" width="270"> <img src="docs/images/android-shipments-direct.png" alt="A direct shipment opened" width="270">
 
-- The same four lists as on web, as segmented buttons with counts. Expanding a card shows its route map.
+- The web's shipments column: **Open, Offered, Approved, Direct** with counts, **Type**, **Sort** with ↑/↓, and **Advanced search** (pickup and delivery date ranges).
+- Each shipment is a card as in the shipper app: type and load, pickup and delivery with place name, area and window, and a line for the list. Tapping a card opens its route map and its action: **Send offer** (Open), **Add to trip** (Approved), **Assign →** (Direct).
 
-### Send offers
-📷 `docs/images/android-send-offers.png`
+<img src="docs/images/android-send-offers.png" alt="Send an offer sheet" width="270"> <img src="docs/images/android-assign.png" alt="Assign to a truck sheet" width="270">
 
-- **Check eligibility** opens a sheet with the eligible trucks and the km each adds. Tick trucks, enter prices, optionally pick a limit, and **Send offers**.
+- **Send an offer:** the company's trucks that can take it, with the km and time each adds. Tick trucks, enter a price, optionally a limit, and **Send offer**.
+- **Assign to a truck:** the trucks that can take it, each with the km and time it adds and where its stops would go, and **Assign**; **Choose positions by hand →** for the full assign form.
+
+### Tracking tab
+<img src="docs/images/android-tracking.png" alt="Tracking tab" width="270">
+
+- The web Tracking page: **Trips running now** with Truck and Shipper filters, Sort, **Show map**, **Ready to start (N)**, the summary and a card per running trip (its Now line, stop dots, earnings and its shipments by state, Add to trip on an accepted offer); **History** by week, month, year or dates.
+
+### Truck
+<img src="docs/images/android-truck.png" alt="Truck: trip" width="270"> <img src="docs/images/android-truck-drivers.png" alt="Truck: drivers" width="270">
+
+- On top: type, size, capacity, status, the office, the **Active** switch and **Tracking ›**.
+- **Trip | Drivers | Shipments**, the three columns of the web truck page: the trip's map and its card as on Tracking, with **Change trip start**; the drivers with what they do now and their driving bars, **Add driver**, **Reassign drivers**, **Remove drivers** (not during a trip) and **Check eligibility after N min**; the shipment lists for this truck only.
+
+### Driver sheet
+<img src="docs/images/android-driver.png" alt="Driver sheet" width="270">
+
+- From a driver in the Drivers list or on a truck: the truck, **Team with** the other driver, what the driver is doing now, breaks, today and week against the EU 561 limits, and the fixed rules in words.
 
 ### Notification
 📷 `docs/images/android-notification.png`
@@ -267,56 +285,15 @@ floating action buttons, bottom sheets for short choices, full-screen forms, pul
 
 ---
 
-## 5. Screenshot plan
+## 5. Screenshots still to take
 
-*Working section: delete it once every 📷 above has its image.*
+*Working section: delete it once these two are in.*
 
-### 5.1 Before capturing: demo data
-
-The seeded database has companies, shippers and shipments, but no trucks, drivers or trips.
-Add the data below **through the API** (it adds, it wipes nothing; a reseed removes it again).
-Use one seeded company as "our" company and a second one as the competitor.
-
-| # | Data | Needed for |
+| File | Where | How |
 |---|---|---|
-| 1 | Our company: 4 trucks (one of each type; one **Large**), 5 drivers, all trucks active | Company, Fleet tab |
-| 2 | Large truck with **two drivers** (team) | Truck, Driver |
-| 3 | Two trucks with a **running trip**: 2–3 shipments each, interleaved (A picked up, B picked up and delivered, then A delivered), clock advanced so some stops are reached | Fleet map, Truck, Android map |
-| 4 | Open shipments: one with **no offer yet** (for Open), one with **our waiting offers** (2 trucks) | Shipments, Send offers |
-| 5 | One open shipment with offers from **both companies** | Shipper offers |
-| 6 | One shipment where the shipper **accepted our offer** | Approved, shipper card |
-| 7 | One **direct** shipment booked to our company | Direct, Assign shipment |
-| 8 | One open shipment whose **2-hour window has passed** | Shipper "change times" card |
+| `android-choose-company.png` | Android, first launch | Clear the app data (`adb shell pm clear com.freight.fleetmanagement`) and open the app |
+| `android-notification.png` | Android, app open | Book a shipment in the shipper app; the banner "New shipment available" with View shows |
 
-Keep the sim clock at one fixed time for all screenshots so dates match across images.
-
-### 5.2 How to capture
-
-- **Web:** browser window **1440 × 900**, light theme, zoom 100 %. Playwright (already in `frontend/fleetmanagement/web`) can capture at a fixed size.
-- **Android:** the emulator (Pixel, portrait), captured with `adb exec-out screencap -p > docs/images/<name>.png`.
-- Save as PNG in `docs/images/` with the exact names below. Crop browser chrome; keep each image under about 500 KB.
-- Use only the synthetic demo data (no real names or companies).
-
-### 5.3 Shot list
-
-| # | File | App | Where | Must be visible |
-|---|---|---|---|---|
-| 1 | `web-companies.png` | Fleet web | Companies | Several companies with logos and truck counts |
-| 2 | `web-fleet.png` ★ | Fleet web | Company | All three columns: fleet and drivers, map with **two routes** and live positions, shipments |
-| 3 | `web-truck.png` | Fleet web | Truck (running, team) | All three columns: both drivers with their driving bars; route map with reached (grey) and pending stops; the trip card with its Now line, stop dots and shipment lines; the Shipments tabs |
-| 4 | `web-shipments-offers.png` | Fleet web | Company → Shipments column → Open | A selected card with its route on the fleet map, **two trucks ticked with prices**, Send 2 offers button; tab counts |
-| 5 | `web-assign-shipment.png` ★ | Fleet web | Truck → Shipments → Direct → Assign → | The truck already chosen, route preview with the new stops and **"This shipment fits — ready to assign."** |
-| 6 | `web-driver.png` | Fleet web | Driver panel (driver of the running truck) | Full tracking with bars, and rule choices |
-| 7 | `web-tracking.png` | Fleet web | Company → Tracking (several trips running) | Summary strip, **two or three trip cards** with Now lines, stop dots, earnings bars and shipment lines in several states, one line opened to its shipper card; an accepted offer with Add to trip |
-| 8 | `shipper-new-shipment.png` | Shipper web | Shipper → New shipment | Both pins on the map, filled form, company dropdown |
-| 9 | `shipper-shipments.png` | Shipper web | Shipper | Cards in several states: offers open, accepted, direct, change times |
-| 10 | `shipper-offers.png` | Shipper web | See offers | **Two offers** from different companies with Accept |
-| 11 | `android-choose-company.png` | Android | First launch | Company list (clear app data first) |
-| 12 | `android-fleet.png` ★ | Android | Fleet tab | Map preview with routes, truck cards, Add button |
-| 13 | `android-fleet-map.png` | Android | Fleet map, full screen | Two coloured routes, trucks, office |
-| 14 | `android-truck.png` | Android | Truck (running) | Trip map and stops |
-| 15 | `android-shipments.png` ★ | Android | Shipments tab | Segmented buttons with counts, one card expanded with its route map |
-| 16 | `android-send-offers.png` | Android | Open → Check eligibility | Sheet with trucks ticked and prices entered |
-| 17 | `android-notification.png` | Android | Book a shipment while the app is open | The in-app banner "New shipment available" with View |
-
-★ = also shown in the README. When the images are in, un-comment the README's Screenshots section.
+Capture on the phone with `adb exec-out screencap -p > docs/images/<name>.png`. The other images
+show the demo data with the sim clock at Sun 2 Aug 2026, 16:00 (web at 1440 × 900, light theme;
+Android on a phone in the dark theme).

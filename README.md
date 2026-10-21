@@ -10,17 +10,21 @@ The hard part is the feasibility check. Before a shipment is added to a truck, t
 
 This is a portfolio project. It shows a domain-driven .NET backend and a TypeScript frontend (web and Android) applied to a domain with real regulatory rules.
 
-<!--
 ## Screenshots
 
 | Fleet management (web) | Assigning a shipment (web) |
 |---|---|
-| ![Company fleet with map](docs/images/web-fleet.png) | ![Assign shipment with live feasibility](docs/images/web-assign-shipment.png) |
+| ![Company page with the fleet map](docs/images/web-fleet.png) | ![Assign a shipment: the route as it would look, and it fits](docs/images/web-assign-shipment.png) |
 
-| Fleet tab (Android) | Shipments tab (Android) |
+| Tracking (web) | Shipper's offers (web) |
 |---|---|
-| ![Android fleet map and trucks](docs/images/android-fleet.png) | ![Android open shipments](docs/images/android-shipments.png) |
--->
+| ![Tracking: running trips](docs/images/web-tracking.png) | ![Offers from two companies](docs/images/shipper-offers.png) |
+
+| Fleet (Android) | Truck (Android) | Tracking (Android) |
+|---|---|---|
+| <img src="docs/images/android-fleet-map.png" alt="Android fleet map" width="240"> | <img src="docs/images/android-truck.png" alt="Android truck trip" width="240"> | <img src="docs/images/android-tracking.png" alt="Android tracking" width="240"> |
+
+More in the [app tour](freight-ui-screens.md).
 
 ## Features
 
