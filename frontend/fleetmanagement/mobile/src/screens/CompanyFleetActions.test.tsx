@@ -90,8 +90,8 @@ describe('activation switch', () => {
     expect(callsTo(api, 'POST', '/trucks/t3/activate')).toBe(0)
     expect(onSelectTruck).not.toHaveBeenCalled()
 
-    fireEvent.press(screen.getByRole('button', { name: 'Assign driver' }))
-    expect(await screen.findByText('Assign drivers')).toBeOnTheScreen()
+    fireEvent.press(screen.getAllByRole('button', { name: 'Assign driver' }).at(-1)!)
+    expect(await screen.findByText('Drivers of FL-13')).toBeOnTheScreen()
     expect(await screen.findByText('Add new driver')).toBeOnTheScreen()
   })
 
@@ -108,7 +108,7 @@ describe('drivers line on a truck card', () => {
     installFakeApi(routes({ 'GET /drivers?unassigned=true&truckingCompanyId=c1': { drivers: [] } }))
     renderCompany()
     fireEvent.press(await screen.findByLabelText('Assign a driver to FL-13'))
-    expect(await screen.findByText('Assign drivers')).toBeOnTheScreen()
+    expect(await screen.findByText('Drivers of FL-13')).toBeOnTheScreen()
   })
 })
 

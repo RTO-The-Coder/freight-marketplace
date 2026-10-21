@@ -154,7 +154,8 @@ it('filters by type; the counts follow the filter', async () => {
   renderWithApp(<OpenShipmentsScreen company={deviceCompany} />)
 
   fireEvent.press(await screen.findByText('Type: All'))
-  fireEvent.press(await screen.findByText('Tanker'))
+  // The menu opens above the list, so its "Tanker" comes after the card's.
+  fireEvent.press((await screen.findAllByText('Tanker')).at(-1)!)
 
   expect(await screen.findByText('Open 1')).toBeOnTheScreen()
   expect(screen.getByText('Direct 0')).toBeOnTheScreen()

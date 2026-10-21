@@ -26,7 +26,7 @@ const truckDetail = (truckId: string, truckName: string, stops: unknown[], extra
   truckType: 'Flatbed',
   truckSize: 'Medium',
   isActive: true,
-  status: stops.length ? 'EnRoute' : 'AtOffice',
+  status: stops.length ? 'Running' : 'AtOffice',
   truckingCompanyId: 'c1',
   driverConfigurationType: null,
   primaryDriver: null,

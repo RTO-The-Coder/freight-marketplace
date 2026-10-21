@@ -76,7 +76,7 @@ const trip = (truckId: string, truckName: string, extra = {}) => ({
   distanceKmSoFar: 1840.4,
   drivingTicksSoFar: 372,
   restTicksSoFar: 216,
-  now: { kind: 'Driving', fromPlace: 'Plant — 60200 Brno', toPlace: 'Store — 11000 Praha, Prague', kmLeft: 96.2, driverName: null, until: null },
+  now: { kind: 'Driving', fromPlace: 'Plant — 60200 Centrum, Brno', toPlace: 'Store — 11000 Praha, Prague', kmLeft: 96.2, driverName: null, until: null },
   position: { truckId, tripId: `trip-${truckId}`, latitude: 50, longitude: 15, headingToStopId: 's2', legProgressFraction: 0.5 },
   stopsDone: 1,
   stops: [stop('s1', 'Pickup', 'Reached'), stop('s2', 'Delivery', 'Pending'), stop('s3', 'Office', 'Pending')],
@@ -129,11 +129,11 @@ it('shows a trip card: drivers, facts, the now line, progress and earnings', asy
   const c = card('Flatbed 1')
 
   expect(c.getByText('Lena Brandt, Jonas Weber (team)')).toBeOnTheScreen()
-  expect(c.getByText('1,840 km')).toBeOnTheScreen()
+  expect(c.getByText(`${(1840).toLocaleString()} km`)).toBeOnTheScreen()
   expect(c.getByText('🚚 Driving Brno → Prague, 96 km left')).toBeOnTheScreen()
   expect(c.getByText('1 of 3 stops done')).toBeOnTheScreen()
   // Earned 640 + to deliver 380 + offers 340 and 360.
-  expect(c.getByText('€1,720.00')).toBeOnTheScreen()
+  expect(c.getByText('€1720.00')).toBeOnTheScreen()
   expect(c.getByText('DELIVERED 1')).toBeOnTheScreen()
   expect(c.getByText('ON BOARD 1')).toBeOnTheScreen()
   expect(c.getByText('OFFERS 2')).toBeOnTheScreen()

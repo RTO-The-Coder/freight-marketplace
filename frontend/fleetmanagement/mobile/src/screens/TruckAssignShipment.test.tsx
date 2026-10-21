@@ -208,6 +208,8 @@ it('existing trip: chooses insert positions by place, never delivery before pick
   await waitFor(() =>
     expect(lastBody(api, '/trucks/t1/assign-shipment/feasibility')).toMatchObject({ pickupInsertIndex: 1, deliveryInsertIndex: 2 }),
   )
+  // The pickup menu fades out before the delivery menu opens.
+  await waitFor(() => expect(screen.queryByText('before stop 1 (Pickup · Brussels)')).toBeNull())
 
   fireEvent.press(screen.getByLabelText('Insert delivery: after all stops'))
   // Delivery can't go before the pickup.
