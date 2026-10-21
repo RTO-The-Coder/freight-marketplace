@@ -220,6 +220,7 @@ it('existing trip: chooses insert positions by place, never delivery before pick
   await waitFor(() =>
     expect(lastBody(api, '/trucks/t1/assign-shipment/feasibility')).toMatchObject({ pickupInsertIndex: 1, deliveryInsertIndex: 1 }),
   )
+  expect(await screen.findByText(/^This shipment fits — ready to assign/)).toBeOnTheScreen()
 })
 
 it('shows why a shipment cannot be assigned and keeps Assign disabled', async () => {

@@ -1,4 +1,4 @@
-import { act, fireEvent, screen, waitFor } from '@testing-library/react-native'
+import { fireEvent, screen, waitFor } from '@testing-library/react-native'
 import { pickSimDateTime } from '../time/pickSimDateTime'
 import { BASE, callsTo, deviceCompany, installFakeApi, renderWithApp } from '../test/helpers'
 import { OpenShipmentsScreen } from './OpenShipmentsScreen'
@@ -147,8 +147,6 @@ describe('open shipment: send offers', () => {
     expect(sendButton()).toBeDisabled()
     fireEvent.changeText(screen.getByLabelText('Price for FL-01'), '850')
     expect(sendButton()).toBeEnabled()
-    // The list behind the sheet renders its rows in batches 50 ms apart; let it finish.
-    await act(() => new Promise((resolve) => setTimeout(resolve, 100)))
   })
 
   it('shows the server refusal and keeps the sheet open', async () => {
