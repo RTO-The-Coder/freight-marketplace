@@ -78,7 +78,7 @@ export function ShipperDetailScreen({ shipperId }: ShipperDetailScreenProps) {
   const [selectedShipmentId, setSelectedShipmentId] = useState<string | null>(null)
   const [pickupAddress, setPickupAddress] = useState<ShipperAddressDto | null>(null)
   const [deliveryAddress, setDeliveryAddress] = useState<ShipperAddressDto | null>(null)
-  const [offersFor, setOffersFor] = useState<string | null>(null)
+  const [offersFor, setOffersFor] = useState<ShipmentSummaryDto | null>(null)
   const [changeTimesFor, setChangeTimesFor] = useState<ShipmentSummaryDto | null>(null)
   // Bumped whenever the simulation clock moves - shipments are re-read so in-transit ones move on the map.
   const { simVersion } = useSimClock()
@@ -163,7 +163,7 @@ export function ShipperDetailScreen({ shipperId }: ShipperDetailScreenProps) {
           <>
             <p className="ship-row__note">Offers close {formatDateTime(shipment.offerDeadline)}.</p>
             <div className="ship-row__actions" onClick={stopClick}>
-              <button type="button" className="btn btn--sm btn--primary" onClick={() => setOffersFor(shipment.shipmentId)}>
+              <button type="button" className="btn btn--sm btn--primary" onClick={() => setOffersFor(shipment)}>
                 See offers ({shipment.waitingOfferCount})
               </button>
               {changeTimes}
@@ -352,7 +352,7 @@ export function ShipperDetailScreen({ shipperId }: ShipperDetailScreenProps) {
 
       {offersFor && (
         <ShipmentOffersModal
-          shipmentId={offersFor}
+          shipment={offersFor}
           onClose={() => setOffersFor(null)}
           onAccepted={() => {
             setOffersFor(null)

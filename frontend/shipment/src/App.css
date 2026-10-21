@@ -301,11 +301,29 @@ p[role='alert'] {
   background: var(--c-surface-sunken);
 }
 
-.times-form .modal-actions {
-  margin-top: 0;
+/* --- Offers popup ---------------------------------------------------- */
+.offers {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-4);
 }
 
-/* --- Offers popup ---------------------------------------------------- */
+.offers__context {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.offers__route {
+  font-weight: 600;
+}
+
+.offers__deadline,
+.offers__loading {
+  font-size: var(--text-sm);
+  color: var(--c-text-muted);
+}
+
 .offer-list {
   list-style: none;
   margin: 0;
@@ -315,17 +333,35 @@ p[role='alert'] {
   gap: var(--space-2);
 }
 
-.offer-list li {
+.offer-row {
   display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: var(--space-3);
+  flex-direction: column;
+  gap: var(--space-2);
   padding: var(--space-3);
   border: 1px solid var(--c-border);
   border-radius: var(--radius-md);
 }
 
+.offer-row--confirming {
+  border-color: var(--c-accent);
+  box-shadow: 0 0 0 1px var(--c-accent);
+}
+
+.offer-row__main {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+}
+
+.offer-row__who {
+  flex: 1;
+  min-width: 0;
+}
+
 .offer-list .offer-company {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-2);
   font-weight: 600;
   color: var(--c-text);
 }
@@ -337,9 +373,31 @@ p[role='alert'] {
 }
 
 .offer-price {
+  margin-left: auto;
+  font-size: var(--text-md);
   font-weight: 600;
   color: var(--c-text);
   white-space: nowrap;
+  font-variant-numeric: tabular-nums;
+}
+
+.offer-row__confirm {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: var(--space-2) var(--space-3);
+  padding-top: var(--space-2);
+  border-top: 1px solid var(--c-border);
+  font-size: var(--text-sm);
+}
+
+.offer-row__confirm > span:first-child {
+  flex: 1 1 14rem;
+}
+
+.offer-row__confirm-actions {
+  display: flex;
+  gap: var(--space-2);
 }
 
 /* --- Shipment rows (left column) ------------------------------------ */
