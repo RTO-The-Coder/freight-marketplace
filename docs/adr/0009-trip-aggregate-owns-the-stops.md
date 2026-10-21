@@ -17,11 +17,13 @@ The obvious model — a `Truck` with a list of stops — mixes two things with v
 - **Never deleted.** A stop is only ever marked `Reached`. A trip is the permanent record of the journey, reached and pending stops alike.
 - **Each stop stores its incoming leg** — distance and driving time from OSRM (ADR 0006) — so the trip's arrival times can be recalculated at any moment without calling OSRM.
 - **Derived, not stored:** the truck's current load (picked up but not yet delivered), the next stop, and which truck carries a shipment (found through the trip that holds its stops).
+- **The trip is the journey's record.** Besides its stops it keeps the drivers who drove on it, with their names at that time (recorded when the trip opens and when drivers are assigned while it runs, once each), the distance and driving time of the legs covered, and its rest time — one 5-minute tick for every tick the driver rules stop the truck (breaks, daily and weekly rests; waiting for a window is kept on the stop instead). The Tracking page and its history read these, so a completed trip still shows who drove it and how long after the drivers have moved on.
 - **Every insertion is tried on a copy first** (`Trip.Clone()`): the new stops are inserted into the copy and the whole remaining route is checked — every stop's window with the driver's breaks and rests, and the capacity on every leg. Only a feasible insertion is applied to the real trip.
 
 ## Consequences
 - The aggregate boundary matches the invariants: stop order, sequence numbers, capacity along the route and the office-last rule are all enforced inside one trip, in one transaction.
 - A "no" never changes anything, which makes dry runs, "Check eligibility" (ADR 0007) and real assignments use exactly the same check.
-- The truck stays small: it holds its drivers, its status and its progress on the current leg, not its route.
+- The truck stays small: it holds its drivers, its status and its progress on the current leg, not its route. When the truck opens its next trip, that progress (left over from the leg back to the office) is dropped, so a new trip's distance and driving start at zero.
+- The trip's drivers are a copy of their names, not a link: renaming or reassigning a driver later does not change a past trip. Trips completed before drivers and rest time were recorded have neither.
 - Because stops are never removed, there is no way to take a shipment off a trip once its stops are added; cancelling a shipment is not modelled.
 - Trips are not chained: a new trip starts with fully rested drivers (see [freight-driving-rules.md](../../freight-driving-rules.md), "Trip start").

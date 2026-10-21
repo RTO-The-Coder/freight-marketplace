@@ -29,8 +29,10 @@ classDiagram
         ComplianceState
     }
     class Trip {
-        StartedAt
+        StartedAt, CompletedAt?
         Stops, ordered
+        Drivers, name at the time
+        Distance, driving, rest so far
         CurrentLoad, derived
     }
     class Stop {
@@ -61,6 +63,7 @@ classDiagram
     }
 
     TruckingCompany "1" <.. "*" Truck : belongs to
+    TruckingCompany "1" <.. "*" Driver : belongs to
     Truck *-- DriverAssignment
     DriverAssignment ..> "1..2" Driver
     Truck "1" <.. "0..1 open" Trip : runs
@@ -72,7 +75,7 @@ classDiagram
     TruckingCompany "1" <.. "0..1" DeviceToken : push device
 ```
 
-**How to read it:** a filled diamond (◆) means *owns* — saved and changed together. A dotted arrow means *refers to by id*. Only two things are owned: a Truck's driver assignment, and a Trip's stops.
+**How to read it:** a filled diamond (◆) means *owns* — saved and changed together. A dotted arrow means *refers to by id*. Only two things are owned: a Truck's driver assignment, and a Trip's stops (with its record of drivers).
 
 **The parts of the domain:**
 
@@ -125,6 +128,13 @@ flowchart LR
 - **Capacity is checked on every leg:** the peak is 18 t of 24 t, so C fits. It is checked again at the real moment of pickup.
 - **Stops are never deleted:** reached stops stay on the Trip. The **office** stop is added with the first shipment and always stays last.
 
+**The Trip is also the record of the journey**, for the Tracking page and its history:
+
+- **Drivers:** every driver who drove on it, with their name at that time — the truck's drivers when the Trip opens, and any driver assigned while it runs. Each is recorded once.
+- **Distance and driving so far:** the planned km and driving ticks of every leg covered (a leg cut short by an insert counts the part already driven). While a leg is under way, the truck's progress on it is added on top when shown, so nothing is counted twice.
+- **Rest so far:** one tick for every tick the driver rules stopped the truck — breaks, daily and weekly rests together. Waiting for a stop's window is not rest; it is kept on the stop.
+- **A new Trip starts clean:** when a truck opens its next Trip, the progress left over from its last leg home is dropped, so none of the old Trip's distance or driving is carried into the new one.
+
 ---
 
 ## 3. One clock for everything
@@ -136,7 +146,7 @@ flowchart TD
     A["Advance the clock by N ticks"] --> B{"For each tick,<br/>for every open Trip"}
     B --> C["Advance the driver's<br/>compliance ledger"]
     C --> D{"Is the driver<br/>allowed to drive?"}
-    D -- "no: break / rest" --> B
+    D -- "no: break / rest<br/>(adds to the Trip's rest)" --> B
     D -- yes --> E{"Waiting for a<br/>stop's window?"}
     E -- "yes: Parked" --> B
     E -- no --> F["Drive one tick<br/>along the current leg"]
@@ -163,7 +173,14 @@ No open trip means the truck is at its company's office. The maps still draw the
 
 ---
 
-## 5. Drivers: compliance ledger and team swap
+## 5. Drivers: company, compliance ledger and team swap
+
+**Company.** Every driver is added to a trucking company, as every truck is. A truck only takes drivers of its own company, and a truck or driver without a company can't be given drivers or a truck. Either can leave its company and later join any company:
+
+- **No direct move:** joining a company while still in another is refused; leave first.
+- **Not during a trip:** leaving is refused while the truck, or the driver's truck, has an open trip.
+- **A truck that leaves** loses its drivers and is switched off.
+- **A driver that leaves** comes off its truck. From a team the other driver stays on as the single driver, and the truck stays on; a truck left with no driver is switched off.
 
 Each driver has fixed **driving rules**, chosen once (full or split break, full / reduced / split daily rest, full or reduced weekly rest, extended driving days). The **compliance ledger** tracks their continuous, daily, weekly and two-week driving under the EU 561 rules. It starts fully rested when the truck's trip starts. Details are in [freight-driving-rules.md](freight-driving-rules.md).
 
@@ -195,7 +212,10 @@ flowchart LR
     E -- yes --> OK["Feasible: arrival times<br/>and added km"]
 ```
 
-The dispatcher can run this as a dry run first, and it runs again when they press Assign.
+The dispatcher can run this as a dry run first, and it runs again when they press Assign. The dry
+run also answers with the route as it would look: every remaining stop in order with its place
+name and forecast arrival (none when the capacity check already said no), the two new stops
+marked, and the km the shipment adds.
 
 ---
 
@@ -381,7 +401,7 @@ sequenceDiagram
 
 ## 14. Design rules
 
-- **Aggregates refer to each other by id**, never by holding the other object. Only a Truck's driver assignment and a Trip's stops are owned.
+- **Aggregates refer to each other by id**, never by holding the other object. Only a Truck's driver assignment and a Trip's stops and drivers are owned.
 - **One use case = one handler = one save.** Repositories only track changes; the handler commits once.
 - **The Domain project has no framework dependencies** — no EF Core, no ASP.NET.
 - **Derived, not stored:** truck status, truck position, current load, arrival times, and whether an offer is still waiting.

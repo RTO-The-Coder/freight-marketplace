@@ -17,9 +17,10 @@ The project was built in **vertical slices**: each slice worked end to end (doma
 - Read endpoints for the apps: companies, shippers and a shipper's shipments.
 
 ### 3. Fleet management
-- Trucks (type and size; capacity follows from the size) and drivers (with their fixed rest-rule choices).
-- Assign one driver, or two on a Large truck only; remove drivers while no trip is open.
-- A truck can only be activated with a company and a driver. A per-company fleet view.
+- Trucks (type and size; capacity follows from the size) and drivers (with their fixed rest-rule choices), both belonging to a company.
+- Assign one driver of the truck's own company, or two on a Large truck only; remove drivers while no trip is open.
+- Trucks and drivers can leave a company (not during a trip) and later join any company.
+- A truck can only be activated with a company and a driver. A per-company fleet view with the company's trucks and drivers.
 
 ### 4. Driver compliance
 - The EU 561 rule engine and a compliance ledger per driver: breaks, daily, weekly and two-week limits, with split, reduced and extended variants.
