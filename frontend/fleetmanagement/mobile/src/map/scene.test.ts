@@ -146,8 +146,7 @@ describe('boundsOf', () => {
   })
 })
 
-it('routeStatus: loading text, straight-line warning, or nothing', () => {
-  expect(routeStatus(null, false, 'Loading…')).toBe('Loading…')
-  expect(routeStatus([], true, 'Loading…')).toBe('Some legs shown as straight lines — routing service was unavailable.')
-  expect(routeStatus([], false, 'Loading…')).toBeNull()
+it('routeStatus: straight-line warning, or nothing', () => {
+  expect(routeStatus(true)).toBe('Some legs shown as straight lines — routing service was unavailable.')
+  expect(routeStatus(false)).toBeNull()
 })

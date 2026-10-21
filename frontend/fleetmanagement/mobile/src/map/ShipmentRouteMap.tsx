@@ -23,7 +23,8 @@ export function ShipmentRouteMap({ shipment, height }: { shipment: ShipmentSumma
       title="Shipment route"
       scene={scene}
       height={height}
-      status={routeStatus(legs, anyStraightLine, 'Loading route…')}
+      loading={legs === null}
+      status={routeStatus(anyStraightLine)}
     />
   )
 }

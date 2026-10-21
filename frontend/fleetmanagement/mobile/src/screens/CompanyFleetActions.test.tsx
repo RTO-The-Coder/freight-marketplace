@@ -1,4 +1,10 @@
 import { act, fireEvent, screen, waitFor } from '@testing-library/react-native'
+import {
+  BREAK_RULE_DESCRIPTIONS,
+  DAILY_REST_RULE_DESCRIPTIONS,
+  truckSizeCapacity,
+  WEEKLY_REST_RULE_DESCRIPTIONS,
+} from '@freight/fleetmanagement-core'
 import { callsTo, installFakeApi, renderWithApp } from '../test/helpers'
 import { CompanyDetailScreen } from './CompanyDetailScreen'
 
@@ -35,6 +41,7 @@ function routes(extra: Record<string, unknown> = {}) {
     'GET /trucks/t1': detail('t1', 'FL-07'),
     'GET /trucks/t2': detail('t2', 'FL-12'),
     'GET /trucks/t3': detail('t3', 'FL-13'),
+    'GET /companies/c1/fleet': { trucks: [], unassignedDrivers: [], drivers: [] },
     ...extra,
   }
 }
@@ -48,10 +55,11 @@ function bodyOf(api: jest.Mock, path: string) {
   return call ? JSON.parse(call[1].body) : undefined
 }
 
-async function openFabAction(label: 'Add truck' | 'Add driver') {
+/** ＋ Add opens a sheet with the two choices. */
+async function openFabAction(label: 'Add a truck' | 'Add a driver') {
   fireEvent.press(await screen.findByLabelText('Add to fleet'))
-  // Paper exposes each action as a non-pressable labelled container; the tappable card inside is hidden from accessibility.
-  fireEvent.press(await screen.findByText(label, { includeHiddenElements: true }))
+  expect(await screen.findByText('Add to Northwind Freight')).toBeOnTheScreen()
+  fireEvent.press(screen.getByText(label))
 }
 
 describe('activation switch', () => {
@@ -72,7 +80,9 @@ describe('activation switch', () => {
   it('explains why a truck without a driver cannot be activated, and offers to assign one', async () => {
     const api = installFakeApi(routes({ 'GET /drivers?unassigned=true&truckingCompanyId=c1': { drivers: [] } }))
     const onSelectTruck = jest.fn()
-    renderWithApp(<CompanyDetailScreen companyId="c1" onLoaded={jest.fn()} onSelectTruck={onSelectTruck} />)
+    renderWithApp(
+      <CompanyDetailScreen companyId="c1" onLoaded={jest.fn()} onSelectTruck={onSelectTruck} />,
+    )
 
     // The switch takes the tap itself (it must not fall through and open the truck).
     fireEvent(await screen.findByLabelText('FL-13 active'), 'valueChange', true)
@@ -93,6 +103,15 @@ describe('activation switch', () => {
   })
 })
 
+describe('drivers line on a truck card', () => {
+  it('opens the driver assignment for the truck', async () => {
+    installFakeApi(routes({ 'GET /drivers?unassigned=true&truckingCompanyId=c1': { drivers: [] } }))
+    renderCompany()
+    fireEvent.press(await screen.findByLabelText('Assign a driver to FL-13'))
+    expect(await screen.findByText('Assign drivers')).toBeOnTheScreen()
+  })
+})
+
 describe('pull to refresh', () => {
   it('reloads the fleet', async () => {
     const api = installFakeApi(routes())
@@ -103,62 +122,69 @@ describe('pull to refresh', () => {
   })
 })
 
-describe('add truck (FAB → full-screen form)', () => {
-  it('needs a name, type and size; creates the truck, assigns it to the company and reloads', async () => {
+describe('add truck (＋ Add → Add a truck)', () => {
+  it('needs a name, type and size; creates the truck, assigns it to the company, confirms and reloads', async () => {
     const api = installFakeApi(routes({ 'POST /trucks': { truckId: 'new1' }, 'POST /trucks/new1/company': {} }))
     renderCompany()
-    await openFabAction('Add truck')
+    await openFabAction('Add a truck')
 
-    const save = screen.getByRole('button', { name: 'Save' })
-    expect(save).toBeDisabled()
+    expect(screen.getByText('Northwind Freight')).toBeOnTheScreen()
+    const add = screen.getByRole('button', { name: 'Add truck' })
+    expect(add).toBeDisabled()
 
     fireEvent.changeText(screen.getByLabelText('Truck name'), '  FL-14 ')
+    // Option cards in plain words, each with what it carries or holds.
+    expect(screen.getByText('Box van')).toBeOnTheScreen()
+    expect(screen.getByText('chilled and frozen')).toBeOnTheScreen()
     fireEvent.press(screen.getByText('Refrigerated'))
-    fireEvent.press(screen.getByText('Medium'))
-    expect(screen.getByText(`Capacity ${(9000).toLocaleString()} kg · 45 m³`)).toBeOnTheScreen()
-    expect(save).toBeEnabled()
+    expect(add).toBeDisabled()
+    fireEvent.press(screen.getByText(truckSizeCapacity('Medium')))
+    expect(add).toBeEnabled()
 
-    fireEvent.press(save)
+    fireEvent.press(add)
 
     await waitFor(() =>
       expect(bodyOf(api, '/trucks')).toEqual({ truckName: 'FL-14', truckType: 'Refrigerated', truckSize: 'Medium' }),
     )
     await waitFor(() => expect(bodyOf(api, '/trucks/new1/company')).toEqual({ truckingCompanyId: 'c1' }))
     await waitFor(() => expect(callsTo(api, 'GET', '/trucks?truckingCompanyId=c1')).toBe(2))
+    expect(await screen.findByText('Truck added')).toBeOnTheScreen()
+    expect(screen.getByText('FL-14 · Refrigerated · Medium')).toBeOnTheScreen()
   })
 
   it('shows the API error and stays open', async () => {
     installFakeApi(routes({ 'POST /trucks': new Error('Truck name already used') }))
     renderCompany()
-    await openFabAction('Add truck')
+    await openFabAction('Add a truck')
 
     fireEvent.changeText(screen.getByLabelText('Truck name'), 'FL-07')
-    fireEvent.press(screen.getByText('BoxVan'))
+    fireEvent.press(screen.getByText('Box van'))
     fireEvent.press(screen.getByText('Small'))
-    fireEvent.press(screen.getByRole('button', { name: 'Save' }))
+    fireEvent.press(screen.getByRole('button', { name: 'Add truck' }))
 
     expect(await screen.findByText('Truck name already used')).toBeOnTheScreen()
-    expect(screen.getByRole('button', { name: 'Save' })).toBeOnTheScreen()
+    expect(screen.getByRole('button', { name: 'Add truck' })).toBeOnTheScreen()
   })
 })
 
-describe('add driver (FAB → full-screen form)', () => {
-  it('needs names and all three rules; sends the extend flag', async () => {
+describe('add driver (＋ Add → Add a driver)', () => {
+  it('needs names and all three rules; sends the extend flag and confirms', async () => {
     const api = installFakeApi(routes({ 'POST /drivers': { driverId: 'd9' } }))
     renderCompany()
-    await openFabAction('Add driver')
+    await openFabAction('Add a driver')
 
-    const save = screen.getByRole('button', { name: 'Save' })
-    expect(save).toBeDisabled()
+    const add = screen.getByRole('button', { name: 'Add driver' })
+    expect(add).toBeDisabled()
 
     fireEvent.changeText(screen.getByLabelText('First name'), 'Erika')
     fireEvent.changeText(screen.getByLabelText('Last name'), 'Mustermann')
-    fireEvent.press(screen.getByText('SplitBreak'))
-    fireEvent.press(screen.getByText('ReducedRest'))
-    expect(save).toBeDisabled()
-    fireEvent.press(screen.getByText('FullWeeklyRest'))
+    // Nothing is chosen until tapped; each option shows its rule in plain words.
+    fireEvent.press(screen.getByText(BREAK_RULE_DESCRIPTIONS.SplitBreak))
+    fireEvent.press(screen.getByText(DAILY_REST_RULE_DESCRIPTIONS.ReducedRest))
+    expect(add).toBeDisabled()
+    fireEvent.press(screen.getByText(WEEKLY_REST_RULE_DESCRIPTIONS.FullWeeklyRest))
     fireEvent.press(screen.getByRole('checkbox', { name: 'Extend daily driving when eligible' }))
-    fireEvent.press(save)
+    fireEvent.press(add)
 
     await waitFor(() =>
       expect(bodyOf(api, '/drivers')).toEqual({
@@ -171,15 +197,17 @@ describe('add driver (FAB → full-screen form)', () => {
         truckingCompanyId: 'c1',
       }),
     )
-    await waitFor(() => expect(screen.queryByRole('button', { name: 'Save' })).toBeNull())
+    await waitFor(() => expect(screen.queryByRole('button', { name: 'Add driver' })).toBeNull())
+    expect(await screen.findByText('Driver added')).toBeOnTheScreen()
+    expect(screen.getByText('Erika Mustermann')).toBeOnTheScreen()
   })
 
-  it('Cancel (bottom bar) closes without saving', async () => {
+  it('Cancel closes without saving', async () => {
     const api = installFakeApi(routes())
     renderCompany()
-    await openFabAction('Add driver')
+    await openFabAction('Add a driver')
     fireEvent.press(screen.getByRole('button', { name: 'Cancel' }))
-    await waitFor(() => expect(screen.queryByRole('button', { name: 'Save' })).toBeNull())
+    await waitFor(() => expect(screen.queryByRole('button', { name: 'Add driver' })).toBeNull())
     expect(callsTo(api, 'POST', '/drivers')).toBe(0)
   })
 })

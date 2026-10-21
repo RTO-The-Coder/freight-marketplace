@@ -63,7 +63,10 @@ export function fleetScene(
   legs: RouteLeg<FleetStop>[] | null,
   positions: Map<string, TruckPositionDto>,
   office: { latitude: number; longitude: number } | null,
+  /** Each running truck's route colour, by its index; the route palette in order when left out. */
+  colors?: readonly string[],
 ): MapScene {
+  const colorOf = (truckIndex: number) => colors?.[truckIndex] ?? ROUTE_COLORS[truckIndex % ROUTE_COLORS.length]
   const trucks = running.flatMap((t) => {
     const pos = positions.get(t.truckId)
     return pos?.tripId ? [{ id: t.truckId, latitude: pos.latitude, longitude: pos.longitude, label: t.truckName }] : []
@@ -73,7 +76,7 @@ export function fleetScene(
       const done = isDone(leg)
       return {
         path: leg.path,
-        color: ROUTE_COLORS[leg.to.truckIndex % ROUTE_COLORS.length],
+        color: colorOf(leg.to.truckIndex),
         width: done ? 2 : 3.5,
         opacity: done ? 0.4 : 0.85,
         dashed: !leg.road,
@@ -171,9 +174,8 @@ export function boundsOf(points: LatLng[]): LngLatBounds | null {
   return [west, south, east, north]
 }
 
-/** The line under a map: loading, or a warning when some legs are straight-line fallbacks. */
-export function routeStatus(legs: unknown[] | null, anyStraightLine: boolean, loadingText: string): string | null {
-  if (legs === null) return loadingText
+/** The note under a map: a warning when some legs are straight-line fallbacks (loading is a chip on the map). */
+export function routeStatus(anyStraightLine: boolean): string | null {
   if (anyStraightLine) return 'Some legs shown as straight lines — routing service was unavailable.'
   return null
 }

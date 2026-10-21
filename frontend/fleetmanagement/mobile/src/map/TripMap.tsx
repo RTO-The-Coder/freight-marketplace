@@ -19,5 +19,7 @@ export function TripMap({ stops, position }: Props) {
 
   if (ordered.length === 0) return null
 
-  return <MapPreview title="Trip map" scene={scene} status={routeStatus(legs, anyStraightLine, 'Loading road routes…')} />
+  return (
+    <MapPreview title="Trip map" scene={scene} loading={legs === null} status={routeStatus(anyStraightLine)} />
+  )
 }

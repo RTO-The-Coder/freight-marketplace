@@ -3,6 +3,7 @@ import { Modal, Pressable, StyleSheet, View } from 'react-native'
 import { SafeAreaView } from 'react-native-safe-area-context'
 import { Appbar, Icon, Text, useTheme } from 'react-native-paper'
 import { OSM_ATTRIBUTION } from './osmStyle'
+import { RoutesLoadingChip } from './RoutesLoadingChip'
 import { RouteMap } from './RouteMap'
 import type { MapScene } from './scene'
 
@@ -10,7 +11,9 @@ interface Props {
   /** Title of the full-screen map. */
   title: string
   scene: MapScene
-  /** Loading / straight-line note shown under the map, if any. */
+  /** The road routes are still being fetched: a chip on the map says so. */
+  loading: boolean
+  /** A note under the map (straight-line fallback), if any. */
   status: string | null
   /** Called from the full-screen map; the map closes first. */
   onPressTruck?: (truckId: string) => void
@@ -21,7 +24,7 @@ interface Props {
  * A static map preview inside a scrolling screen (no gestures, so the page scrolls
  * over it). Tapping it opens the same map full screen, with pan and zoom.
  */
-export function MapPreview({ title, scene, status, onPressTruck, height = 220 }: Props) {
+export function MapPreview({ title, scene, loading, status, onPressTruck, height = 220 }: Props) {
   const theme = useTheme()
   const [open, setOpen] = useState(false)
   const [selected, setSelected] = useState<string | null>(null)
@@ -41,6 +44,7 @@ export function MapPreview({ title, scene, status, onPressTruck, height = 220 }:
     <View>
       <View style={[styles.preview, { height, borderColor: theme.colors.outlineVariant }]}>
         <RouteMap scene={scene} interactive={false} style={StyleSheet.absoluteFill} />
+        {loading && <RoutesLoadingChip />}
         {/* Catches every touch: a tap opens full screen, a drag scrolls the page. */}
         <Pressable
           style={StyleSheet.absoluteFill}
@@ -76,6 +80,7 @@ export function MapPreview({ title, scene, status, onPressTruck, height = 220 }:
                 : undefined
             }
           />
+          {loading && <RoutesLoadingChip raised={Boolean(selected || status)} />}
           {(selected || status) && (
             <View style={[styles.info, { backgroundColor: theme.colors.surface }]}>
               {selected && <Text variant="bodyLarge">{selected}</Text>}
