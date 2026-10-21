@@ -35,6 +35,13 @@ export default function TabsLayout() {
             ),
           }}
         />
+        <Tabs.Screen
+          name="tracking"
+          options={{
+            title: 'Tracking',
+            tabBarIcon: ({ color, size }) => <MaterialCommunityIcons name="map-marker-path" color={color} size={size} />,
+          }}
+        />
       </Tabs>
       {/* "New shipment available": a banner while the app is open; a tap opens the shipment. */}
       <PushNotifications />

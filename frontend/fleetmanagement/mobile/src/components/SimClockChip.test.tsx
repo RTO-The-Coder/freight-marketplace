@@ -1,5 +1,5 @@
 import { fireEvent, screen, waitFor } from '@testing-library/react-native'
-import { fmtSimShort } from '@freight/fleetmanagement-core'
+import { fmtSimDateTime, fmtSimShort } from '@freight/fleetmanagement-core'
 import { pickSimDateTime } from '../time/pickSimDateTime'
 import { BASE, installFakeApi, renderWithApp } from '../test/helpers'
 
@@ -44,6 +44,28 @@ it('advances by ticks and shows what moved', async () => {
   await waitFor(() => expect(bodyOf(api, '/simulation/advance')).toEqual({ ticks: 3 }))
   expect(await screen.findByText('2 trucks moved · 1 trip completed')).toBeOnTheScreen()
   expect(await screen.findByText(fmtSimShort('2026-08-01T06:00:00Z'))).toBeOnTheScreen()
+})
+
+it('moves the clock 1 hour with ▸ and confirms the new time', async () => {
+  const api = installFakeApi(routes())
+  renderWithApp(<></>)
+  await screen.findByText(fmtSimShort('2026-08-01T05:00:00Z'))
+
+  fireEvent.press(screen.getByLabelText('Advance 1 hour'))
+
+  await waitFor(() => expect(bodyOf(api, '/simulation/advance')).toEqual({ ticks: 12 }))
+  expect(await screen.findByText(`Now ${fmtSimDateTime('2026-08-01T06:00:00Z')}`)).toBeOnTheScreen()
+  expect(screen.getByText('2 trucks moved · 1 trip completed')).toBeOnTheScreen()
+})
+
+it('closes the sheet after advancing', async () => {
+  installFakeApi(routes())
+  renderWithApp(<></>)
+  await openSheet()
+  fireEvent.press(screen.getByText('Advance'))
+
+  expect(await screen.findByText('2 trucks moved · 1 trip completed')).toBeOnTheScreen()
+  await waitFor(() => expect(screen.queryByText('Simulation clock')).toBeNull())
 })
 
 it('converts hours to ticks (1 hour = 12 ticks)', async () => {
