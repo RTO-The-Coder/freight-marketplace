@@ -17,6 +17,13 @@ function openPicker(value: Date, mode: Mode): Promise<Date | null> {
   })
 }
 
+/** Android's date dialog alone, in UTC. Resolves the picked simulation day as "YYYY-MM-DD", or null if dismissed. */
+export async function pickSimDate(initialDate: string | null): Promise<string | null> {
+  const initial = initialDate ? new Date(`${initialDate}T00:00:00Z`) : new Date()
+  const date = await openPicker(initial, 'date')
+  return date ? date.toISOString().slice(0, 10) : null
+}
+
 /**
  * Android's date dialog, then its time dialog, both in UTC. Resolves the picked
  * simulation time as "YYYY-MM-DDTHH:mm" (what core's SimClock.setTime and
