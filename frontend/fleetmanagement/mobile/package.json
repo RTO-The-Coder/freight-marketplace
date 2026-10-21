@@ -11,6 +11,9 @@
   },
   "jest": {
     "preset": "jest-expo",
+    "setupFilesAfterEnv": [
+      "<rootDir>/src/test/setup.ts"
+    ],
     "moduleNameMapper": {
       "^@maplibre/maplibre-react-native$": "<rootDir>/src/test/maplibreMock.tsx",
       "^@react-native-async-storage/async-storage$": "@react-native-async-storage/async-storage/jest/async-storage-mock"

@@ -77,6 +77,7 @@ it('converts hours to ticks (1 hour = 12 ticks)', async () => {
   fireEvent.press(screen.getByText('Advance'))
 
   await waitFor(() => expect(bodyOf(api, '/simulation/advance')).toEqual({ ticks: 12 }))
+  expect(await screen.findByText('2 trucks moved · 1 trip completed')).toBeOnTheScreen()
 })
 
 it('sets the time picked in the dialogs as UTC simulation time', async () => {
@@ -88,6 +89,7 @@ it('sets the time picked in the dialogs as UTC simulation time', async () => {
   fireEvent.press(screen.getByText('Set time'))
 
   await waitFor(() => expect(bodyOf(api, '/simulation/time')).toEqual({ newCurrentTime: '2026-08-29T14:20:00Z' }))
+  expect(await screen.findByText(`Clock set to ${fmtSimDateTime('2026-08-29T14:20:00Z')}`)).toBeOnTheScreen()
 })
 
 it('does nothing when the time dialogs are cancelled', async () => {
@@ -99,6 +101,8 @@ it('does nothing when the time dialogs are cancelled', async () => {
   fireEvent.press(screen.getByText('Set time'))
 
   await waitFor(() => expect(pickSimDateTime).toHaveBeenCalled())
+  // The button comes back from "Setting…" without a request.
+  expect(await screen.findByText('Set time')).toBeOnTheScreen()
   expect(bodyOf(api, '/simulation/time')).toBeUndefined()
 })
 

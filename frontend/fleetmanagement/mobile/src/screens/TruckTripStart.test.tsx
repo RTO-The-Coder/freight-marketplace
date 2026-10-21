@@ -75,6 +75,8 @@ it('does nothing when the pickers are cancelled', async () => {
   renderTruck()
   fireEvent.press(await screen.findByText('Change trip start'))
   await waitFor(() => expect(pickSimDateTime).toHaveBeenCalled())
+  // The button comes back from "Changing…" without a request.
+  expect(await screen.findByText('Change trip start')).toBeOnTheScreen()
   expect(callsTo(api, 'PATCH', '/trips/trip1/start')).toBe(0)
 })
 

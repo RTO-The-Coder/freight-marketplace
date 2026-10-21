@@ -53,6 +53,8 @@ const board = {
   direct: [shipment('dir', 'Flatbed', '2026-08-01T11:00:00Z', { isDirect: true, truckingCompanyId: 'c1', offersOpen: false })],
 }
 
+/** An opened card fetches its road route; wait until the map has it. */
+const routeDrawn = () => waitFor(() => expect(screen.queryByText('Loading road routes…')).toBeNull())
 const typesShown = () => screen.getAllByText(/^(Flatbed|Tanker)$/).map((n) => n.props.children)
 
 beforeEach(() => (pickSimDateTime as jest.Mock).mockReset())
@@ -109,6 +111,7 @@ it('Offered shows our offers with truck, positions, price and limit - and no but
     screen.getByText('Our offer: Truck-2 · pickup position 2, delivery position 3 · €910.00 · until offers close'),
   ).toBeOnTheScreen()
   fireEvent.press(screen.getByText('Box van'))
+  await routeDrawn()
   expect(screen.queryByText('Send offer')).toBeNull()
   expect(screen.queryByText('Add to trip')).toBeNull()
 })
@@ -126,6 +129,8 @@ it('Approved: Add to trip adds the accepted offer to the trip, confirms and relo
   expect(await screen.findByText('Added to the trip')).toBeOnTheScreen()
   // Loaded once, again on the tab tap, and again after adding.
   await waitFor(() => expect(callsTo(api, 'GET', '/companies/c1/shipments/board')).toBe(3))
+  await waitFor(() => expect(screen.queryByTestId('updating-tag')).toBeNull())
+  await routeDrawn()
 })
 
 it('Approved: shows the error when the offer no longer fits the truck', async () => {
@@ -147,6 +152,7 @@ it('Direct says it was booked to this company and offers Assign →', async () =
   expect(await screen.findByText('Booked directly to Northwind Freight.')).toBeOnTheScreen()
   fireEvent.press(screen.getByText('Flatbed'))
   expect(screen.getByText('Assign →')).toBeOnTheScreen()
+  await routeDrawn()
 })
 
 it('filters by type; the counts follow the filter', async () => {

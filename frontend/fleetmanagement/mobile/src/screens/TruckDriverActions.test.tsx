@@ -66,6 +66,12 @@ function bodyOf(api: jest.Mock, method: string, path: string) {
 }
 
 /** Opens the truck screen on its Drivers view. */
+/** After saving: the sheet has closed and the truck has reloaded. */
+async function savedAndReloaded() {
+  await waitFor(() => expect(screen.queryByText('Save drivers')).toBeNull())
+  await waitFor(() => expect(screen.queryByTestId('updating-tag')).toBeNull())
+}
+
 async function renderDrivers(count: number) {
   renderWithApp(<TruckDetailScreen truckId="t1" onLoaded={jest.fn()} onOpenTracking={jest.fn()} />)
   fireEvent.press(await screen.findByText(`Drivers ${count}`))
@@ -125,6 +131,7 @@ describe('assign drivers', () => {
     await waitFor(() =>
       expect(bodyOf(api, 'PATCH', '/trucks/t1/drivers')).toEqual({ primaryDriverId: 'd1', secondaryDriverId: 'd2' }),
     )
+    await savedAndReloaded()
   })
 
   it('shows the API error and stays open', async () => {
@@ -180,6 +187,7 @@ describe('assign drivers', () => {
       () => expect(bodyOf(api, 'PATCH', '/trucks/t1/drivers')).toEqual({ primaryDriverId: 'd9', secondaryDriverId: null }),
       slow,
     )
+    await savedAndReloaded()
   }, 20000)
 })
 

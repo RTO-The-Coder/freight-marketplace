@@ -52,8 +52,9 @@ export function SimClockChip() {
         : { title: `Clock set to ${fmtSimDateTime(currentTime)}` },
     )
     // Only the end of a request decides what to show; the values are read as they are then.
+    // `started` too: a quick reply can land in the same render as the start, so busy never shows true.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [busy, error])
+  }, [busy, error, started])
 
   const advanceBy = (n: number) => {
     if (busy || n <= 0) return
