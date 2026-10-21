@@ -1,4 +1,4 @@
-export { ApiError, createApiClient } from './client'
+export { ApiError, createApiClient, onRequestsInFlightChange } from './client'
 export type { ApiClient, ApiClientConfig } from './client'
 export { createFleetApi } from './fleetApi'
 export type {
