@@ -1,43 +1,49 @@
-import { StyleSheet, View } from 'react-native'
+import { StyleSheet } from 'react-native'
 import { Button, Text, useTheme } from 'react-native-paper'
-import { BottomSheet } from './BottomSheet'
+import { ActionButton } from './ActionButton'
+import { Sheet } from './Sheet'
 
 interface Props {
   title: string
   message: string
   confirmLabel: string
-  busy: boolean
+  /** Shown with a spinner while the action runs: "Removing…". */
+  busyLabel: string
   visible: boolean
   onCancel: () => void
-  onConfirm: () => void
+  onConfirm: () => Promise<unknown> | void
 }
 
-/** Confirmation for a destructive action, as a bottom sheet (thumb reach). */
-export function ConfirmSheet({ title, message, confirmLabel, busy, visible, onCancel, onConfirm }: Props) {
+/** Confirmation for a destructive action, as a sheet with Cancel and the red action at the bottom. */
+export function ConfirmSheet({ title, message, confirmLabel, busyLabel, visible, onCancel, onConfirm }: Props) {
   const theme = useTheme()
   return (
-    <BottomSheet title={title} visible={visible} onClose={onCancel}>
+    <Sheet
+      title={title}
+      visible={visible}
+      onClose={onCancel}
+      footer={
+        <>
+          <Button mode="outlined" style={styles.action} onPress={onCancel}>
+            Cancel
+          </Button>
+          <ActionButton
+            style={styles.action}
+            mode="contained"
+            buttonColor={theme.colors.error}
+            textColor={theme.colors.onError}
+            label={confirmLabel}
+            busyLabel={busyLabel}
+            onPress={onConfirm}
+          />
+        </>
+      }
+    >
       <Text variant="bodyMedium">{message}</Text>
-      <View style={styles.actions}>
-        <Button mode="outlined" style={styles.action} onPress={onCancel}>
-          Cancel
-        </Button>
-        <Button
-          mode="contained"
-          style={styles.action}
-          buttonColor={theme.colors.error}
-          textColor={theme.colors.onError}
-          disabled={busy}
-          onPress={onConfirm}
-        >
-          {busy ? 'Working…' : confirmLabel}
-        </Button>
-      </View>
-    </BottomSheet>
+    </Sheet>
   )
 }
 
 const styles = StyleSheet.create({
-  actions: { flexDirection: 'row', gap: 12 },
   action: { flex: 1 },
 })

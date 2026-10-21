@@ -45,12 +45,12 @@ const position = (extra = {}) => ({
 })
 
 function renderTruck() {
-  renderWithApp(<TruckDetailScreen truckId="t1" onLoaded={jest.fn()} onSelectDriver={jest.fn()} />)
+  renderWithApp(<TruckDetailScreen truckId="t1" onLoaded={jest.fn()} onOpenTracking={jest.fn()} />)
 }
 
 beforeEach(() => (pickSimDateTime as jest.Mock).mockReset())
 
-it('changes the start of a trip that has not moved, in UTC simulation time, then reloads', async () => {
+it('changes the start of a trip that has not moved, in UTC simulation time, confirms and reloads', async () => {
   ;(pickSimDateTime as jest.Mock).mockResolvedValue('2026-08-02T06:30')
   const api = installFakeApi({
     'GET /trucks/t1': truck([stop()]),
@@ -65,6 +65,7 @@ it('changes the start of a trip that has not moved, in UTC simulation time, then
     const call = api.mock.calls.find(([u, init]) => u === `${BASE}/trips/trip1/start` && init?.method === 'PATCH')
     expect(call && JSON.parse(call[1].body)).toEqual({ newStartTime: '2026-08-02T06:30:00Z' })
   })
+  expect(await screen.findByText('Trip start changed')).toBeOnTheScreen()
   await waitFor(() => expect(callsTo(api, 'GET', '/trucks/t1')).toBe(2))
 })
 
@@ -80,7 +81,7 @@ it('does nothing when the pickers are cancelled', async () => {
 it('is hidden once the truck has moved along its leg', async () => {
   installFakeApi({ 'GET /trucks/t1': truck([stop()]), 'GET /trucks/t1/position': position({ legProgressFraction: 0.2 }) })
   renderTruck()
-  await screen.findByText('Depot — 1100 Favoriten, Vienna\nLeg 42 km / 55 min · Pending')
+  await screen.findByLabelText('FL-07 active')
   expect(screen.queryByText('Change trip start')).toBeNull()
 })
 
@@ -90,14 +91,14 @@ it('is hidden once a stop is reached', async () => {
     'GET /trucks/t1/position': position(),
   })
   renderTruck()
-  await screen.findByText(/Reached/)
+  await screen.findByLabelText('FL-07 active')
   expect(screen.queryByText('Change trip start')).toBeNull()
 })
 
 it('is hidden without an open trip', async () => {
   installFakeApi({ 'GET /trucks/t1': truck([]), 'GET /trucks/t1/position': position({ tripId: null }) })
   renderTruck()
-  await screen.findByText('No active trip — the truck is at its company office.')
+  await screen.findByText('No trip — the truck is at the office.')
   expect(screen.queryByText('Change trip start')).toBeNull()
 })
 

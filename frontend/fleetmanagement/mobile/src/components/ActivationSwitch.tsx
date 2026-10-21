@@ -1,10 +1,10 @@
 import { ApiError, type TruckSize } from '@freight/api-client'
 import { useState } from 'react'
 import { StyleSheet, View } from 'react-native'
-import { Button, Switch, Text } from 'react-native-paper'
+import { ActivityIndicator, Button, Switch, Text, useTheme } from 'react-native-paper'
 import { fleetApi } from '@freight/fleetmanagement-core'
 import { AssignDriversSheet } from './AssignDriversSheet'
-import { BottomSheet } from './BottomSheet'
+import { Sheet } from './Sheet'
 
 interface Props {
   truckId: string
@@ -19,18 +19,21 @@ interface Props {
 
 /**
  * On/off switch for a truck's activation — Android's standard control for a setting.
- * It always takes the tap (a greyed-out switch would let the tap fall through to the row):
+ * It always takes the tap (a greyed-out switch would let the tap fall through to the card):
  * when the truck can't be activated it explains why and offers to assign a driver.
  */
 export function ActivationSwitch({ truckId, truckName, truckSize, isActive, hasDriver, onChanged, onError }: Props) {
+  const theme = useTheme()
   const [busy, setBusy] = useState(false)
-  const [sheet, setSheet] = useState<'blocked' | 'assignDrivers' | null>(null)
+  const [blockedOpen, setBlockedOpen] = useState(false)
+  /** Opened on top of the "can't be activated" sheet: Android drops a sheet opened while another is still closing. */
+  const [assigning, setAssigning] = useState(false)
   const blocked = !isActive && !hasDriver
 
   const toggle = async () => {
     if (busy) return
     if (blocked) {
-      setSheet('blocked')
+      setBlockedOpen(true)
       return
     }
     setBusy(true)
@@ -45,34 +48,50 @@ export function ActivationSwitch({ truckId, truckName, truckSize, isActive, hasD
     }
   }
 
+  const closeAll = () => {
+    setAssigning(false)
+    setBlockedOpen(false)
+  }
+
   return (
     <>
-      <Switch
-        value={isActive}
-        onValueChange={() => void toggle()}
-        accessibilityLabel={`${truckName} active`}
-        accessibilityHint={blocked ? 'Assign a driver to this truck before it can be activated' : undefined}
-      />
+      <View style={styles.switchRow}>
+        {busy && <ActivityIndicator size={14} color={theme.colors.primary} accessibilityLabel={isActive ? 'Deactivating' : 'Activating'} />}
+        <Switch
+          value={isActive}
+          disabled={busy}
+          onValueChange={() => void toggle()}
+          accessibilityLabel={`${truckName} active`}
+          accessibilityHint={blocked ? 'Assign a driver to this truck before it can be activated' : undefined}
+        />
+      </View>
 
-      <BottomSheet title={`${truckName} can't be activated`} visible={sheet === 'blocked'} onClose={() => setSheet(null)}>
+      <Sheet
+        title={`${truckName} can't be activated`}
+        visible={blockedOpen}
+        onClose={closeAll}
+        footer={
+          <>
+            <Button mode="outlined" style={styles.action} onPress={closeAll}>
+              Close
+            </Button>
+            <Button mode="contained" style={styles.action} icon="account-plus" onPress={() => setAssigning(true)}>
+              Assign driver
+            </Button>
+          </>
+        }
+      >
         <Text variant="bodyMedium">A truck needs a driver before it can take shipments. Assign one first.</Text>
-        <View style={styles.actions}>
-          <Button mode="outlined" style={styles.action} onPress={() => setSheet(null)}>
-            Close
-          </Button>
-          <Button mode="contained" style={styles.action} icon="account-plus" onPress={() => setSheet('assignDrivers')}>
-            Assign driver
-          </Button>
-        </View>
-      </BottomSheet>
+      </Sheet>
 
       <AssignDriversSheet
         truckId={truckId}
+        truckName={truckName}
         truckSize={truckSize}
-        visible={sheet === 'assignDrivers'}
-        onClose={() => setSheet(null)}
+        visible={blockedOpen && assigning}
+        onClose={() => setAssigning(false)}
         onAssigned={() => {
-          setSheet(null)
+          closeAll()
           onChanged()
         }}
       />
@@ -81,6 +100,6 @@ export function ActivationSwitch({ truckId, truckName, truckSize, isActive, hasD
 }
 
 const styles = StyleSheet.create({
-  actions: { flexDirection: 'row', gap: 12 },
   action: { flex: 1 },
+  switchRow: { flexDirection: 'row', alignItems: 'center', gap: 4 },
 })

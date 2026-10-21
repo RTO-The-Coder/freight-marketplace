@@ -11,7 +11,7 @@ export default function TruckRoute() {
       <TruckDetailScreen
         truckId={truckId}
         onLoaded={setTitle}
-        onSelectDriver={(driverId) => router.push(`/fleet/driver/${driverId}`)}
+        onOpenTracking={(id) => router.navigate(`/tracking?truckId=${id}`)}
       />
     </>
   )

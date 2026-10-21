@@ -30,6 +30,14 @@ const ledger = {
   weeklyDrivingMinutesThisWeek: 1920,
   weeklyDrivingMinutesPriorWeek: 0,
   lastEvaluatedSimulatedTime: '2026-08-01T14:00:00Z',
+  awaitingSecondBreakBlock: false,
+  extendedDaysUsedThisWeek: 0,
+  awaitingSecondDailyRestBlock: false,
+  reducedDailyRestsUsedSinceWeeklyRest: 0,
+  lastRestEndedAt: '2026-08-01T05:00:00Z',
+  lastWeeklyRestEndedAt: '2026-07-27T05:00:00Z',
+  weeklyRestMinutesOwed: 0,
+  currentActivityLengthMinutes: 0,
 }
 
 const driverDetail = {
@@ -39,6 +47,17 @@ const driverDetail = {
   weeklyRestRule: 'FullWeeklyRest',
   extendDailyDrivingWhenEligible: false,
   complianceState: ledger,
+  truckingCompanyId: 'c1',
+  limits: {
+    maxContinuousDrivingMinutesBeforeBreak: 270,
+    maxDailyDrivingMinutes: 540,
+    extendedDailyDrivingMinutes: 600,
+    maxExtendedDaysPerWeek: 2,
+    maxReducedDailyRestsSinceWeeklyRest: 3,
+    maxWeeklyDrivingMinutes: 3360,
+    maxTwoWeekDrivingMinutes: 5400,
+    maxMinutesBetweenWeeklyRests: 8640,
+  },
 }
 
 function bodyOf(api: jest.Mock, method: string, path: string) {
@@ -46,21 +65,25 @@ function bodyOf(api: jest.Mock, method: string, path: string) {
   return call ? JSON.parse(call[1].body) : undefined
 }
 
-function renderTruck() {
-  renderWithApp(<TruckDetailScreen truckId="t1" onLoaded={jest.fn()} onSelectDriver={jest.fn()} />)
+/** Opens the truck screen on its Drivers view. */
+async function renderDrivers(count: number) {
+  renderWithApp(<TruckDetailScreen truckId="t1" onLoaded={jest.fn()} onOpenTracking={jest.fn()} />)
+  fireEvent.press(await screen.findByText(`Drivers ${count}`))
 }
 
-describe('assign drivers (full-screen form)', () => {
+describe('assign drivers', () => {
   it('Medium truck: picks a primary from search, no secondary slot, saves and reloads', async () => {
     const api = installFakeApi({
       'GET /trucks/t1': truck(),
       'GET /drivers?unassigned=true&truckingCompanyId=c1': { drivers: [petra, marek] },
       'PATCH /trucks/t1/drivers': {},
     })
-    renderTruck()
+    await renderDrivers(0)
 
-    fireEvent.press(await screen.findByText('Assign drivers'))
-    const save = await screen.findByRole('button', { name: 'Save' })
+    fireEvent.press(await screen.findByText('+ Assign driver'))
+    expect(await screen.findByText('Drivers of FL-07')).toBeOnTheScreen()
+    expect(screen.getByText('Medium truck')).toBeOnTheScreen()
+    const save = screen.getByRole('button', { name: 'Save drivers' })
     await screen.findByText('Petra Novak')
     expect(save).toBeDisabled()
     expect(screen.queryByText('Secondary driver')).toBeNull()
@@ -69,7 +92,7 @@ describe('assign drivers (full-screen form)', () => {
     expect(screen.queryByText('Marek Wójcik')).toBeNull()
     fireEvent.press(screen.getByText('Petra Novak'))
     expect(save).toBeEnabled()
-    // The form itself reads the truck when it opens, so count only the reload after saving.
+    // The sheet itself reads the truck when it opens, so count only the reload after saving.
     const before = callsTo(api, 'GET', '/trucks/t1')
     fireEvent.press(save)
 
@@ -86,9 +109,9 @@ describe('assign drivers (full-screen form)', () => {
       'GET /drivers?unassigned=true&truckingCompanyId=c1': { drivers: [petra] },
       'PATCH /trucks/t1/drivers': {},
     })
-    renderTruck()
+    await renderDrivers(1)
 
-    fireEvent.press(await screen.findByText('Change drivers'))
+    fireEvent.press(await screen.findByText('Reassign drivers'))
     expect(await screen.findByText('Secondary driver')).toBeOnTheScreen()
     // The primary slot shows Jan as chosen; the secondary search must not offer him.
     expect(screen.getByLabelText('Change primary driver')).toBeOnTheScreen()
@@ -97,7 +120,7 @@ describe('assign drivers (full-screen form)', () => {
 
     fireEvent.changeText(screen.getByLabelText('Search secondary driver'), '')
     fireEvent.press(screen.getByText('Petra Novak'))
-    fireEvent.press(screen.getByRole('button', { name: 'Save' }))
+    fireEvent.press(screen.getByRole('button', { name: 'Save drivers' }))
 
     await waitFor(() =>
       expect(bodyOf(api, 'PATCH', '/trucks/t1/drivers')).toEqual({ primaryDriverId: 'd1', secondaryDriverId: 'd2' }),
@@ -110,14 +133,14 @@ describe('assign drivers (full-screen form)', () => {
       'GET /drivers?unassigned=true&truckingCompanyId=c1': { drivers: [petra] },
       'PATCH /trucks/t1/drivers': new Error('Driver already assigned elsewhere'),
     })
-    renderTruck()
-    fireEvent.press(await screen.findByText('Assign drivers'))
+    await renderDrivers(0)
+    fireEvent.press(await screen.findByText('+ Assign driver'))
     fireEvent.press(await screen.findByText('Petra Novak'))
-    fireEvent.press(screen.getByRole('button', { name: 'Save' }))
+    fireEvent.press(screen.getByRole('button', { name: 'Save drivers' }))
     expect(await screen.findByText('Driver already assigned elsewhere')).toBeOnTheScreen()
   })
 
-  it('adds a new driver from the form, selects them and assigns them', async () => {
+  it('adds a new driver from the sheet, selects them and assigns them', async () => {
     const erika = { driverId: 'd9', firstName: 'Erika', lastName: 'Mustermann' }
     let created = false
     const api = installFakeApi({
@@ -129,27 +152,28 @@ describe('assign drivers (full-screen form)', () => {
       },
       'PATCH /trucks/t1/drivers': {},
     })
-    renderTruck()
-    fireEvent.press(await screen.findByText('Assign drivers'))
+    await renderDrivers(0)
+    fireEvent.press(await screen.findByText('+ Assign driver'))
     fireEvent.press(await screen.findByText('Add new driver'))
 
-    // The Add Driver form opens on top of Assign drivers.
+    // Add a driver opens on top of the drivers sheet.
     fireEvent.changeText(await screen.findByLabelText('First name'), 'Erika')
     fireEvent.changeText(screen.getByLabelText('Last name'), 'Mustermann')
-    fireEvent.press(screen.getByText('FullBreak'))
-    fireEvent.press(screen.getByText('FullRest'))
-    fireEvent.press(screen.getByText('FullWeeklyRest'))
-    // Add Driver sits inside the Assign drivers form, so its Save comes first.
-    const addDriverSave = screen.getAllByRole('button', { name: 'Save' })[0]
-    expect(addDriverSave).toBeEnabled()
-    fireEvent.press(addDriverSave)
+    // Each rule option shows its plain-words description.
+    fireEvent.press(screen.getByText('45 min after 4 h 30 of driving'))
+    fireEvent.press(screen.getByText('11 h every day'))
+    fireEvent.press(screen.getByText('45 h each week'))
+    // The Drivers view has its own Add driver button; the sheet's comes last.
+    const addDriver = screen.getAllByRole('button', { name: 'Add driver' }).at(-1)!
+    expect(addDriver).toBeEnabled()
+    fireEvent.press(addDriver)
 
-    // Two stacked full-screen forms and four API calls: give slow CI machines more than the 1 s default.
+    // Two stacked sheets and four API calls: give slow CI machines more than the 1 s default.
     const slow = { timeout: 5000 }
     await waitFor(() => expect(callsTo(api, 'POST', '/drivers')).toBe(1), slow)
     await waitFor(() => expect(screen.queryByLabelText('First name')).toBeNull(), slow)
     await waitFor(() => expect(callsTo(api, 'GET', '/drivers?unassigned=true&truckingCompanyId=c1')).toBe(2), slow)
-    const save = screen.getByRole('button', { name: 'Save' })
+    const save = screen.getByRole('button', { name: 'Save drivers' })
     expect(save).toBeEnabled()
     fireEvent.press(save)
     await waitFor(
@@ -159,7 +183,26 @@ describe('assign drivers (full-screen form)', () => {
   }, 20000)
 })
 
-describe('remove drivers (bottom-sheet confirmation)', () => {
+describe('add a driver to the company', () => {
+  it('opens Add a driver and confirms', async () => {
+    installFakeApi({
+      'GET /trucks/t1': truck(),
+      'GET /companies/c1': { companyId: 'c1', name: 'Northwind Freight' },
+      'POST /drivers': { driverId: 'd9' },
+    })
+    await renderDrivers(0)
+    fireEvent.press(await screen.findByText('Add driver'))
+    fireEvent.changeText(await screen.findByLabelText('First name'), 'Erika')
+    fireEvent.changeText(screen.getByLabelText('Last name'), 'Mustermann')
+    fireEvent.press(screen.getByText('45 min after 4 h 30 of driving'))
+    fireEvent.press(screen.getByText('11 h every day'))
+    fireEvent.press(screen.getByText('45 h each week'))
+    fireEvent.press(screen.getAllByRole('button', { name: 'Add driver' }).at(-1)!)
+    expect(await screen.findByText('Erika Mustermann · put them on this truck with Assign')).toBeOnTheScreen()
+  })
+})
+
+describe('remove drivers', () => {
   const routes = (extra = {}) => ({
     'GET /trucks/t1': truck({ primaryDriver: jan }),
     'GET /drivers/d1': driverDetail,
@@ -169,7 +212,7 @@ describe('remove drivers (bottom-sheet confirmation)', () => {
 
   it('asks first, then removes and reloads', async () => {
     const api = installFakeApi(routes())
-    renderTruck()
+    await renderDrivers(1)
     fireEvent.press(await screen.findByText('Remove drivers'))
     expect(await screen.findByText('Remove drivers?')).toBeOnTheScreen()
     fireEvent.press(screen.getByRole('button', { name: 'Remove' }))
@@ -179,7 +222,7 @@ describe('remove drivers (bottom-sheet confirmation)', () => {
 
   it('Cancel removes nothing', async () => {
     const api = installFakeApi(routes())
-    renderTruck()
+    await renderDrivers(1)
     fireEvent.press(await screen.findByText('Remove drivers'))
     fireEvent.press(await screen.findByRole('button', { name: 'Cancel' }))
     await waitFor(() => expect(screen.queryByText('Remove drivers?')).toBeNull())
@@ -193,6 +236,7 @@ describe('remove drivers (bottom-sheet confirmation)', () => {
       kind: 'Pickup',
       status: 'Pending',
       sequence: 10,
+      placeName: 'Depot — 1100 Favoriten, Vienna',
       latitude: 51,
       longitude: 17,
       incomingLegDistanceKm: 0,
@@ -200,14 +244,13 @@ describe('remove drivers (bottom-sheet confirmation)', () => {
       reachedAt: null,
     }
     installFakeApi(routes({ 'GET /trucks/t1': truck({ primaryDriver: jan, stops: [stop] }) }))
-    renderTruck()
-    expect(await screen.findByText('Not possible while the truck has an open trip')).toBeOnTheScreen()
-    fireEvent.press(screen.getByText('Remove drivers'))
-    expect(screen.queryByText('Remove drivers?')).toBeNull()
+    await renderDrivers(1)
+    expect(await screen.findByText('A truck with an open trip cannot lose its drivers.')).toBeOnTheScreen()
+    expect(screen.getByRole('button', { name: 'Remove drivers' })).toBeDisabled()
   })
 })
 
-describe('check eligibility (bottom sheet)', () => {
+describe('check eligibility (on the driver card)', () => {
   const routes = (result: unknown) => ({
     'GET /trucks/t1': truck({ primaryDriver: jan }),
     'GET /drivers/d1': driverDetail,
@@ -216,8 +259,7 @@ describe('check eligibility (bottom sheet)', () => {
 
   it('checks after 60 minutes by default and shows the answer', async () => {
     const api = installFakeApi(routes({ isEligible: true, reason: null, minutesUntilEligible: null }))
-    renderTruck()
-    fireEvent.press(await screen.findByText('Check eligibility'))
+    await renderDrivers(1)
     fireEvent.press(await screen.findByRole('button', { name: 'Check' }))
     expect(await screen.findByText('Eligible to drive after 60 minutes.')).toBeOnTheScreen()
     expect(bodyOf(api, 'POST', '/drivers/d1/eligibility-check')).toEqual({ afterMinutes: 60 })
@@ -225,18 +267,16 @@ describe('check eligibility (bottom sheet)', () => {
 
   it('shows the reason when not eligible', async () => {
     installFakeApi(routes({ isEligible: false, reason: 'DailyCapReached', minutesUntilEligible: 600 }))
-    renderTruck()
-    fireEvent.press(await screen.findByText('Check eligibility'))
-    fireEvent.changeText(await screen.findByLabelText('After (minutes)'), '30')
+    await renderDrivers(1)
+    fireEvent.changeText(await screen.findByLabelText('Minutes from now for Jan Kowalski'), '30')
     fireEvent.press(screen.getByRole('button', { name: 'Check' }))
     expect(await screen.findByText('Not eligible after 30 minutes — DailyCapReached.')).toBeOnTheScreen()
   })
 
   it('needs a whole number of minutes', async () => {
     installFakeApi(routes({ isEligible: true, reason: null, minutesUntilEligible: null }))
-    renderTruck()
-    fireEvent.press(await screen.findByText('Check eligibility'))
-    fireEvent.changeText(await screen.findByLabelText('After (minutes)'), 'abc')
+    await renderDrivers(1)
+    fireEvent.changeText(await screen.findByLabelText('Minutes from now for Jan Kowalski'), 'abc')
     expect(screen.getByRole('button', { name: 'Check' })).toBeDisabled()
   })
 })

@@ -62,7 +62,7 @@ describe('trip map on the truck screen', () => {
       [geometryKey(50.5, 16.5, 51.1, 17.1)]: { distanceKm: 1, timeTicks: 1, path: [{ lat: 50.5, lng: 16.5 }, { lat: 50.8, lng: 16.9 }, { lat: 51.1, lng: 17.1 }] },
       [geometryKey(51.1, 17.1, 52.2, 21.2)]: { distanceKm: 1, timeTicks: 1, path: [{ lat: 51.1, lng: 17.1 }, { lat: 52.2, lng: 21.2 }] },
     })
-    renderWithApp(<TruckDetailScreen truckId="t1" onLoaded={jest.fn()} onSelectDriver={jest.fn()} />)
+    renderWithApp(<TruckDetailScreen truckId="t1" onLoaded={jest.fn()} onOpenTracking={jest.fn()} />)
 
     await waitFor(() => expect(drawnLines()).toHaveLength(2))
     // GeoJSON order is [lng, lat]; the first leg follows the road via the middle point.
@@ -90,7 +90,7 @@ describe('trip map on the truck screen', () => {
       'GET /trucks/t1': truckDetail('t1', 'FL-07', [stop('s1', 'Pickup', 'Pending', 10, 53.3, 18.3)]),
       'GET /trucks/t1/position': position('t1', 53.9, 18.9),
     })
-    renderWithApp(<TruckDetailScreen truckId="t1" onLoaded={jest.fn()} onSelectDriver={jest.fn()} />)
+    renderWithApp(<TruckDetailScreen truckId="t1" onLoaded={jest.fn()} onOpenTracking={jest.fn()} />)
 
     expect(
       await screen.findByText('Some legs shown as straight lines — routing service was unavailable.'),
@@ -100,28 +100,44 @@ describe('trip map on the truck screen', () => {
 
   it('has no map without a trip', async () => {
     installFakeApi({ 'GET /trucks/t1': truckDetail('t1', 'FL-07', []), 'GET /trucks/t1/position': position('t1', 50, 16) })
-    renderWithApp(<TruckDetailScreen truckId="t1" onLoaded={jest.fn()} onSelectDriver={jest.fn()} />)
-    await screen.findByText('No active trip — the truck is at its company office.')
+    renderWithApp(<TruckDetailScreen truckId="t1" onLoaded={jest.fn()} onOpenTracking={jest.fn()} />)
+    await screen.findByText('No trip — the truck is at the office.')
     expect(screen.queryByTestId('maplibre-map')).toBeNull()
   })
 })
 
-describe('fleet map on the company screen', () => {
+describe('fleet map on the Fleet tab', () => {
   function fleetRoutes(trucks: ReturnType<typeof truckDetail>[]) {
+    const running = trucks.filter((t) => t.stops.length > 0)
     const routes: Record<string, unknown> = {
       'GET /companies/c1': { companyId: 'c1', name: 'Northwind Freight', officeLatitude: 49.9, officeLongitude: 15.9 },
       'GET /trucks?truckingCompanyId=c1': {
         trucks: trucks.map((t) => ({ ...t, hasDriverAssignment: false })),
       },
+      'GET /companies/c1/fleet': { trucks: [], unassignedDrivers: [], drivers: [] },
+      // The running trips carry the trucks' live positions.
+      'GET /companies/c1/tracking': {
+        trips: running.map((t) => ({
+          tripId: `trip-${t.truckId}`,
+          truckId: t.truckId,
+          now: { kind: 'Driving', fromPlace: 'Depot', toPlace: 'Store', kmLeft: 10, driverName: null, until: null },
+          position: position(t.truckId, 50.1, 16.1),
+          stops: [],
+        })),
+        readyTrucks: [],
+      },
     }
-    for (const t of trucks) {
-      routes[`GET /trucks/${t.truckId}`] = t
-      routes[`GET /trucks/${t.truckId}/position`] = position(t.truckId, 50.1, 16.1)
-    }
+    for (const t of trucks) routes[`GET /trucks/${t.truckId}`] = t
     return routes
   }
 
-  it('shows each running truck’s route in its own colour, and a truck tap (full screen) opens it', async () => {
+  function renderFleetMap(onSelectTruck = jest.fn()) {
+    renderWithApp(
+      <CompanyDetailScreen companyId="c1" onLoaded={jest.fn()} onSelectTruck={onSelectTruck} />,
+    )
+  }
+
+  it('shows each running truck’s route in its own colour, and a truck tap opens it', async () => {
     installFakeApi(
       fleetRoutes([
         truckDetail('t1', 'FL-01', [stop('a', 'Pickup', 'Pending', 1, 54.4, 18.4)]),
@@ -130,7 +146,8 @@ describe('fleet map on the company screen', () => {
       ]),
     )
     const onSelectTruck = jest.fn()
-    renderWithApp(<CompanyDetailScreen companyId="c1" onLoaded={jest.fn()} onSelectTruck={onSelectTruck} />)
+    renderFleetMap(onSelectTruck)
+    fireEvent.press(await screen.findByText('Map'))
 
     await waitFor(() => expect(drawnLines()).toHaveLength(2))
     const colors = drawnLines().map((l) => l.properties.color)
@@ -138,19 +155,33 @@ describe('fleet map on the company screen', () => {
     expect(screen.getByLabelText('Company office')).toBeOnTheScreen()
     expect(screen.queryByTestId('maplibre-marker-truck-t3')).toBeNull()
 
-    fireEvent.press(screen.getByLabelText('Open fleet map full screen'))
-    expect(await screen.findByLabelText('Close map')).toBeOnTheScreen()
-    fireEvent.press(screen.getAllByTestId('maplibre-marker-truck-t2').at(-1)!)
+    fireEvent.press(screen.getByTestId('maplibre-marker-truck-t2'))
     expect(onSelectTruck).toHaveBeenCalledWith('t2')
-    await waitFor(() => expect(screen.queryByLabelText('Close map')).toBeNull())
   })
 
-  it('says so when no truck is on a trip', async () => {
+  it('keeps a truck’s colour when another is switched off under the map', async () => {
+    installFakeApi(
+      fleetRoutes([
+        truckDetail('t1', 'FL-01', [stop('a', 'Pickup', 'Pending', 1, 54.4, 18.4)]),
+        truckDetail('t2', 'FL-02', [stop('b', 'Pickup', 'Pending', 1, 54.5, 18.5)]),
+      ]),
+    )
+    renderFleetMap()
+    fireEvent.press(await screen.findByText('Map'))
+    await waitFor(() => expect(drawnLines()).toHaveLength(2))
+    const fl02Color = drawnLines()[1].properties.color
+
+    fireEvent.press(screen.getByLabelText('Show FL-01 on the map'))
+
+    await waitFor(() => expect(drawnLines()).toHaveLength(1))
+    expect(drawnLines()[0].properties.color).toBe(fl02Color)
+  })
+
+  it('says so when no selected truck is on a trip', async () => {
     installFakeApi(fleetRoutes([truckDetail('t1', 'FL-01', [])]))
-    renderWithApp(<CompanyDetailScreen companyId="c1" onLoaded={jest.fn()} onSelectTruck={jest.fn()} />)
-    expect(
-      await screen.findByText('No trucks are on a trip right now. Assign a shipment to see its route here.'),
-    ).toBeOnTheScreen()
+    renderFleetMap()
+    fireEvent.press(await screen.findByText('Map'))
+    expect(await screen.findByText('No selected truck is on a trip.')).toBeOnTheScreen()
     expect(screen.queryByTestId('maplibre-map')).toBeNull()
   })
 })
@@ -172,6 +203,8 @@ it('shipment card: the expanded card shows the pickup → delivery route', async
           loadWeightKg: 1000,
           loadVolumeCubicMeters: 5,
           requiredTruckType: 'Flatbed',
+          pickupPlaceName: 'Depot — 59900 Wazemmes, Lille',
+          deliveryPlaceName: 'Store — 57000 Sablon, Metz',
           pickupWindowEarliest: '2026-08-01T08:00:00Z',
           pickupWindowLatest: '2026-08-01T12:00:00Z',
           deliveryWindowEarliest: '2026-08-03T08:00:00Z',
